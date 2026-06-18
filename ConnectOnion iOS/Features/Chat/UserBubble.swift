@@ -5,8 +5,8 @@ struct UserBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 8) {
-            if !item.files.isEmpty {
-                AttachmentStrip(files: item.files)
+            if !item.images.isEmpty || !item.files.isEmpty {
+                AttachmentStrip(images: item.images, files: item.files)
             }
 
             if !item.content.isEmpty {

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UniformTypeIdentifiers
 @testable import ConnectOnion_iOS
 
 private let testAgentAddress = "0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
@@ -88,6 +89,23 @@ struct ProtocolCodecTests {
         #expect(payload?[string: "prompt"] == "Inspect the project")
         #expect(payload?[string: "to"] == testAgentAddress)
         #expect(payload?[int: "timestamp"] == message[int: "timestamp"])
+    }
+}
+
+struct AttachmentEncodingTests {
+    @Test func createsAndDecodesDataURLAttachments() throws {
+        let data = try #require("readme".data(using: .utf8))
+        let attachment = AttachmentEncoding.fileAttachment(
+            name: "README.md",
+            contentType: .markdown,
+            data: data
+        )
+
+        #expect(attachment.name == "README.md")
+        #expect(attachment.type == "text/markdown")
+        #expect(attachment.size == data.count)
+        #expect(attachment.dataURL.hasPrefix("data:text/markdown;base64,"))
+        #expect(AttachmentEncoding.decodedData(from: attachment.dataURL) == data)
     }
 }
 
@@ -259,6 +277,35 @@ struct ChatViewModelTests {
         #expect(!conversation.messages.contains { $0.kind == .user })
         #expect(conversation.title == "New chat")
     }
+
+    @Test @MainActor func attachmentOnlyMessageSendsAndPersistsUserAttachments() async throws {
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = AttachmentCapturingClient()
+        let file = FileAttachment(
+            id: "file-1",
+            name: "README.md",
+            type: "text/markdown",
+            size: 6,
+            dataURL: "data:text/markdown;base64,cmVhZG1l"
+        )
+        let image = "data:image/png;base64,aW1hZ2U="
+        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
+
+        viewModel.send("", images: [image], files: [file])
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(client.sentInputs.count == 1)
+        #expect(client.sentInputs.first?.prompt == "")
+        #expect(client.sentInputs.first?.images == [image])
+        #expect(client.sentInputs.first?.files == [file])
+        #expect(viewModel.items.first?.kind == .user)
+        #expect(viewModel.items.first?.images == [image])
+        #expect(viewModel.items.first?.files == [file])
+        #expect(conversation.messages.first?.images == [image])
+        #expect(conversation.messages.first?.files == [file])
+        #expect(conversation.title == "Image attachment")
+    }
 }
 
 @MainActor
@@ -290,6 +337,30 @@ private final class OnboardFirstMessageClient: ConnectOnionClientProviding {
                 "id": .string("onboard-first-message"),
                 "methods": .array([.string("invite_code")])
             ])))
+            continuation.finish()
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
+@MainActor
+private final class AttachmentCapturingClient: ConnectOnionClientProviding {
+    private(set) var sentInputs: [AgentInput] = []
+
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        sentInputs.append(input)
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: "Received attachments", session: nil, chatItems: []))
             continuation.finish()
         }
     }

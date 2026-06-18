@@ -1,0 +1,38 @@
+name: iOS Tests
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Unit and UI Tests
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [ -d "/Applications/Xcode_27.0.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_27.0.app/Contents/Developer
+          elif [ -d "/Applications/Xcode-beta.app" ]; then
+            sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer
+          fi
+          xcodebuild -version
+          xcrun simctl list devices available
+
+      - name: Run All Tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project "ConnectOnion iOS.xcodeproj" \
+            -scheme "ConnectOnion iOS" \
+            -destination "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest" \
+            -parallel-testing-enabled NO

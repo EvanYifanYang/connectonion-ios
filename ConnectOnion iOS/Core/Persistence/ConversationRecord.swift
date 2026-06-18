@@ -98,7 +98,14 @@ extension ConversationRecord {
 
     private func updateTitleIfNeeded(from messages: [ChatItem]) {
         guard title == "New chat" || title.isEmpty else { return }
-        guard let firstUserMessage = messages.first(where: { $0.kind == .user })?.content else { return }
-        title = String(firstUserMessage.prefix(36))
+        guard let firstUserMessage = messages.first(where: { $0.kind == .user }) else { return }
+        let content = firstUserMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !content.isEmpty {
+            title = String(content.prefix(36))
+        } else if !firstUserMessage.images.isEmpty {
+            title = "Image attachment"
+        } else if !firstUserMessage.files.isEmpty {
+            title = "File attachment"
+        }
     }
 }

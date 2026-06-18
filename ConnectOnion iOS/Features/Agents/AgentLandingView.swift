@@ -4,7 +4,7 @@ import SwiftData
 struct AgentLandingView: View {
     var agent: AgentConfigRecord
     var info: AgentInfo?
-    var onSend: (String) -> Void
+    var onSend: (AgentInput) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +21,13 @@ struct AgentLandingView: View {
                 .padding(.bottom, 28)
             }
 
-            LandingComposer(suggestions: AgentPromptSuggestions.defaults, onSend: onSend)
+            LandingComposer(
+                suggestions: AgentPromptSuggestions.defaults,
+                acceptedInputs: info?.acceptedInputs,
+                onSend: { prompt, images, files in
+                    onSend(AgentInput(prompt: prompt, images: images, files: files))
+                }
+            )
         }
         .navigationTitle(info?.name ?? agent.displayName)
         .navigationBarTitleDisplayMode(.inline)

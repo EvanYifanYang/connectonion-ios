@@ -10,7 +10,7 @@ struct AppShellView: View {
     @State private var selectedConversationID: UUID?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
-    @State private var pendingPrompts: [UUID: String] = [:]
+    @State private var pendingInputs: [UUID: AgentInput] = [:]
     @State private var showingAddAgent = false
     @State private var showingNewConversation = false
     @State private var showingSettings = false
@@ -33,7 +33,8 @@ struct AppShellView: View {
                 onDeleteAgent: { deletingAgent = $0 },
                 onDeleteConversation: deleteConversation,
                 onSettings: { showingSettings = true },
-                onOpenDetail: showDetailColumn
+                onOpenDetail: showDetailColumn,
+                onRefresh: refreshAgentInfo
             )
         } detail: {
             detailView
@@ -64,7 +65,7 @@ struct AppShellView: View {
                 if prompt.isEmpty {
                     newChat(for: agent)
                 } else {
-                    startConversation(agent: agent, prompt: prompt)
+                    startConversation(agent: agent, input: AgentInput(prompt: prompt))
                 }
             }
         }
@@ -108,14 +109,14 @@ struct AppShellView: View {
                 conversation: conversation,
                 agent: agent,
                 info: infoStore.infoByAddress[agent.address],
-                initialPrompt: pendingPrompts[conversation.id],
-                onInitialPromptConsumed: { pendingPrompts[conversation.id] = nil }
+                initialInput: pendingInputs[conversation.id],
+                onInitialInputConsumed: { pendingInputs[conversation.id] = nil }
             )
         } else if let agent = selectedAgent {
             AgentLandingView(
                 agent: agent,
                 info: infoStore.infoByAddress[agent.address],
-                onSend: { prompt in startConversation(agent: agent, prompt: prompt) }
+                onSend: { input in startConversation(agent: agent, input: input) }
             )
         } else {
             WelcomeView(onAddAgent: { showingAddAgent = true })
@@ -144,6 +145,10 @@ struct AppShellView: View {
         if selectedConversationID == nil, selectedAgentAddress == nil {
             selectedAgentAddress = agents.first?.address
         }
+    }
+
+    private func refreshAgentInfo() async {
+        await infoStore.refreshNow(addresses: agents.map(\.address))
     }
 
     private func agent(for address: String) -> AgentConfigRecord? {
@@ -208,10 +213,10 @@ struct AppShellView: View {
         showDetailColumn()
     }
 
-    private func startConversation(agent: AgentConfigRecord, prompt: String) {
+    private func startConversation(agent: AgentConfigRecord, input: AgentInput) {
         let conversation = ConversationRecord(agentAddress: agent.address, mode: .safe)
         modelContext.insert(conversation)
-        pendingPrompts[conversation.id] = prompt
+        pendingInputs[conversation.id] = input
         selectedAgentAddress = agent.address
         selectedConversationID = conversation.id
         showDetailColumn()

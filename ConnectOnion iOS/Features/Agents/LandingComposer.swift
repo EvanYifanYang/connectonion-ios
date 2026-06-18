@@ -2,16 +2,20 @@ import SwiftUI
 
 struct LandingComposer: View {
     var suggestions: [String]
-    var onSend: (String) -> Void
+    var acceptedInputs: AgentAcceptedInputs?
+    var onSend: (String, [String], [FileAttachment]) -> Void
 
     var body: some View {
         VStack(spacing: 12) {
-            PromptSuggestionStrip(suggestions: suggestions, onSelect: onSend)
+            PromptSuggestionStrip(suggestions: suggestions) { suggestion in
+                onSend(suggestion, [], [])
+            }
 
             ChatInputBar(
                 placeholder: "Message this agent",
                 isRunning: false,
-                onSend: { text in onSend(text) },
+                acceptedInputs: acceptedInputs,
+                onSend: onSend,
                 onStop: {}
             )
             .padding(.horizontal, 16)
@@ -25,6 +29,7 @@ struct LandingComposer: View {
 #Preview("Landing Composer") {
     LandingComposer(
         suggestions: ["What can you do?", "Show system info", "List files"],
-        onSend: { _ in }
+        acceptedInputs: PreviewFixtures.sampleAgentInfo.acceptedInputs,
+        onSend: { _, _, _ in }
     )
 }

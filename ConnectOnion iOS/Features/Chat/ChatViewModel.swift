@@ -76,10 +76,13 @@ final class ChatViewModel {
 
     func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = []) {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
         errorMessage = nil
-        pendingUserItem = ChatItem(kind: .user, content: trimmed)
+        var userItem = ChatItem(kind: .user, content: trimmed)
+        userItem.images = images
+        userItem.files = files
+        pendingUserItem = userItem
         sessionState = .connecting
         elapsedTime = 0
         stopTimer()

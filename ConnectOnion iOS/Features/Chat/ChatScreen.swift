@@ -5,8 +5,8 @@ struct ChatScreen: View {
     let conversation: ConversationRecord
     let agent: AgentConfigRecord
     let info: AgentInfo?
-    let initialPrompt: String?
-    let onInitialPromptConsumed: () -> Void
+    let initialInput: AgentInput?
+    let onInitialInputConsumed: () -> Void
 
     @State private var viewModel: ChatViewModel
 
@@ -14,14 +14,14 @@ struct ChatScreen: View {
         conversation: ConversationRecord,
         agent: AgentConfigRecord,
         info: AgentInfo?,
-        initialPrompt: String?,
-        onInitialPromptConsumed: @escaping () -> Void
+        initialInput: AgentInput?,
+        onInitialInputConsumed: @escaping () -> Void
     ) {
         self.conversation = conversation
         self.agent = agent
         self.info = info
-        self.initialPrompt = initialPrompt
-        self.onInitialPromptConsumed = onInitialPromptConsumed
+        self.initialInput = initialInput
+        self.onInitialInputConsumed = onInitialInputConsumed
         _viewModel = State(initialValue: ChatViewModel(conversation: conversation, agent: agent.config))
     }
 
@@ -66,7 +66,8 @@ struct ChatScreen: View {
             ChatInputBar(
                 placeholder: "Message \(displayName)",
                 isRunning: viewModel.shouldShowStopButton,
-                onSend: { viewModel.send($0) },
+                acceptedInputs: info?.acceptedInputs,
+                onSend: { viewModel.send($0, images: $1, files: $2) },
                 onStop: viewModel.stop
             )
             .padding(.horizontal, 16)
@@ -77,9 +78,9 @@ struct ChatScreen: View {
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
         .animation(AppMotion.standard, value: viewModel.shouldShowFirstPromptSuggestions)
         .task(id: conversation.id) {
-            guard let initialPrompt else { return }
-            viewModel.send(initialPrompt)
-            onInitialPromptConsumed()
+            guard let initialInput else { return }
+            viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)
+            onInitialInputConsumed()
         }
     }
 
@@ -99,8 +100,8 @@ struct ChatScreen: View {
             conversation: conversation,
             agent: agent,
             info: agent.cachedInfo,
-            initialPrompt: nil,
-            onInitialPromptConsumed: {}
+            initialInput: nil,
+            onInitialInputConsumed: {}
         )
             .modelContainer(container)
     } else {

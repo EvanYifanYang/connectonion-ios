@@ -16,6 +16,9 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
     private let chatStopButtonID = "connectonion.chat.stop.button"
+    private let chatAttachmentButtonID = "connectonion.chat.attachment.button"
+    private let chatAttachmentPhotoButtonID = "connectonion.chat.attachment.photo"
+    private let chatAttachmentFilesButtonID = "connectonion.chat.attachment.files"
     private let showSystemInfoSuggestionID = "connectonion.suggestion.show-system-info"
     private let seededAgentID = "connectonion.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededNewChatAgentID = "connectonion.chat.new.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
@@ -72,6 +75,19 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         let response = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Connected. Streaming mock response")).firstMatch
         XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
+    }
+
+    @MainActor
+    func testChatAttachmentMenuExposesPhotoAndFileOptions() throws {
+        let app = launchUITestApp()
+        openSeededConversation(in: app)
+
+        XCTAssertTrue(app.anyElement(chatAttachmentButtonID).exists)
+        tapElement(chatAttachmentButtonID, in: app)
+
+        XCTAssertTrue(app.anyElement(chatAttachmentPhotoButtonID).waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(chatAttachmentFilesButtonID).exists, app.debugDescription)
+        app.buttons["Cancel"].tap()
     }
 
     @MainActor

@@ -14,6 +14,7 @@ struct SidebarView: View {
     var onDeleteConversation: (ConversationRecord) -> Void
     var onSettings: () -> Void
     var onOpenDetail: () -> Void
+    var onRefresh: () async -> Void
 
     @State private var feedbackTrigger = 0
 
@@ -79,6 +80,9 @@ struct SidebarView: View {
             .padding(.vertical, 14)
         }
         .scrollIndicators(.hidden)
+        .refreshable {
+            await onRefresh()
+        }
         .accessibilityIdentifier(AccessibilityID.sidebar)
         .animation(AppMotion.standard, value: agents.map(\.address))
         .animation(AppMotion.standard, value: conversations.map(\.id))
@@ -201,7 +205,8 @@ private struct SidebarEmptyState: View {
         onDeleteAgent: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
-        onOpenDetail: {}
+        onOpenDetail: {},
+        onRefresh: {}
     )
 }
 
@@ -219,6 +224,7 @@ private struct SidebarEmptyState: View {
         onDeleteAgent: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
-        onOpenDetail: {}
+        onOpenDetail: {},
+        onRefresh: {}
     )
 }

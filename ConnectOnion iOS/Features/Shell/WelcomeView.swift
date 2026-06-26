@@ -7,11 +7,7 @@ struct WelcomeView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 44))
-                .foregroundStyle(.primary)
-                .frame(width: 76, height: 76)
-                .glassSurface(cornerRadius: 24)
+            ConnectOnionLogoMark()
 
             Text("ConnectOnion")
                 .font(.title.bold())
@@ -28,6 +24,17 @@ struct WelcomeView: View {
     private func addAgent() {
         feedbackTrigger += 1
         onAddAgent()
+    }
+}
+
+struct ConnectOnionLogoMark: View {
+    var body: some View {
+        Image("logo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 52, height: 52)
+            .frame(width: 76, height: 76)
+            .glassSurface(cornerRadius: 24)
     }
 }
 

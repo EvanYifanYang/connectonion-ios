@@ -172,10 +172,7 @@ private struct SidebarEmptyState: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: "point.3.connected.trianglepath.dotted")
-                .font(.system(size: 42, weight: .medium))
-                .frame(width: 76, height: 76)
-                .glassSurface(cornerRadius: 24)
+            ConnectOnionLogoMark()
 
             Text("ConnectOnion")
                 .font(.title.bold())

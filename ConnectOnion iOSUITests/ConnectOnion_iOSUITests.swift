@@ -243,7 +243,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testSuggestionsReturnWhenFirstPromptTriggersInviteGate() throws {
+    func testFirstPromptResendsAfterInviteGate() throws {
         let app = launchUITestApp(scenario: "onboard-first-message")
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -261,7 +261,8 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         let status = waitForStaticText(onboardStatusID, in: app)
         XCTAssertTrue(status.label.contains("Invite submitted"), status.label)
-        XCTAssertTrue(app.anyElement(showSystemInfoSuggestionID).waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertFalse(app.anyElement(showSystemInfoSuggestionID).exists)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
         XCTAssertFalse(app.anyElement(chatStopButtonID).exists)
     }

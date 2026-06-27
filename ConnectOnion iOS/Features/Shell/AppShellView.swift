@@ -93,11 +93,18 @@ struct AppShellView: View {
         }
         .task {
             restoreInitialSelection()
-            infoStore.refresh(addresses: agents.map(\.address))
+            infoStore.startAutoRefresh(addresses: agentAddresses)
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             restoreInitialSelection()
-            infoStore.refresh(addresses: addresses)
+            infoStore.startAutoRefresh(addresses: addresses)
+        }
+        .onChange(of: selectedAgentAddress) { _, address in
+            guard let address else { return }
+            infoStore.refresh(addresses: [address])
+        }
+        .onDisappear {
+            infoStore.stopAutoRefresh()
         }
     }
 
@@ -133,6 +140,10 @@ struct AppShellView: View {
         return agents.first { $0.address == selectedAgentAddress }
     }
 
+    private var agentAddresses: [String] {
+        agents.map(\.address)
+    }
+
     private func restoreInitialSelection() {
         if agents.isEmpty {
             selectedAgentAddress = nil
@@ -148,7 +159,7 @@ struct AppShellView: View {
     }
 
     private func refreshAgentInfo() async {
-        await infoStore.refreshNow(addresses: agents.map(\.address))
+        await infoStore.refreshNow(addresses: agentAddresses)
     }
 
     private func agent(for address: String) -> AgentConfigRecord? {

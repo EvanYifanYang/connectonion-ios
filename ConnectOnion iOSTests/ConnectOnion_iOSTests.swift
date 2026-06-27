@@ -254,14 +254,16 @@ struct ChatViewModelTests {
         #expect(viewModel.errorMessage?.contains("Could not connect") == true)
     }
 
-    @Test @MainActor func firstPromptThatTriggersOnboardingKeepsSuggestionsAvailableAfterInviteSubmit() async throws {
+    @Test @MainActor func firstPromptThatTriggersOnboardingResendsOriginalInputAfterInviteSuccess() async throws {
         let conversation = ConversationRecord(agentAddress: testAgentAddress)
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
-        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: OnboardFirstMessageClient())
+        let client = OnboardFirstMessageClient()
+        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
 
         viewModel.send("What can you do?")
         try await Task.sleep(for: .milliseconds(100))
 
+        #expect(client.sentInputs.map(\.prompt) == ["What can you do?"])
         #expect(viewModel.items.count == 1)
         #expect(viewModel.items[0].kind == .onboardRequired)
         #expect(!viewModel.items.contains { $0.kind == .user })
@@ -270,12 +272,13 @@ struct ChatViewModelTests {
         #expect(!viewModel.shouldShowFirstPromptSuggestions)
 
         viewModel.submitOnboard(inviteCode: "OpenOnion")
-        try await Task.sleep(for: .milliseconds(50))
+        try await Task.sleep(for: .milliseconds(150))
 
         #expect(viewModel.pendingOnboard == nil)
-        #expect(viewModel.shouldShowFirstPromptSuggestions)
-        #expect(!conversation.messages.contains { $0.kind == .user })
-        #expect(conversation.title == "New chat")
+        #expect(!viewModel.shouldShowFirstPromptSuggestions)
+        #expect(client.sentInputs.map(\.prompt) == ["What can you do?", "What can you do?"])
+        #expect(conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" })
+        #expect(conversation.title == "What can you do?")
     }
 
     @Test @MainActor func attachmentOnlyMessageSendsAndPersistsUserAttachments() async throws {
@@ -329,14 +332,30 @@ private final class FailingConnectOnionClient: ConnectOnionClientProviding {
 
 @MainActor
 private final class OnboardFirstMessageClient: ConnectOnionClientProviding {
+    private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
+    private var onboardAccepted = false
+    private(set) var sentInputs: [AgentInput] = []
+
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        sentInputs.append(input)
         AsyncThrowingStream { continuation in
+            self.continuation = continuation
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
-            continuation.yield(.server(ServerEvent(payload: [
-                "type": .string("ONBOARD_REQUIRED"),
-                "id": .string("onboard-first-message"),
-                "methods": .array([.string("invite_code")])
-            ])))
+
+            if !onboardAccepted {
+                continuation.yield(.server(ServerEvent(payload: [
+                    "type": .string("RUNTIME_INPUT_ACK"),
+                    "id": .string("input-ack")
+                ])))
+                continuation.yield(.server(ServerEvent(payload: [
+                    "type": .string("ONBOARD_REQUIRED"),
+                    "id": .string("onboard-first-message"),
+                    "methods": .array([.string("invite_code")])
+                ])))
+                return
+            }
+
+            continuation.yield(.output(result: "Ready: \(input.prompt)", session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -347,7 +366,15 @@ private final class OnboardFirstMessageClient: ConnectOnionClientProviding {
 
     func sendAskUserResponse(_ answer: String) async throws {}
     func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
-    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {
+        onboardAccepted = true
+        continuation?.yield(.server(ServerEvent(payload: [
+            "type": .string("ONBOARD_SUCCESS"),
+            "id": .string("onboard-success"),
+            "message": .string("Invite accepted")
+        ])))
+        continuation?.finish()
+    }
     func sendPlanReviewResponse(_ message: String) async throws {}
     func disconnect() {}
 }

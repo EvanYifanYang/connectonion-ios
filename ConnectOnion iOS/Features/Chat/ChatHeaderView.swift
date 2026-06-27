@@ -47,9 +47,13 @@ struct ChatHeaderView: View {
         case .disconnected:
             "Disconnected"
         case .connected:
-            "Connected"
+            info?.online == false ? "Offline" : "Connected"
         case .idle:
-            "Ready"
+            if let online = info?.online {
+                online ? "Online" : "Offline"
+            } else {
+                "Ready"
+            }
         }
     }
 
@@ -59,10 +63,12 @@ struct ChatHeaderView: View {
 
     private var isOnline: Bool {
         switch state {
-        case .connected, .active, .waiting, .reconnecting:
+        case .active, .waiting:
             true
-        case .idle, .connecting, .disconnected:
+        case .disconnected:
             false
+        case .connected, .idle, .connecting, .reconnecting:
+            info?.online ?? false
         }
     }
 }

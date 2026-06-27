@@ -9,6 +9,7 @@ final class MockConnectOnionClient: ConnectOnionClientProviding {
 
     private let mode: Mode
     private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
+    private var onboardAccepted = false
     private(set) var sentControlMessages: [String] = []
 
     init(mode: Mode = .standard) {
@@ -20,13 +21,16 @@ final class MockConnectOnionClient: ConnectOnionClientProviding {
             self.continuation = continuation
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
 
-            if mode == .onboardFirstMessage {
+            if mode == .onboardFirstMessage && !onboardAccepted {
+                continuation.yield(.server(ServerEvent(payload: [
+                    "type": .string("RUNTIME_INPUT_ACK"),
+                    "id": .string("mock-input-ack")
+                ])))
                 continuation.yield(.server(ServerEvent(payload: [
                     "type": .string("ONBOARD_REQUIRED"),
                     "id": .string("mock-onboard"),
                     "methods": .array([.string("invite_code")])
                 ])))
-                continuation.finish()
                 return
             }
 
@@ -59,6 +63,14 @@ final class MockConnectOnionClient: ConnectOnionClientProviding {
 
     func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {
         sentControlMessages.append("onboard:\(inviteCode ?? "")")
+        guard mode == .onboardFirstMessage else { return }
+        onboardAccepted = true
+        continuation?.yield(.server(ServerEvent(payload: [
+            "type": .string("ONBOARD_SUCCESS"),
+            "id": .string("mock-onboard-success"),
+            "message": .string("Invite accepted")
+        ])))
+        continuation?.finish()
     }
 
     func sendPlanReviewResponse(_ message: String) async throws {

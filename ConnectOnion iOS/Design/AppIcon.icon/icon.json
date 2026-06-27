@@ -1,19 +1,45 @@
 {
-  "fill" : {
-    "linear-gradient" : [
-      "extended-gray:1.00000,1.00000",
-      "extended-gray:1.00000,1.00000"
-    ]
-  },
+  "fill-specializations" : [
+    {
+      "value" : {
+        "linear-gradient" : [
+          "extended-gray:1.00000,1.00000",
+          "extended-gray:1.00000,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "linear-gradient" : [
+          "extended-gray:0.00000,1.00000",
+          "extended-gray:0.25000,1.00000"
+        ]
+      }
+    }
+  ],
   "groups" : [
     {
+      "blur-material" : null,
+      "hidden" : false,
       "layers" : [
         {
-          "glass" : true,
+          "blend-mode" : "normal",
+          "glass-specializations" : [
+            {
+              "value" : true
+            },
+            {
+              "appearance" : "dark",
+              "value" : true
+            }
+          ],
+          "hidden" : false,
           "image-name" : "Onion.png",
           "name" : "Onion",
+          "opacity" : 1,
           "position" : {
-            "scale" : 0.9,
+            "scale" : 0.8,
             "translation-in-points" : [
               0,
               0
@@ -21,6 +47,7 @@
           }
         }
       ],
+      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.6

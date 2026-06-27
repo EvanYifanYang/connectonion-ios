@@ -22,8 +22,11 @@ final class ChatViewModel {
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var pendingUserItem: ChatItem?
+    @ObservationIgnored private var inFlightInput: AgentInput?
+    @ObservationIgnored private var inFlightUserItemID: String?
+    @ObservationIgnored private var inFlightWasFirstPrompt = false
     @ObservationIgnored private var optimisticUserItemID: String?
-    @ObservationIgnored private var optimisticUserWasFirstPrompt = false
+    private var deferredOnboardInput: AgentInput?
 
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
         self.conversation = conversation
@@ -69,9 +72,14 @@ final class ChatViewModel {
     var shouldShowFirstPromptSuggestions: Bool {
         !hasCommittedUserMessage &&
             pendingOnboard == nil &&
+            deferredOnboardInput == nil &&
             errorMessage == nil &&
             sessionState != .connecting &&
             sessionState != .reconnecting
+    }
+
+    func send(_ input: AgentInput) {
+        send(input.prompt, images: input.images, files: input.files)
     }
 
     func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = []) {
@@ -79,6 +87,8 @@ final class ChatViewModel {
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
         errorMessage = nil
+        let input = AgentInput(prompt: trimmed, images: images, files: files)
+        inFlightInput = input
         var userItem = ChatItem(kind: .user, content: trimmed)
         userItem.images = images
         userItem.files = files
@@ -88,7 +98,6 @@ final class ChatViewModel {
         stopTimer()
 
         streamTask?.cancel()
-        let input = AgentInput(prompt: trimmed, images: images, files: files)
         let session = snapshot()
         streamTask = Task { [weak self] in
             guard let self else { return }
@@ -188,6 +197,8 @@ final class ChatViewModel {
         streamTask?.cancel()
         client.disconnect()
         pendingUserItem = nil
+        clearInFlightInput()
+        deferredOnboardInput = nil
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
     }
@@ -213,8 +224,10 @@ final class ChatViewModel {
             }
 
             if let pendingUserItem {
+                let wasFirstPrompt = !items.contains { $0.kind == .user }
                 optimisticUserItemID = pendingUserItem.id
-                optimisticUserWasFirstPrompt = !items.contains { $0.kind == .user }
+                inFlightUserItemID = pendingUserItem.id
+                inFlightWasFirstPrompt = wasFirstPrompt
                 append(pendingUserItem, animated: true, shouldPersist: false)
 
                 var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
@@ -229,8 +242,9 @@ final class ChatViewModel {
             }
 
         case .server(let event):
-            if event.type == "ONBOARD_REQUIRED", optimisticUserWasFirstPrompt {
-                discardOptimisticUserPrompt()
+            if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
+                deferredOnboardInput = inFlightInput
+                discardInFlightUserPrompt()
             } else {
                 commitOptimisticUserPrompt()
             }
@@ -248,9 +262,13 @@ final class ChatViewModel {
                 conversation.mode = mode
             }
             persist()
+            if event.type == "ONBOARD_SUCCESS" {
+                resumeDeferredOnboardInput()
+            }
 
         case .output(let result, let session, let chatItems):
             commitOptimisticUserPrompt()
+            clearInFlightInput()
             clearOptimisticPlaceholder()
             if !chatItems.isEmpty {
                 items = chatItems
@@ -290,18 +308,33 @@ final class ChatViewModel {
         }
     }
 
-    private func discardOptimisticUserPrompt() {
-        guard let optimisticUserItemID else { return }
-        withAnimation(.smooth(duration: 0.2)) {
-            items.removeAll { $0.id == optimisticUserItemID }
+    private func discardInFlightUserPrompt() {
+        let userItemID = inFlightUserItemID ?? optimisticUserItemID
+        if let userItemID {
+            withAnimation(.smooth(duration: 0.2)) {
+                items.removeAll { $0.id == userItemID }
+            }
         }
+        clearInFlightInput()
         self.optimisticUserItemID = nil
-        optimisticUserWasFirstPrompt = false
     }
 
     private func commitOptimisticUserPrompt() {
         optimisticUserItemID = nil
-        optimisticUserWasFirstPrompt = false
+    }
+
+    private func clearInFlightInput() {
+        inFlightInput = nil
+        inFlightUserItemID = nil
+        inFlightWasFirstPrompt = false
+    }
+
+    private func resumeDeferredOnboardInput() {
+        guard let input = deferredOnboardInput else { return }
+        deferredOnboardInput = nil
+        Task { @MainActor [weak self] in
+            self?.send(input)
+        }
     }
 
     private func snapshot() -> ConversationSession {
@@ -316,6 +349,8 @@ final class ChatViewModel {
 
     private func fail(_ message: String) {
         pendingUserItem = nil
+        clearInFlightInput()
+        deferredOnboardInput = nil
         commitOptimisticUserPrompt()
         clearOptimisticPlaceholder()
         errorMessage = userFacingError(message)

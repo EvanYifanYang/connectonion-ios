@@ -23,6 +23,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let seededAgentID = "connectonion.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededNewChatAgentID = "connectonion.chat.new.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededConversationID = "connectonion.conversation.C9F4D04E-6D26-4F70-9808-74F09752D6D1"
+    private let seededDeleteConversationID = "connectonion.conversation.delete.C9F4D04E-6D26-4F70-9808-74F09752D6D1"
     private let approvalApproveButtonID = "connectonion.approval.approve"
     private let approvalAlwaysButtonID = "connectonion.approval.always"
     private let approvalSkipButtonID = "connectonion.approval.skip"
@@ -170,6 +171,20 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
         XCTAssertFalse(app.anyElement(chatStopButtonID).exists)
+    }
+
+    @MainActor
+    func testConversationRowSwipeDeletesChat() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        let conversation = waitForElement(seededConversationID, in: app)
+        conversation.swipeLeft()
+
+        XCTAssertTrue(app.anyElement(seededDeleteConversationID).waitForExistence(timeout: 5), app.debugDescription)
+        tapElement(seededDeleteConversationID, in: app)
+
+        XCTAssertFalse(app.anyElement(seededConversationID).waitForExistence(timeout: 2), app.debugDescription)
     }
 
     @MainActor

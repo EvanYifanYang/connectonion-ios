@@ -56,6 +56,10 @@ enum AccessibilityID {
         "connectonion.conversation.\(id.uuidString)"
     }
 
+    static func deleteConversation(_ id: UUID) -> String {
+        "connectonion.conversation.delete.\(id.uuidString)"
+    }
+
     static func newChatAgent(_ address: String) -> String {
         "connectonion.chat.new.agent.\(address)"
     }

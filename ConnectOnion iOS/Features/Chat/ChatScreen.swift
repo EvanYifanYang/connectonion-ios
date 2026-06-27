@@ -85,7 +85,7 @@ struct ChatScreen: View {
     }
 
     private var displayName: String {
-        info?.name ?? agent.displayName
+        agent.displayName(info: info)
     }
 }
 

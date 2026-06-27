@@ -17,6 +17,31 @@ struct AgentAddressTests {
     }
 }
 
+struct AgentDisplayNameTests {
+    @Test func localAliasOverridesRemoteAgentInfoName() {
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: " A1 ")
+        let info = AgentInfo(address: testAgentAddress, name: "Previous Name", online: true)
+
+        #expect(agent.displayName(info: info) == "A1")
+    }
+
+    @Test func remoteAgentInfoNameIsFallbackWhenAliasIsEmpty() {
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: " ")
+        let info = AgentInfo(address: testAgentAddress, name: "Remote Name", online: true)
+
+        #expect(agent.displayName(info: info) == "Remote Name")
+    }
+
+    @Test func remoteProfileNameAppearsOnlyWhenDifferentFromLocalAlias() {
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "A1")
+        let matchingInfo = AgentInfo(address: testAgentAddress, name: "a1", online: true)
+        let differentInfo = AgentInfo(address: testAgentAddress, name: "OpenOnion", online: true)
+
+        #expect(agent.remoteProfileName(info: matchingInfo) == nil)
+        #expect(agent.remoteProfileName(info: differentInfo) == "OpenOnion")
+    }
+}
+
 struct ProtocolCodecTests {
     @Test @MainActor func connectMessageIncludesSignedEnvelopeAndSessionState() throws {
         let codec = ProtocolCodec(identityStore: MockIdentityStore())

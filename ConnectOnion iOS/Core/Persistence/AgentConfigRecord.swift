@@ -53,10 +53,28 @@ extension AgentConfigRecord {
     }
 
     var displayName: String {
-        if !alias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            alias
+        displayName(info: cachedInfo)
+    }
+
+    func displayName(info: AgentInfo?) -> String {
+        let trimmedAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAlias.isEmpty {
+            return trimmedAlias
         } else {
-            cachedInfo?.name ?? AgentAddress(rawValue: address)?.shortDisplay ?? address
+            return info?.name ?? AgentAddress(rawValue: address)?.shortDisplay ?? address
         }
+    }
+
+    func remoteProfileName(info: AgentInfo?) -> String? {
+        let localAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !localAlias.isEmpty else { return nil }
+
+        guard let profileName = info?.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !profileName.isEmpty,
+              profileName.localizedCaseInsensitiveCompare(localAlias) != .orderedSame else {
+            return nil
+        }
+
+        return profileName
     }
 }

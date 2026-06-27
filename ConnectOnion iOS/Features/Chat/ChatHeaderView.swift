@@ -16,11 +16,12 @@ struct ChatHeaderView: View {
                         .font(.headline)
                         .lineLimit(1)
 
-                    Text(statusText)
+                    Text(subtitleText)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .contentTransition(.opacity)
-                        .animation(AppMotion.quick, value: statusText)
+                        .lineLimit(1)
+                        .animation(AppMotion.quick, value: subtitleText)
                 }
 
                 Spacer(minLength: 0)
@@ -57,8 +58,20 @@ struct ChatHeaderView: View {
         }
     }
 
+    private var subtitleText: String {
+        if let remoteProfileName {
+            "\(statusText) · Profile: \(remoteProfileName)"
+        } else {
+            statusText
+        }
+    }
+
     private var displayName: String {
-        info?.name ?? agent.displayName
+        agent.displayName(info: info)
+    }
+
+    private var remoteProfileName: String? {
+        agent.remoteProfileName(info: info)
     }
 
     private var isOnline: Bool {
@@ -79,4 +92,10 @@ struct ChatHeaderView: View {
 
 #Preview("Chat Header Active") {
     ChatHeaderView(agent: PreviewFixtures.sampleAgent, info: PreviewFixtures.sampleAgentInfo, state: .active, elapsedTime: 12.4)
+}
+
+#Preview("Chat Header With Remote Profile") {
+    let agent = AgentConfigRecord(address: PreviewFixtures.testAgentAddress, alias: "A1")
+    let info = AgentInfo(address: PreviewFixtures.testAgentAddress, name: "OpenOnion", online: true)
+    ChatHeaderView(agent: agent, info: info, state: .idle, elapsedTime: 0)
 }

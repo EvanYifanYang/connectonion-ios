@@ -9,10 +9,11 @@ struct AgentConfig: Codable, Equatable, Identifiable, Sendable {
     var lastConnectedAt: Date?
 
     var displayName: String {
-        if !alias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            alias
+        let trimmedAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedAlias.isEmpty {
+            return trimmedAlias
         } else {
-            AgentAddress(rawValue: address)?.shortDisplay ?? address
+            return AgentAddress(rawValue: address)?.shortDisplay ?? address
         }
     }
 }

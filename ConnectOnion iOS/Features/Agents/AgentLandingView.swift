@@ -29,7 +29,7 @@ struct AgentLandingView: View {
                 }
             )
         }
-        .navigationTitle(info?.name ?? agent.displayName)
+        .navigationTitle(agent.displayName(info: info))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -15,12 +15,17 @@ struct AgentSidebarRow: View {
         HStack(spacing: 8) {
             Button(action: onSelect) {
                 HStack(spacing: 12) {
-                    AgentAvatar(title: info?.name ?? agent.displayName, online: info?.online)
+                    AgentAvatar(title: displayName, online: info?.online)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(info?.name ?? agent.displayName)
+                        Text(displayName)
                             .font(.body)
                             .lineLimit(1)
+
+                        if let remoteProfileName {
+                            AgentProfileNameLabel(name: remoteProfileName)
+                        }
+
                         Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
                             .font(.footnote.monospaced())
                             .foregroundStyle(.tertiary)
@@ -32,7 +37,7 @@ struct AgentSidebarRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(info?.name ?? agent.displayName)
+            .accessibilityLabel(displayName)
             .accessibilityIdentifier(AccessibilityID.agent(agent.address))
             .contextMenu {
                 actions
@@ -58,6 +63,14 @@ struct AgentSidebarRow: View {
         .confirmationDialog("Agent Actions", isPresented: $isShowingActions, titleVisibility: .visible) {
             actions
         }
+    }
+
+    private var displayName: String {
+        agent.displayName(info: info)
+    }
+
+    private var remoteProfileName: String? {
+        agent.remoteProfileName(info: info)
     }
 
     @ViewBuilder
@@ -87,5 +100,12 @@ struct AgentSidebarRow: View {
     let agent = PreviewFixtures.sampleAgent
     let info = AgentInfo(address: agent.address, name: "OpenOnion", online: false)
     AgentSidebarRow(agent: agent, info: info, isSelected: false, onSelect: {}, onNewChat: {}, onRename: {}, onDelete: {})
+        .padding()
+}
+
+#Preview("Agent Row With Remote Profile") {
+    let agent = AgentConfigRecord(address: PreviewFixtures.testAgentAddress, alias: "A1")
+    let info = AgentInfo(address: agent.address, name: "OpenOnion", online: true)
+    AgentSidebarRow(agent: agent, info: info, isSelected: true, onSelect: {}, onNewChat: {}, onRename: {}, onDelete: {})
         .padding()
 }

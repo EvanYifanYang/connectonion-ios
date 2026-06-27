@@ -47,6 +47,10 @@ struct NewConversationSheet: View {
                                             .foregroundStyle(.primary)
                                             .lineLimit(1)
 
+                                        if let remoteProfileName = agent.remoteProfileName(info: infoByAddress[agent.address]) {
+                                            AgentProfileNameLabel(name: remoteProfileName)
+                                        }
+
                                         Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
                                             .font(.footnote.monospaced())
                                             .foregroundStyle(.tertiary)
@@ -126,7 +130,7 @@ struct NewConversationSheet: View {
     }
 
     private func displayName(for agent: AgentConfigRecord) -> String {
-        infoByAddress[agent.address]?.name ?? agent.displayName
+        agent.displayName(info: infoByAddress[agent.address])
     }
 
     private func start() {
@@ -151,6 +155,17 @@ struct NewConversationSheet: View {
         agents: [PreviewFixtures.sampleAgent],
         infoByAddress: [:],
         initialAgentAddress: nil,
+        onStart: { _, _ in }
+    )
+}
+
+#Preview("New Conversation With Remote Profile") {
+    let agent = AgentConfigRecord(address: PreviewFixtures.testAgentAddress, alias: "A1")
+    let info = AgentInfo(address: PreviewFixtures.testAgentAddress, name: "OpenOnion", online: true)
+    NewConversationSheet(
+        agents: [agent],
+        infoByAddress: [PreviewFixtures.testAgentAddress: info],
+        initialAgentAddress: PreviewFixtures.testAgentAddress,
         onStart: { _, _ in }
     )
 }

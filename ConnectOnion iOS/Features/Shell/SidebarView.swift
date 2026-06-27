@@ -143,7 +143,7 @@ struct SidebarView: View {
 
     private func agentName(for address: String) -> String {
         if let agent = agents.first(where: { $0.address == address }) {
-            return infoByAddress[address]?.name ?? agent.displayName
+            return agent.displayName(info: infoByAddress[address])
         }
         return AgentAddress(rawValue: address)?.shortDisplay ?? address
     }

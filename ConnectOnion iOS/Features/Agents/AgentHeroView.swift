@@ -6,12 +6,12 @@ struct AgentHeroView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            AgentAvatar(title: info?.name ?? agent.displayName, online: info?.online)
+            AgentAvatar(title: displayName, online: info?.online)
                 .scaleEffect(1.2)
                 .padding(.bottom, 8)
 
             HStack(spacing: 8) {
-                Text(info?.name ?? agent.displayName)
+                Text(displayName)
                     .font(.title2.bold())
                     .lineLimit(1)
 
@@ -20,6 +20,10 @@ struct AgentHeroView: View {
                         .foregroundStyle(online ? .green : .secondary)
                         .accessibilityLabel(online ? "Online" : "Offline")
                 }
+            }
+
+            if let remoteProfileName {
+                AgentProfileNameLabel(name: remoteProfileName)
             }
 
             if !metaLine.isEmpty {
@@ -34,6 +38,14 @@ struct AgentHeroView: View {
                 .foregroundStyle(.tertiary)
                 .textSelection(.enabled)
         }
+    }
+
+    private var displayName: String {
+        agent.displayName(info: info)
+    }
+
+    private var remoteProfileName: String? {
+        agent.remoteProfileName(info: info)
     }
 
     private var metaLine: String {
@@ -55,6 +67,20 @@ struct AgentHeroView: View {
 #Preview("Agent Hero Offline") {
     let agent = PreviewFixtures.sampleAgent
     let info = AgentInfo(address: PreviewFixtures.testAgentAddress, name: "OpenOnion", online: false)
+    AgentHeroView(agent: agent, info: info)
+        .padding()
+}
+
+#Preview("Agent Hero With Remote Profile") {
+    let agent = AgentConfigRecord(address: PreviewFixtures.testAgentAddress, alias: "A1")
+    let info = AgentInfo(
+        address: PreviewFixtures.testAgentAddress,
+        name: "OpenOnion",
+        trust: "careful",
+        version: "1.0",
+        model: "co/gemini-2.5-flash",
+        online: true
+    )
     AgentHeroView(agent: agent, info: info)
         .padding()
 }

@@ -40,7 +40,7 @@ struct ConversationSidebarRow: View {
 
     private var rowButton: some View {
         Button(action: handleRowTap) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "text.bubble")
                     .font(.body)
                     .foregroundStyle(.secondary)

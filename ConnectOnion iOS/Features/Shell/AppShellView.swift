@@ -1,8 +1,10 @@
 import SwiftData
 import SwiftUI
+import WidgetKit
 
 struct AppShellView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \AgentConfigRecord.createdAt) private var agents: [AgentConfigRecord]
     @Query(sort: \ConversationRecord.updatedAt, order: .reverse) private var conversations: [ConversationRecord]
 
@@ -93,15 +95,39 @@ struct AppShellView: View {
         }
         .task {
             restoreInitialSelection()
+            publishWidgetSnapshot()
+            consumePendingWidgetRequest()
             infoStore.startAutoRefresh(addresses: agentAddresses)
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             restoreInitialSelection()
+            publishWidgetSnapshot()
             infoStore.startAutoRefresh(addresses: addresses)
+        }
+        .onChange(of: agents.map(\.updatedAt)) { _, _ in
+            publishWidgetSnapshot()
+        }
+        .onChange(of: conversations.map(\.updatedAt)) { _, _ in
+            publishWidgetSnapshot()
+        }
+        .onChange(of: infoStore.infoByAddress) { _, _ in
+            publishWidgetSnapshot()
         }
         .onChange(of: selectedAgentAddress) { _, address in
             guard let address else { return }
             infoStore.refresh(addresses: [address])
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            consumePendingWidgetRequest()
+        }
+        .onOpenURL { url in
+            guard let request = ConnectOnionDeepLink.parse(url) else { return }
+            if let conversationID = request.conversationID {
+                openConversation(id: conversationID)
+            } else {
+                handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+            }
         }
         .onDisappear {
             infoStore.stopAutoRefresh()
@@ -236,6 +262,68 @@ struct AppShellView: View {
     private func showDetailColumn() {
         columnVisibility = .detailOnly
         preferredCompactColumn = .detail
+    }
+
+    private func consumePendingWidgetRequest() {
+        guard let request = ConnectOnionPendingChatRequestStore.consume() else { return }
+        handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+    }
+
+    private func handleNewChatRequest(agentAddress: String?, suggestion: String?) {
+        let agent = agentAddress.flatMap(agent(for:)) ?? selectedAgent ?? agents.first
+        guard let agent else {
+            showingAddAgent = true
+            return
+        }
+
+        let trimmedSuggestion = suggestion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedSuggestion.isEmpty {
+            newChat(for: agent)
+        } else {
+            startConversation(agent: agent, input: AgentInput(prompt: trimmedSuggestion))
+        }
+    }
+
+    private func openConversation(id: String) {
+        guard let uuid = UUID(uuidString: id),
+              let conversation = conversations.first(where: { $0.id == uuid }) else { return }
+        selectedAgentAddress = conversation.agentAddress
+        selectedConversationID = conversation.id
+        showDetailColumn()
+    }
+
+    private func publishWidgetSnapshot() {
+        let shortcuts = agents
+            .map { agent -> ConnectOnionAgentShortcut in
+                let latestConversation = conversations.first { $0.agentAddress == agent.address }
+                let info = infoStore.infoByAddress[agent.address] ?? agent.cachedInfo
+                let lastUsedAt = latestConversation?.updatedAt ?? agent.updatedAt
+                return ConnectOnionAgentShortcut(
+                    address: agent.address,
+                    displayName: agent.displayName(info: info),
+                    subtitle: widgetSubtitle(for: latestConversation, info: info),
+                    lastUsedAt: lastUsedAt,
+                    suggestions: ConnectOnionSharedSuggestions.defaults
+                )
+            }
+            .sorted { $0.lastUsedAt > $1.lastUsedAt }
+
+        ConnectOnionWidgetSnapshotStore.save(
+            ConnectOnionWidgetSnapshot(updatedAt: .now, agents: Array(shortcuts.prefix(6)))
+        )
+        WidgetCenter.shared.reloadTimelines(ofKind: "ConnectOnionWidget")
+    }
+
+    private func widgetSubtitle(for conversation: ConversationRecord?, info: AgentInfo?) -> String {
+        if let conversation {
+            return conversation.title
+        }
+
+        if info?.online == true {
+            return "Online"
+        }
+
+        return "Ready"
     }
 }
 

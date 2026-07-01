@@ -67,6 +67,7 @@ struct ChatScreen: View {
                 placeholder: "Message \(displayName)",
                 isRunning: viewModel.shouldShowStopButton,
                 acceptedInputs: info?.acceptedInputs,
+                skills: info?.skills ?? [],
                 onSend: { viewModel.send($0, images: $1, files: $2) },
                 onStop: viewModel.stop
             )

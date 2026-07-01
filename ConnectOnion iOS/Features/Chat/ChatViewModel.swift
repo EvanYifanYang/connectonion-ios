@@ -96,6 +96,7 @@ final class ChatViewModel {
         sessionState = .connecting
         elapsedTime = 0
         stopTimer()
+        liveActivity.start(conversationID: conversation.id, agentAddress: agent.address, agentName: agent.displayName)
 
         streamTask?.cancel()
         let session = snapshot()
@@ -117,6 +118,13 @@ final class ChatViewModel {
         errorMessage = nil
         sessionState = .reconnecting
         startTimer()
+        liveActivity.start(conversationID: conversation.id, agentAddress: agent.address, agentName: agent.displayName)
+        liveActivity.update(
+            conversationID: conversation.id,
+            phase: .connecting,
+            headline: "Reconnecting to \(agent.displayName)",
+            detail: "Restoring the active conversation"
+        )
 
         streamTask?.cancel()
         let session = snapshot()
@@ -138,6 +146,7 @@ final class ChatViewModel {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
         sessionState = .connected
+        updateLiveActivityAfterUserAction("Continuing after your answer")
 
         Task {
             do {
@@ -154,6 +163,7 @@ final class ChatViewModel {
         }
         persist()
         sessionState = .connected
+        updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
         Task {
             do {
                 try await client.sendApprovalResponse(approved: approved, scope: scope, mode: mode, feedback: feedback)
@@ -169,6 +179,7 @@ final class ChatViewModel {
         }
         persist()
         sessionState = .connected
+        updateLiveActivityAfterUserAction("Verification submitted")
         Task {
             do {
                 try await client.sendOnboardSubmit(inviteCode: inviteCode, payment: payment)
@@ -184,6 +195,7 @@ final class ChatViewModel {
         }
         persist()
         sessionState = .connected
+        updateLiveActivityAfterUserAction("Plan feedback sent")
         Task {
             do {
                 try await client.sendPlanReviewResponse(message)
@@ -201,10 +213,20 @@ final class ChatViewModel {
         deferredOnboardInput = nil
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
+        liveActivity.end(
+            conversationID: conversation.id,
+            phase: .stopped,
+            headline: "Agent stopped",
+            detail: "The current reply was cancelled"
+        )
     }
 
     private var client: ConnectOnionClientProviding {
         clientOverride ?? injectedClient
+    }
+
+    private var liveActivity: AgentReplyLiveActivityController {
+        AgentReplyLiveActivityController.shared
     }
 
     private var hasCommittedUserMessage: Bool {
@@ -237,6 +259,12 @@ final class ChatViewModel {
                 self.pendingUserItem = nil
                 sessionState = .active
                 startTimer()
+                liveActivity.update(
+                    conversationID: conversation.id,
+                    phase: .running,
+                    headline: "\(agent.displayName) is working",
+                    detail: "Waiting for the first streamed event"
+                )
             } else {
                 sessionState = status == "running" ? .active : .connected
             }
@@ -252,6 +280,7 @@ final class ChatViewModel {
             if let newState = ChatEventReducer.apply(event, to: &items) {
                 sessionState = newState
             }
+            updateLiveActivity(for: event)
             if let eventID = event.id {
                 conversation.lastRenderedEventID = eventID
             }
@@ -280,6 +309,12 @@ final class ChatViewModel {
             sessionState = .connected
             stopTimer()
             persist()
+            liveActivity.end(
+                conversationID: conversation.id,
+                phase: .completed,
+                headline: "Reply ready",
+                detail: "\(agent.displayName) finished responding"
+            )
 
         case .failure(let message):
             fail(message)
@@ -357,6 +392,107 @@ final class ChatViewModel {
         sessionState = .disconnected
         stopTimer()
         persist()
+        liveActivity.end(
+            conversationID: conversation.id,
+            phase: .failed,
+            headline: "Agent disconnected",
+            detail: errorMessage ?? "The reply could not be completed"
+        )
+    }
+
+    private func updateLiveActivity(for event: ServerEvent) {
+        switch event.type {
+        case "tool_call":
+            let toolName = event.payload[string: "name"] ?? "tool"
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .tool,
+                headline: "Using \(toolName)",
+                detail: liveActivityDetail(for: event.payload["args"]?.objectValue) ?? "Running a tool call",
+                toolName: toolName
+            )
+
+        case "tool_result":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .running,
+                headline: "\(agent.displayName) is reading results",
+                detail: "Tool call completed"
+            )
+
+        case "llm_call", "thinking", "intent":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .running,
+                headline: "\(agent.displayName) is thinking",
+                detail: event.payload[string: "model"] ?? event.payload[string: "ack"] ?? "Planning the next step"
+            )
+
+        case "assistant":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .running,
+                headline: "\(agent.displayName) is replying",
+                detail: "Streaming the final response"
+            )
+
+        case "ask_user":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .waiting,
+                headline: "Needs your reply",
+                detail: event.payload[string: "text"] ?? event.payload[string: "question"] ?? "Return to answer the agent"
+            )
+
+        case "approval_needed":
+            let toolName = event.payload[string: "tool"] ?? "tool"
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .waiting,
+                headline: "Approval needed",
+                detail: event.payload[string: "description"] ?? "Review \(toolName)",
+                toolName: toolName
+            )
+
+        case "plan_review":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .waiting,
+                headline: "Plan ready",
+                detail: "Return to review the agent plan"
+            )
+
+        case "ONBOARD_REQUIRED":
+            liveActivity.update(
+                conversationID: conversation.id,
+                phase: .waiting,
+                headline: "Verification needed",
+                detail: "Return to finish onboarding"
+            )
+
+        default:
+            break
+        }
+    }
+
+    private func updateLiveActivityAfterUserAction(_ detail: String) {
+        liveActivity.update(
+            conversationID: conversation.id,
+            phase: .running,
+            headline: "\(agent.displayName) is continuing",
+            detail: detail
+        )
+    }
+
+    private func liveActivityDetail(for arguments: [String: JSONValue]?) -> String? {
+        guard let arguments else { return nil }
+        let preferredKeys = ["path", "file_path", "command", "query", "url"]
+        for key in preferredKeys {
+            if let value = arguments[key]?.stringValue, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
     }
 
     private func userFacingError(_ message: String) -> String {

@@ -3,6 +3,7 @@ import SwiftUI
 struct LandingComposer: View {
     var suggestions: [String]
     var acceptedInputs: AgentAcceptedInputs?
+    var skills: [SkillInfo]
     var onSend: (String, [String], [FileAttachment]) -> Void
 
     var body: some View {
@@ -15,6 +16,7 @@ struct LandingComposer: View {
                 placeholder: "Message this agent",
                 isRunning: false,
                 acceptedInputs: acceptedInputs,
+                skills: skills,
                 onSend: onSend,
                 onStop: {}
             )
@@ -30,6 +32,7 @@ struct LandingComposer: View {
     LandingComposer(
         suggestions: ["What can you do?", "Show system info", "List files"],
         acceptedInputs: PreviewFixtures.sampleAgentInfo.acceptedInputs,
+        skills: PreviewFixtures.sampleSkills,
         onSend: { _, _, _ in }
     )
 }

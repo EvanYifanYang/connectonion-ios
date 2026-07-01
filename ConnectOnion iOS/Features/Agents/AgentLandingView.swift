@@ -24,6 +24,7 @@ struct AgentLandingView: View {
             LandingComposer(
                 suggestions: AgentPromptSuggestions.defaults,
                 acceptedInputs: info?.acceptedInputs,
+                skills: info?.skills ?? [],
                 onSend: { prompt, images, files in
                     onSend(AgentInput(prompt: prompt, images: images, files: files))
                 }

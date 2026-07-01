@@ -24,6 +24,10 @@ enum AccessibilityID {
     static let chatAttachmentPhotoButton = "connectonion.chat.attachment.photo"
     static let chatAttachmentFilesButton = "connectonion.chat.attachment.files"
     static let chatAttachmentError = "connectonion.chat.attachment.error"
+    static let chatVoiceButton = "connectonion.chat.voice.button"
+    static let chatVoiceStatus = "connectonion.chat.voice.status"
+    static let chatVoiceError = "connectonion.chat.voice.error"
+    static let chatSkillPalette = "connectonion.chat.skill.palette"
     static let suggestionStrip = "connectonion.suggestion.strip"
     static let settingsButton = "connectonion.settings.button"
     static let reconnectButton = "connectonion.chat.reconnect.button"
@@ -70,6 +74,10 @@ enum AccessibilityID {
 
     static func attachmentRemove(_ id: String) -> String {
         "connectonion.chat.attachment.remove.\(normalizedComponent(id))"
+    }
+
+    static func chatSkill(_ name: String) -> String {
+        "connectonion.chat.skill.\(normalizedComponent(name))"
     }
 
     static func askUserField(_ name: String) -> String {

@@ -20,11 +20,13 @@ struct ConnectOnionLiveActivity: Widget {
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.startedAt, style: .timer)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.trailing, 6)
-                        .padding(.top, 6)
+                    if context.state.showsTimer {
+                        Text(context.state.startedAt, style: .timer)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .padding(.trailing, 6)
+                            .padding(.top, 6)
+                    }
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
@@ -88,15 +90,26 @@ private struct LiveActivityLockScreenView: View {
 
             Spacer(minLength: 8)
 
-            Text(context.state.startedAt, style: .timer)
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            if context.state.showsTimer {
+                Text(context.state.startedAt, style: .timer)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 8)
     }
 }
 
 private extension AgentReplyActivityAttributes.ContentState {
+    var showsTimer: Bool {
+        switch phase {
+        case .connecting, .running, .tool, .waiting:
+            true
+        case .completed, .failed, .stopped:
+            false
+        }
+    }
+
     var phaseLabel: String {
         switch phase {
         case .connecting:

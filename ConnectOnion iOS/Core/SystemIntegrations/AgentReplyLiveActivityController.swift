@@ -7,14 +7,12 @@ final class AgentReplyLiveActivityController {
 
     private var activityIDs: [UUID: String] = [:]
     private var latestStates: [UUID: AgentReplyActivityAttributes.ContentState] = [:]
-    private var completionEndTasks: [UUID: Task<Void, Never>] = [:]
     private var currentConversationID: UUID?
 
     private init() {}
 
     func start(conversationID: UUID, agentAddress: String, agentName: String) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        cancelCompletionEnd(for: conversationID)
         restoreTrackedActivity(for: conversationID)
         endOtherActiveActivities(except: conversationID)
         currentConversationID = conversationID
@@ -59,8 +57,7 @@ final class AgentReplyLiveActivityController {
     func complete(
         conversationID: UUID,
         headline: String,
-        detail: String,
-        retention: TimeInterval = 5 * 60
+        detail: String
     ) {
         let startedAt = latestStates[conversationID]?.startedAt ?? .now
         let state = AgentReplyActivityAttributes.ContentState(
@@ -71,25 +68,14 @@ final class AgentReplyLiveActivityController {
             startedAt: startedAt,
             updatedAt: .now
         )
-        latestStates[conversationID] = state
-        cancelCompletionEnd(for: conversationID)
-
         guard let activityID = activityIDs[conversationID] else { return }
-        let staleDate = Date.now.addingTimeInterval(retention)
-
-        Task {
-            await Self.updateActivity(id: activityID, state: state, staleDate: staleDate)
+        latestStates[conversationID] = nil
+        activityIDs[conversationID] = nil
+        if currentConversationID == conversationID {
+            currentConversationID = nil
         }
-
-        let nanoseconds = UInt64(max(0, retention) * 1_000_000_000)
-        completionEndTasks[conversationID] = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: nanoseconds)
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            await self?.finishCompletedActivity(conversationID: conversationID, state: state)
+        Task {
+            await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
         }
     }
 
@@ -123,7 +109,6 @@ final class AgentReplyLiveActivityController {
         headline: String,
         detail: String
     ) {
-        cancelCompletionEnd(for: conversationID)
         let startedAt = latestStates[conversationID]?.startedAt ?? .now
         let state = AgentReplyActivityAttributes.ContentState(
             phase: phase,
@@ -144,8 +129,7 @@ final class AgentReplyLiveActivityController {
     }
 
     private func cancelCompletionEnd(for conversationID: UUID) {
-        completionEndTasks[conversationID]?.cancel()
-        completionEndTasks[conversationID] = nil
+        _ = conversationID
     }
 
     private func restoreTrackedActivity(for conversationID: UUID) {
@@ -176,7 +160,6 @@ final class AgentReplyLiveActivityController {
                 continue
             }
 
-            cancelCompletionEnd(for: otherConversationID)
             latestStates[otherConversationID] = nil
             activityIDs[otherConversationID] = nil
 
@@ -198,22 +181,6 @@ final class AgentReplyLiveActivityController {
             startedAt: activity.content.state.startedAt,
             updatedAt: .now
         )
-    }
-
-    private func finishCompletedActivity(
-        conversationID: UUID,
-        state: AgentReplyActivityAttributes.ContentState
-    ) async {
-        latestStates[conversationID] = nil
-        let activityID = activityIDs[conversationID]
-        activityIDs[conversationID] = nil
-        completionEndTasks[conversationID] = nil
-        if currentConversationID == conversationID {
-            currentConversationID = nil
-        }
-
-        guard let activityID else { return }
-        await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
     }
 
     nonisolated private static func updateActivity(

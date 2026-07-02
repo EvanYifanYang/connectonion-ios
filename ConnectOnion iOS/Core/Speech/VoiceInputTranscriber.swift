@@ -22,6 +22,7 @@ final class VoiceInputTranscriber {
     @ObservationIgnored private let audioEngine = AVAudioEngine()
     @ObservationIgnored private var request: SFSpeechAudioBufferRecognitionRequest?
     @ObservationIgnored private var task: SFSpeechRecognitionTask?
+    @ObservationIgnored private var audioTapBridge: AudioTapBridge?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var fallbackFinishTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
@@ -112,6 +113,8 @@ final class VoiceInputTranscriber {
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         recognitionRequest.shouldReportPartialResults = true
         request = recognitionRequest
+        let audioTapBridge = AudioTapBridge(request: recognitionRequest)
+        self.audioTapBridge = audioTapBridge
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
@@ -119,9 +122,13 @@ final class VoiceInputTranscriber {
             throw VoiceInputError.audioInputUnavailable
         }
         inputNode.removeTap(onBus: 0)
-        try inputNode.__installTap(onBus: 0, bufferSize: 1024, format: format, error: ()) { [weak recognitionRequest] buffer, _ in
-            recognitionRequest?.append(buffer)
-        }
+        try inputNode.__installTap(
+            onBus: 0,
+            bufferSize: 1024,
+            format: format,
+            error: (),
+            block: Self.makeAudioTapHandler(bridge: audioTapBridge)
+        )
 
         audioEngine.prepare()
         try audioEngine.start()
@@ -129,26 +136,10 @@ final class VoiceInputTranscriber {
         state = .recording
         startTimer()
 
-        task = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                if let result {
-                    transcript = result.bestTranscription.formattedString
-                    if result.isFinal {
-                        finishRecognition()
-                    }
-                }
-
-                if let error {
-                    if !transcript.isEmpty {
-                        finishRecognition()
-                    } else {
-                        fail(with: userFacingMessage(for: error))
-                    }
-                }
-            }
-        }
+        task = recognizer.recognitionTask(
+            with: recognitionRequest,
+            resultHandler: Self.makeRecognitionHandler(owner: self)
+        )
     }
 
     private func stopAudioCapture() {
@@ -156,7 +147,7 @@ final class VoiceInputTranscriber {
             audioEngine.stop()
         }
         audioEngine.inputNode.removeTap(onBus: 0)
-        request?.endAudio()
+        audioTapBridge?.endAudio()
         stopTimer()
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
@@ -180,6 +171,7 @@ final class VoiceInputTranscriber {
         timerTask?.cancel()
         timerTask = nil
         startedAt = nil
+        audioTapBridge = nil
         request = nil
         task = nil
     }
@@ -216,6 +208,77 @@ final class VoiceInputTranscriber {
         }
 
         return "Could not transcribe audio. Try again in a quieter place."
+    }
+
+    private func handleRecognitionCallback(
+        transcript newTranscript: String?,
+        isFinal: Bool,
+        errorMessage: String?
+    ) {
+        if let newTranscript {
+            transcript = newTranscript
+            if isFinal {
+                finishRecognition()
+            }
+        }
+
+        if let errorMessage {
+            if !transcript.isEmpty {
+                finishRecognition()
+            } else {
+                fail(with: errorMessage)
+            }
+        }
+    }
+
+    nonisolated private static func makeAudioTapHandler(
+        bridge: AudioTapBridge
+    ) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
+        { buffer, _ in
+            bridge.append(buffer)
+        }
+    }
+
+    nonisolated private static func makeRecognitionHandler(
+        owner: VoiceInputTranscriber
+    ) -> @Sendable (SFSpeechRecognitionResult?, Error?) -> Void {
+        { [weak owner] result, error in
+            let transcript = result?.bestTranscription.formattedString
+            let isFinal = result?.isFinal ?? false
+            let errorMessage = error.map(Self.userFacingMessage)
+            Task { @MainActor [weak owner] in
+                guard let owner else { return }
+                owner.handleRecognitionCallback(
+                    transcript: transcript,
+                    isFinal: isFinal,
+                    errorMessage: errorMessage
+                )
+            }
+        }
+    }
+
+    nonisolated private static func userFacingMessage(for error: Error) -> String {
+        if let error = error as? VoiceInputError {
+            return error.localizedDescription
+        }
+
+        return "Could not transcribe audio. Try again in a quieter place."
+    }
+}
+
+private final class AudioTapBridge: @unchecked Sendable {
+    private let request: SFSpeechAudioBufferRecognitionRequest
+
+    init(request: SFSpeechAudioBufferRecognitionRequest) {
+        self.request = request
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        request.append(buffer)
+    }
+
+    func endAudio() {
+        request.endAudio()
     }
 }
 

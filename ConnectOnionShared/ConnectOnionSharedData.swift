@@ -73,15 +73,20 @@ enum ConnectOnionPendingChatRequestStore {
 
     static func save(_ request: ConnectOnionPendingChatRequest) {
         guard let data = try? JSONEncoder().encode(request) else { return }
-        ConnectOnionAppGroup.defaults.set(data, forKey: requestKey)
+        let defaults = ConnectOnionAppGroup.defaults
+        defaults.set(data, forKey: requestKey)
+        defaults.synchronize()
     }
 
     static func consume() -> ConnectOnionPendingChatRequest? {
-        guard let data = ConnectOnionAppGroup.defaults.data(forKey: requestKey),
+        let defaults = ConnectOnionAppGroup.defaults
+        defaults.synchronize()
+        guard let data = defaults.data(forKey: requestKey),
               let request = try? JSONDecoder().decode(ConnectOnionPendingChatRequest.self, from: data) else {
             return nil
         }
-        ConnectOnionAppGroup.defaults.removeObject(forKey: requestKey)
+        defaults.removeObject(forKey: requestKey)
+        defaults.synchronize()
         return request
     }
 }

@@ -107,6 +107,9 @@ final class VoiceInputTranscriber {
 
         let inputNode = audioEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
+        guard format.channelCount > 0 else {
+            throw VoiceInputError.audioInputUnavailable
+        }
         inputNode.removeTap(onBus: 0)
         try inputNode.__installTap(onBus: 0, bufferSize: 1024, format: format, error: ()) { [weak recognitionRequest] buffer, _ in
             recognitionRequest?.append(buffer)
@@ -212,6 +215,7 @@ private enum VoiceInputError: LocalizedError {
     case speechPermissionDenied
     case microphonePermissionDenied
     case speechUnavailable
+    case audioInputUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -221,6 +225,8 @@ private enum VoiceInputError: LocalizedError {
             "Enable Microphone access in Settings to dictate messages."
         case .speechUnavailable:
             "Speech recognition is not available right now."
+        case .audioInputUnavailable:
+            "Audio input is not available right now."
         }
     }
 }

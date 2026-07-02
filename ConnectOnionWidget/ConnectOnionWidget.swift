@@ -59,7 +59,10 @@ private struct SmallAgentWidget: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            WidgetHeader(agent: agent)
+            Link(destination: ConnectOnionDeepLink.newChat(agentAddress: agent.address)) {
+                WidgetHeader(agent: agent)
+            }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
@@ -91,10 +94,9 @@ private struct MediumAgentWidget: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(agents) { agent in
-                    Button(intent: StartSuggestedChatIntent(agentAddress: agent.address, suggestion: nil)) {
+                    Link(destination: ConnectOnionDeepLink.newChat(agentAddress: agent.address)) {
                         WidgetAgentRow(agent: agent)
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,13 +104,16 @@ private struct MediumAgentWidget: View {
             if let agent = agents.first {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(agent.suggestions.prefix(3)), id: \.self) { suggestion in
-                        Button(intent: StartSuggestedChatIntent(agentAddress: agent.address, suggestion: suggestion)) {
+                        Link(destination: ConnectOnionDeepLink.newChat(agentAddress: agent.address, suggestion: suggestion)) {
                             Text(suggestion)
                                 .font(.caption.weight(.medium))
                                 .lineLimit(2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+                                .background(.fill.tertiary)
+                                .clipShape(.rect(cornerRadius: 8))
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -7,14 +7,23 @@ final class AgentReplyLiveActivityController {
 
     private var activityIDs: [UUID: String] = [:]
     private var latestStates: [UUID: AgentReplyActivityAttributes.ContentState] = [:]
+    private var completionEndTasks: [UUID: Task<Void, Never>] = [:]
 
     private init() {}
 
     func start(conversationID: UUID, agentAddress: String, agentName: String) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        cancelCompletionEnd(for: conversationID)
 
         let state = AgentReplyActivityAttributes.ContentState.connecting(agentName: agentName)
         latestStates[conversationID] = state
+
+        if let activityID = activityIDs[conversationID] {
+            Task {
+                await Self.updateActivity(id: activityID, state: state)
+            }
+            return
+        }
 
         Task {
             do {
@@ -40,6 +49,43 @@ final class AgentReplyLiveActivityController {
             } catch {
                 activityIDs[conversationID] = nil
             }
+        }
+    }
+
+    func complete(
+        conversationID: UUID,
+        headline: String,
+        detail: String,
+        retention: TimeInterval = 5 * 60
+    ) {
+        let startedAt = latestStates[conversationID]?.startedAt ?? .now
+        let state = AgentReplyActivityAttributes.ContentState(
+            phase: .completed,
+            headline: headline,
+            detail: detail,
+            toolName: nil,
+            startedAt: startedAt,
+            updatedAt: .now
+        )
+        latestStates[conversationID] = state
+        cancelCompletionEnd(for: conversationID)
+
+        guard let activityID = activityIDs[conversationID] else { return }
+        let staleDate = Date.now.addingTimeInterval(retention)
+
+        Task {
+            await Self.updateActivity(id: activityID, state: state, staleDate: staleDate)
+        }
+
+        let nanoseconds = UInt64(max(0, retention) * 1_000_000_000)
+        completionEndTasks[conversationID] = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: nanoseconds)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.finishCompletedActivity(conversationID: conversationID, state: state)
         }
     }
 
@@ -73,6 +119,7 @@ final class AgentReplyLiveActivityController {
         headline: String,
         detail: String
     ) {
+        cancelCompletionEnd(for: conversationID)
         let startedAt = latestStates[conversationID]?.startedAt ?? .now
         let state = AgentReplyActivityAttributes.ContentState(
             phase: phase,
@@ -92,12 +139,31 @@ final class AgentReplyLiveActivityController {
         }
     }
 
-    nonisolated private static func updateActivity(
-        id: String,
+    private func cancelCompletionEnd(for conversationID: UUID) {
+        completionEndTasks[conversationID]?.cancel()
+        completionEndTasks[conversationID] = nil
+    }
+
+    private func finishCompletedActivity(
+        conversationID: UUID,
         state: AgentReplyActivityAttributes.ContentState
     ) async {
+        latestStates[conversationID] = nil
+        let activityID = activityIDs[conversationID]
+        activityIDs[conversationID] = nil
+        completionEndTasks[conversationID] = nil
+
+        guard let activityID else { return }
+        await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
+    }
+
+    nonisolated private static func updateActivity(
+        id: String,
+        state: AgentReplyActivityAttributes.ContentState,
+        staleDate: Date? = nil
+    ) async {
         guard let activity = Activity<AgentReplyActivityAttributes>.activities.first(where: { $0.id == id }) else { return }
-        await activity.update(ActivityContent(state: state, staleDate: nil))
+        await activity.update(ActivityContent(state: state, staleDate: staleDate))
     }
 
     nonisolated private static func endActivity(

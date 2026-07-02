@@ -26,6 +26,8 @@ final class ChatViewModel {
     @ObservationIgnored private var inFlightUserItemID: String?
     @ObservationIgnored private var inFlightWasFirstPrompt = false
     @ObservationIgnored private var optimisticUserItemID: String?
+    @ObservationIgnored private var automaticReconnectAttempts = 0
+    @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
     private var deferredOnboardInput: AgentInput?
 
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
@@ -39,6 +41,7 @@ final class ChatViewModel {
     deinit {
         streamTask?.cancel()
         timerTask?.cancel()
+        automaticReconnectTask?.cancel()
     }
 
     var pendingAskUser: ChatItem? {
@@ -87,6 +90,8 @@ final class ChatViewModel {
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
         errorMessage = nil
+        automaticReconnectAttempts = 0
+        automaticReconnectTask?.cancel()
         let input = AgentInput(prompt: trimmed, images: images, files: files)
         inFlightInput = input
         var userItem = ChatItem(kind: .user, content: trimmed)
@@ -268,6 +273,7 @@ final class ChatViewModel {
             } else {
                 sessionState = status == "running" ? .active : .connected
             }
+            errorMessage = nil
 
         case .server(let event):
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
@@ -296,6 +302,8 @@ final class ChatViewModel {
             }
 
         case .output(let result, let session, let chatItems):
+            automaticReconnectAttempts = 0
+            automaticReconnectTask?.cancel()
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
@@ -309,9 +317,8 @@ final class ChatViewModel {
             sessionState = .connected
             stopTimer()
             persist()
-            liveActivity.end(
+            liveActivity.complete(
                 conversationID: conversation.id,
-                phase: .completed,
                 headline: "Reply ready",
                 detail: "\(agent.displayName) finished responding"
             )
@@ -383,6 +390,12 @@ final class ChatViewModel {
     }
 
     private func fail(_ message: String) {
+        if shouldAutomaticallyReconnect(after: message) {
+            beginAutomaticReconnect()
+            return
+        }
+
+        automaticReconnectTask?.cancel()
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
@@ -398,6 +411,41 @@ final class ChatViewModel {
             headline: "Agent disconnected",
             detail: errorMessage ?? "The reply could not be completed"
         )
+    }
+
+    private func shouldAutomaticallyReconnect(after message: String) -> Bool {
+        guard automaticReconnectAttempts == 0 else { return false }
+        guard conversation.remoteSessionID != nil else { return false }
+        guard hasInFlightAttachments else { return false }
+        switch sessionState {
+        case .connecting, .active, .reconnecting:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func beginAutomaticReconnect() {
+        automaticReconnectAttempts += 1
+        errorMessage = nil
+        pendingUserItem = nil
+        commitOptimisticUserPrompt()
+        clearOptimisticPlaceholder()
+        stopTimer()
+        sessionState = .reconnecting
+        liveActivity.update(
+            conversationID: conversation.id,
+            phase: .connecting,
+            headline: "Recovering the reply",
+            detail: "Restoring the latest response from \(agent.displayName)"
+        )
+
+        automaticReconnectTask?.cancel()
+        automaticReconnectTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard let self, !Task.isCancelled else { return }
+            reconnect()
+        }
     }
 
     private func updateLiveActivity(for event: ServerEvent) {
@@ -506,6 +554,11 @@ final class ChatViewModel {
         }
 
         return message
+    }
+
+    private var hasInFlightAttachments: Bool {
+        guard let inFlightInput else { return false }
+        return !inFlightInput.images.isEmpty || !inFlightInput.files.isEmpty
     }
 
     private func startTimer() {

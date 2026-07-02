@@ -5,11 +5,13 @@ import UniformTypeIdentifiers
 enum AttachmentEncoding {
     static let defaultMaxAttachmentCount = 10
     static let defaultMaxFileSizeBytes = 10 * 1024 * 1024
-    static let defaultMaxInlineImageBytes = 650 * 1024
+    static let defaultMaxInputFrameBytes = 900 * 1024
+    static let defaultInputFrameSafetyMarginBytes = 64 * 1024
 
     struct ImagePayload {
         var dataURL: String
         var size: Int
+        var encodedSize: Int
         var mimeType: String
         var filenameExtension: String
         var image: UIImage?
@@ -48,10 +50,9 @@ enum AttachmentEncoding {
         )
     }
 
-    static func imagePayload(data: Data, maxBytes: Int = defaultMaxInlineImageBytes) -> ImagePayload? {
+    static func imagePayload(data: Data, maxEncodedBytes: Int = defaultMaxInputFrameBytes) -> ImagePayload? {
         guard let image = UIImage(data: data) else { return nil }
 
-        let normalizedMaxBytes = max(120 * 1024, maxBytes)
         let candidates: [(dimension: CGFloat, quality: CGFloat)] = [
             (1600, 0.82),
             (1400, 0.78),
@@ -61,7 +62,10 @@ enum AttachmentEncoding {
             (896, 0.62),
             (768, 0.58),
             (640, 0.52),
-            (512, 0.46)
+            (512, 0.46),
+            (384, 0.42),
+            (320, 0.38),
+            (256, 0.34)
         ]
 
         var smallestPayload: ImagePayload?
@@ -69,24 +73,47 @@ enum AttachmentEncoding {
         for candidate in candidates {
             let scaledImage = image.scaledForTransport(maxDimension: candidate.dimension)
             guard let jpegData = scaledImage.jpegData(compressionQuality: candidate.quality) else { continue }
+            let dataURL = dataURL(for: jpegData, mimeType: "image/jpeg")
             let payload = ImagePayload(
-                dataURL: dataURL(for: jpegData, mimeType: "image/jpeg"),
+                dataURL: dataURL,
                 size: jpegData.count,
+                encodedSize: dataURL.utf8.count,
                 mimeType: "image/jpeg",
                 filenameExtension: "jpg",
                 image: scaledImage
             )
 
-            if payload.size <= normalizedMaxBytes {
+            if payload.encodedSize <= maxEncodedBytes {
                 return payload
             }
 
-            if smallestPayload == nil || payload.size < smallestPayload!.size {
+            if smallestPayload == nil || payload.encodedSize < smallestPayload!.encodedSize {
                 smallestPayload = payload
             }
         }
 
+        guard let smallestPayload, smallestPayload.encodedSize <= maxEncodedBytes else { return nil }
         return smallestPayload
+    }
+
+    static func imagePayload(data: Data, maxBytes: Int) -> ImagePayload? {
+        imagePayload(data: data, maxEncodedBytes: encodedDataURLSize(forRawByteCount: maxBytes, mimeType: "image/jpeg"))
+    }
+
+    static func encodedDataURLSize(forRawByteCount rawByteCount: Int, mimeType: String) -> Int {
+        let base64Length = 4 * ((max(0, rawByteCount) + 2) / 3)
+        return "data:\(mimeType);base64,".utf8.count + base64Length
+    }
+
+    static func estimatedInputFrameBytes(prompt: String, images: [String], files: [FileAttachment]) -> Int {
+        let imageBytes = images.reduce(0) { partial, image in
+            partial + image.utf8.count + 8
+        }
+        let fileBytes = files.reduce(0) { partial, file in
+            partial + file.name.utf8.count + file.dataURL.utf8.count + 64
+        }
+
+        return prompt.utf8.count + imageBytes + fileBytes + 4096
     }
 
     static func decodedData(from dataURL: String) -> Data? {

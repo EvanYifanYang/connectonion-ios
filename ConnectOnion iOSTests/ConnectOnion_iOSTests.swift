@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 import UniformTypeIdentifiers
 @testable import ConnectOnion_iOS
 
@@ -131,6 +132,21 @@ struct AttachmentEncodingTests {
         #expect(attachment.size == data.count)
         #expect(attachment.dataURL.hasPrefix("data:text/markdown;base64,"))
         #expect(AttachmentEncoding.decodedData(from: attachment.dataURL) == data)
+    }
+
+    @Test func imagePayloadRespectsEncodedBudget() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1800, height: 1800))
+        let image = renderer.image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1800, height: 1800))
+        }
+        let data = try #require(image.pngData())
+        let budget = 220 * 1024
+
+        let payload = try #require(AttachmentEncoding.imagePayload(data: data, maxEncodedBytes: budget))
+
+        #expect(payload.encodedSize <= budget)
+        #expect(payload.dataURL.hasPrefix("data:image/jpeg;base64,"))
     }
 }
 
@@ -334,6 +350,21 @@ struct ChatViewModelTests {
         #expect(conversation.messages.first?.files == [file])
         #expect(conversation.title == "Image attachment")
     }
+
+    @Test @MainActor func attachmentFailureAutomaticallyReconnectsAndRecoversReply() async throws {
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = AttachmentRecoveryClient()
+        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
+
+        viewModel.send("What is in this image?", images: ["data:image/png;base64,aW1hZ2U="])
+        try await Task.sleep(for: .milliseconds(700))
+
+        #expect(client.reconnectCount == 1)
+        #expect(viewModel.sessionState == .connected)
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.items.contains { $0.kind == .agent && $0.content == "Recovered image reply" })
+    }
 }
 
 @MainActor
@@ -419,6 +450,35 @@ private final class AttachmentCapturingClient: ConnectOnionClientProviding {
 
     func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
+@MainActor
+private final class AttachmentRecoveryClient: ConnectOnionClientProviding {
+    private(set) var reconnectCount = 0
+
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.finish(throwing: NSError(domain: "ConnectOnionTests", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "'list' object has no attribute 'startswith'"
+            ]))
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        reconnectCount += 1
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: true, session: nil, chatItems: []))
+            continuation.yield(.output(result: "Recovered image reply", session: nil, chatItems: []))
+            continuation.finish()
+        }
     }
 
     func sendAskUserResponse(_ answer: String) async throws {}

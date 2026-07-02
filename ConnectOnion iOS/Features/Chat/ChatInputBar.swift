@@ -205,6 +205,20 @@ struct ChatInputBar: View {
         (acceptedInputs?.files?.maxFileSizeMB ?? 10) * 1024 * 1024
     }
 
+    private var maxImageEncodedBytes: Int {
+        let frameBudget = AttachmentEncoding.defaultMaxInputFrameBytes - AttachmentEncoding.defaultInputFrameSafetyMarginBytes
+        let perAttachmentBudget = frameBudget / max(1, maxAttachmentCount)
+        let acceptedFileBudget = AttachmentEncoding.encodedDataURLSize(
+            forRawByteCount: maxFileSizeBytes,
+            mimeType: "image/jpeg"
+        )
+        return min(perAttachmentBudget, acceptedFileBudget)
+    }
+
+    private var maxInputFramePayloadBytes: Int {
+        AttachmentEncoding.defaultMaxInputFrameBytes - AttachmentEncoding.defaultInputFrameSafetyMarginBytes
+    }
+
     private var currentAttachmentCount: Int {
         imageAttachments.count + fileAttachments.count
     }
@@ -338,8 +352,8 @@ struct ChatInputBar: View {
             return
         }
 
-        guard let payload = AttachmentEncoding.imagePayload(data: data, maxBytes: min(maxFileSizeBytes, AttachmentEncoding.defaultMaxInlineImageBytes)) else {
-            showAttachmentError("Could not read that image")
+        guard let payload = AttachmentEncoding.imagePayload(data: data, maxEncodedBytes: maxImageEncodedBytes) else {
+            showAttachmentError("Image is too large to send")
             return
         }
 
@@ -419,6 +433,12 @@ struct ChatInputBar: View {
         tick()
         let images = imageAttachments.map(\.dataURL)
         let files = fileAttachments
+        let estimatedFrameBytes = AttachmentEncoding.estimatedInputFrameBytes(prompt: trimmed, images: images, files: files)
+        guard estimatedFrameBytes <= maxInputFramePayloadBytes else {
+            showAttachmentError("Message attachments are larger than \(formatFileSize(maxInputFramePayloadBytes))")
+            return
+        }
+
         text = ""
         imageAttachments = []
         fileAttachments = []

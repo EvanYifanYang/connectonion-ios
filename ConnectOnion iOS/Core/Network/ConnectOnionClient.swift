@@ -26,7 +26,8 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             Task { @MainActor in
                 do {
                     let context = try await connect(agent: agent, session: session, continuation: continuation)
-                    try await context.transport.send(json: codec.inputMessage(input: input, agentAddress: agent.address, route: context.route))
+                    let message = try codec.inputMessage(input: input, agentAddress: agent.address, route: context.route)
+                    try await context.transport.send(text: encodedInputMessageText(message))
                     try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
                 } catch {
                     continuation.finish(throwing: error)
@@ -155,6 +156,18 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         return transport
     }
 
+    private func encodedInputMessageText(_ message: [String: JSONValue]) throws -> String {
+        let text = try message.jsonString()
+        let size = text.utf8.count
+        guard size <= AttachmentEncoding.defaultMaxInputFrameBytes else {
+            throw ConnectOnionClientError.inputFrameTooLarge(
+                size: size,
+                maxSize: AttachmentEncoding.defaultMaxInputFrameBytes
+            )
+        }
+        return text
+    }
+
     private func connectedEvent(from event: ServerEvent) -> ConnectOnionClientEvent {
         let sessionValue = event.payload["session"]
         let chatItems = decodeChatItems(from: event.payload["chat_items"])
@@ -186,4 +199,25 @@ private struct ConnectionContext {
     var transport: WebSocketTransporting
     var route: AgentRoute
     var stream: AsyncThrowingStream<String, Error>
+}
+
+private enum ConnectOnionClientError: LocalizedError {
+    case inputFrameTooLarge(size: Int, maxSize: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .inputFrameTooLarge(let size, let maxSize):
+            "Message is too large to send (\(Self.format(size)) > \(Self.format(maxSize))). Remove an attachment or try a smaller file."
+        }
+    }
+
+    private static func format(_ bytes: Int) -> String {
+        if bytes < 1024 {
+            return "\(bytes) B"
+        }
+        if bytes < 1024 * 1024 {
+            return String(format: "%.1f KB", Double(bytes) / 1024)
+        }
+        return String(format: "%.1f MB", Double(bytes) / Double(1024 * 1024))
+    }
 }

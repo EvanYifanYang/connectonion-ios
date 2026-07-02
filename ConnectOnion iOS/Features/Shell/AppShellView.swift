@@ -97,12 +97,12 @@ struct AppShellView: View {
             restoreInitialSelection()
             publishWidgetSnapshot()
             consumePendingWidgetRequest()
-            infoStore.startAutoRefresh(addresses: agentAddresses)
+            configureAgentInfoRefresh()
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             restoreInitialSelection()
             publishWidgetSnapshot()
-            infoStore.startAutoRefresh(addresses: addresses)
+            infoStore.startAutoRefresh(addresses: addresses, focusedAddress: focusedAgentAddress)
         }
         .onChange(of: agents.map(\.updatedAt)) { _, _ in
             publishWidgetSnapshot()
@@ -113,13 +113,19 @@ struct AppShellView: View {
         .onChange(of: infoStore.infoByAddress) { _, _ in
             publishWidgetSnapshot()
         }
-        .onChange(of: selectedAgentAddress) { _, address in
-            guard let address else { return }
-            infoStore.refresh(addresses: [address])
+        .onChange(of: selectedAgentAddress) { _, _ in
+            configureAgentInfoRefresh()
+        }
+        .onChange(of: selectedConversationID) { _, _ in
+            configureAgentInfoRefresh()
         }
         .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            consumePendingWidgetRequest()
+            if phase == .active {
+                consumePendingWidgetRequest()
+                configureAgentInfoRefresh()
+            } else {
+                infoStore.stopAutoRefresh()
+            }
         }
         .onOpenURL { url in
             guard let request = ConnectOnionDeepLink.parse(url) else { return }
@@ -145,6 +151,7 @@ struct AppShellView: View {
                 initialInput: pendingInputs[conversation.id],
                 onInitialInputConsumed: { pendingInputs[conversation.id] = nil }
             )
+            .id(conversation.id)
         } else if let agent = selectedAgent {
             AgentLandingView(
                 agent: agent,
@@ -170,6 +177,13 @@ struct AppShellView: View {
         agents.map(\.address)
     }
 
+    private var focusedAgentAddress: String? {
+        if let selectedConversation {
+            return selectedConversation.agentAddress
+        }
+        return selectedAgent?.address
+    }
+
     private func restoreInitialSelection() {
         if agents.isEmpty {
             selectedAgentAddress = nil
@@ -186,6 +200,14 @@ struct AppShellView: View {
 
     private func refreshAgentInfo() async {
         await infoStore.refreshNow(addresses: agentAddresses)
+    }
+
+    private func configureAgentInfoRefresh(refreshImmediately: Bool = true) {
+        infoStore.startAutoRefresh(
+            addresses: agentAddresses,
+            focusedAddress: focusedAgentAddress,
+            refreshImmediately: refreshImmediately
+        )
     }
 
     private func agent(for address: String) -> AgentConfigRecord? {
@@ -265,8 +287,17 @@ struct AppShellView: View {
     }
 
     private func consumePendingWidgetRequest() {
-        guard let request = ConnectOnionPendingChatRequestStore.consume() else { return }
-        handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+        if let request = ConnectOnionPendingChatRequestStore.consume() {
+            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+            return
+        }
+        // Retry after a short delay to handle the race condition where the widget
+        // extension's perform() hasn't finished writing to UserDefaults yet.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let request = ConnectOnionPendingChatRequestStore.consume() else { return }
+            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+        }
     }
 
     private func handleNewChatRequest(agentAddress: String?, suggestion: String?) {

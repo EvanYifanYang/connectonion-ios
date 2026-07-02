@@ -68,24 +68,32 @@ final class VoiceInputTranscriber {
     }
 
     private func requestPermissions() async throws {
-        let speechStatus = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
+        let speechStatus = await Self.requestSpeechAuthorization()
 
         guard speechStatus == .authorized else {
             throw VoiceInputError.speechPermissionDenied
         }
 
-        let microphoneGranted = await withCheckedContinuation { continuation in
-            AVAudioApplication.requestRecordPermission { granted in
-                continuation.resume(returning: granted)
-            }
-        }
+        let microphoneGranted = await Self.requestMicrophonePermission()
 
         guard microphoneGranted else {
             throw VoiceInputError.microphonePermissionDenied
+        }
+    }
+
+    nonisolated private static func requestSpeechAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    nonisolated private static func requestMicrophonePermission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
         }
     }
 

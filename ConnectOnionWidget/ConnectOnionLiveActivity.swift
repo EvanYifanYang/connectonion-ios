@@ -8,18 +8,23 @@ struct ConnectOnionLiveActivity: Widget {
             LiveActivityLockScreenView(context: context)
                 .activityBackgroundTint(.black.opacity(0.08))
                 .activitySystemActionForegroundColor(.primary)
+                .widgetURL(ConnectOnionDeepLink.conversation(id: context.attributes.conversationID))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(context.state.phaseLabel, systemImage: context.state.phase.systemImageName)
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
+                        .padding(.leading, 4)
+                        .padding(.top, 6)
                 }
 
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.startedAt, style: .timer)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+                        .padding(.trailing, 6)
+                        .padding(.top, 6)
                 }
 
                 DynamicIslandExpandedRegion(.bottom) {
@@ -33,6 +38,9 @@ struct ConnectOnionLiveActivity: Widget {
                             .lineLimit(2)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 4)
+                    .padding(.bottom, 10)
                 }
             } compactLeading: {
                 Image(systemName: context.state.phase.systemImageName)

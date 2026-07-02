@@ -8,12 +8,16 @@ final class AgentReplyLiveActivityController {
     private var activityIDs: [UUID: String] = [:]
     private var latestStates: [UUID: AgentReplyActivityAttributes.ContentState] = [:]
     private var completionEndTasks: [UUID: Task<Void, Never>] = [:]
+    private var currentConversationID: UUID?
 
     private init() {}
 
     func start(conversationID: UUID, agentAddress: String, agentName: String) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         cancelCompletionEnd(for: conversationID)
+        restoreTrackedActivity(for: conversationID)
+        endOtherActiveActivities(except: conversationID)
+        currentConversationID = conversationID
 
         let state = AgentReplyActivityAttributes.ContentState.connecting(agentName: agentName)
         latestStates[conversationID] = state
@@ -144,6 +148,58 @@ final class AgentReplyLiveActivityController {
         completionEndTasks[conversationID] = nil
     }
 
+    private func restoreTrackedActivity(for conversationID: UUID) {
+        guard activityIDs[conversationID] == nil else { return }
+        let conversationKey = conversationID.uuidString
+        guard let existingActivity = Activity<AgentReplyActivityAttributes>.activities.first(where: { activity in
+            activity.attributes.conversationID == conversationKey
+        }) else {
+            return
+        }
+
+        activityIDs[conversationID] = existingActivity.id
+    }
+
+    private func endOtherActiveActivities(except conversationID: UUID) {
+        let preservedActivityID = activityIDs[conversationID]
+        let preservedConversationKey = conversationID.uuidString
+
+        for activity in Activity<AgentReplyActivityAttributes>.activities {
+            if activity.id == preservedActivityID || activity.attributes.conversationID == preservedConversationKey {
+                continue
+            }
+
+            guard let otherConversationID = UUID(uuidString: activity.attributes.conversationID) else {
+                Task {
+                    await Self.endActivity(id: activity.id, state: fallbackEndedState(for: activity), dismissalPolicy: .immediate)
+                }
+                continue
+            }
+
+            cancelCompletionEnd(for: otherConversationID)
+            latestStates[otherConversationID] = nil
+            activityIDs[otherConversationID] = nil
+
+            let state = fallbackEndedState(for: activity)
+            Task {
+                await Self.endActivity(id: activity.id, state: state, dismissalPolicy: .immediate)
+            }
+        }
+    }
+
+    private func fallbackEndedState(
+        for activity: Activity<AgentReplyActivityAttributes>
+    ) -> AgentReplyActivityAttributes.ContentState {
+        AgentReplyActivityAttributes.ContentState(
+            phase: .stopped,
+            headline: activity.content.state.headline,
+            detail: activity.content.state.detail,
+            toolName: activity.content.state.toolName,
+            startedAt: activity.content.state.startedAt,
+            updatedAt: .now
+        )
+    }
+
     private func finishCompletedActivity(
         conversationID: UUID,
         state: AgentReplyActivityAttributes.ContentState
@@ -152,6 +208,9 @@ final class AgentReplyLiveActivityController {
         let activityID = activityIDs[conversationID]
         activityIDs[conversationID] = nil
         completionEndTasks[conversationID] = nil
+        if currentConversationID == conversationID {
+            currentConversationID = nil
+        }
 
         guard let activityID else { return }
         await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)

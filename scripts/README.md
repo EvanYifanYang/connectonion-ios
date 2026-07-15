@@ -62,7 +62,8 @@ E2E_SIMULATOR="iPhone 16" E2E_OS=26.0 ./scripts/run_e2e.sh
 | `'connectonion' package is not installed` | `pip install connectonion` |
 | `No ConnectOnion identity in ~/.co` | `co auth` |
 | `Port 8000 is already in use` | stop the other process, or `E2E_PORT=8010 ./scripts/run_e2e.sh` |
-| App shows **Disconnected** right after Send (agent log shows `ws+` then `ws-`, no `CONNECT`) | WS handshake didn't complete — usually an iOS-client ↔ backend **protocol/version mismatch**. Point `E2E_CONNECTONION_PATH` at the connectonion version the client targets. |
+| App **Disconnected** + `Keychain operation failed (-34018)` banner (agent log: `ws+` then `ws-`, no `CONNECT`) | keychain entitlement missing — **don't disable code signing** (the script leaves signing at its default so the simulator applies entitlements). |
+| App **Disconnected**, no keychain error, agent logs `ws+`/`ws-` with no `CONNECT` | possible iOS-client ↔ backend **protocol/version mismatch** — point `E2E_CONNECTONION_PATH` at the connectonion version the client targets. |
 | App connected, `CONNECT`/`INPUT` logged, but no `42` | the agent's LLM call failed — check the balance / re-run `co auth` (free tier is Gemini-only) |
 | `No full Xcode found` | install Xcode 26, or `sudo xcode-select -s /Applications/Xcode.app` |
 

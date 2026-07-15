@@ -132,6 +132,10 @@ ok "Agent is up."
 # environment variables (prefix stripped) to the runner. They must be ENV VARS for xcodebuild,
 # NOT build-setting arguments — otherwise the test can't read E2E_AGENT_ADDRESS and skips.
 info "Running $ONLY_TESTING against the live agent…"
+# NB: do NOT disable code signing here. The real (non-mock) app creates its Ed25519 identity in the
+# Keychain to sign CONNECT; CODE_SIGNING_ALLOWED=NO strips the keychain entitlement so the identity
+# fails with errSecMissingEntitlement (-34018) and CONNECT is never sent (app shows "Disconnected").
+# Simulator builds sign ad-hoc and DO apply entitlements, so the default signing works.
 XCB_LOG="$(mktemp -t co-e2e-xcb-XXXX).log"
 set +e
 TEST_RUNNER_E2E_AGENT_ADDRESS="$AGENT_ADDR" \
@@ -141,8 +145,7 @@ TEST_RUNNER_E2E_AGENT_ENDPOINT="$ENDPOINT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,name=${SIMULATOR},OS=${OS_VERSION}" \
   -only-testing:"$ONLY_TESTING" \
-  -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee "$XCB_LOG"
+  -parallel-testing-enabled NO 2>&1 | tee "$XCB_LOG"
 STATUS=${PIPESTATUS[0]}
 set -e
 

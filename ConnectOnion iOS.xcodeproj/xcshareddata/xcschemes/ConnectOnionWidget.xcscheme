@@ -18,6 +18,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "07FA10072FDBE00000000017"
                BuildableName = "ConnectOnionWidget.appex"
+               BlueprintName = "ConnectOnionWidget"
                ReferencedContainer = "container:ConnectOnion iOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -31,6 +32,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "073234612FDBD98F00BDE6B4"
                BuildableName = "ConnectOnion iOS.app"
+               BlueprintName = "ConnectOnion iOS"
                ReferencedContainer = "container:ConnectOnion iOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -63,6 +65,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "07FA10072FDBE00000000017"
             BuildableName = "ConnectOnionWidget.appex"
+            BlueprintName = "ConnectOnionWidget"
             ReferencedContainer = "container:ConnectOnion iOS.xcodeproj">
          </BuildableReference>
       </RemoteRunnable>
@@ -71,6 +74,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "073234612FDBD98F00BDE6B4"
             BuildableName = "ConnectOnion iOS.app"
+            BlueprintName = "ConnectOnion iOS"
             ReferencedContainer = "container:ConnectOnion iOS.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -106,6 +110,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "073234612FDBD98F00BDE6B4"
             BuildableName = "ConnectOnion iOS.app"
+            BlueprintName = "ConnectOnion iOS"
             ReferencedContainer = "container:ConnectOnion iOS.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

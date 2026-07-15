@@ -1,15 +1,17 @@
 <div align="center">
-  <img src="docs/logo.png" alt="ConnectOnion" width="112" />
+  <img src="docs/logo-tile.png" alt="ConnectOnion" width="104" />
   <h1>ConnectOnion iOS</h1>
   <p><em>A SwiftUI client for ConnectOnion agents — chat, tools, approvals, and live status in real time.</em></p>
   <p>
-    <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-000000?logo=apple&logoColor=white" />
-    <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white" />
-    <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-147EFB?logo=swift&logoColor=white" />
-    <img alt="SwiftData" src="https://img.shields.io/badge/SwiftData-8A2BE2" />
-    <img alt="Xcode 26" src="https://img.shields.io/badge/Xcode-26-1575F9?logo=xcode&logoColor=white" />
+    <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-8A74C6?style=flat-square&labelColor=2E2748&logo=apple&logoColor=white" />
+    <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-8A74C6?style=flat-square&labelColor=2E2748&logo=swift&logoColor=white" />
+    <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-8A74C6?style=flat-square&labelColor=2E2748&logo=swift&logoColor=white" />
+    <img alt="SwiftData" src="https://img.shields.io/badge/SwiftData-8A74C6?style=flat-square&labelColor=2E2748&logo=swift&logoColor=white" />
+    <img alt="Xcode 26" src="https://img.shields.io/badge/Xcode-26-8A74C6?style=flat-square&labelColor=2E2748&logo=xcode&logoColor=white" />
   </p>
 </div>
+
+---
 
 The app is one end of a protocol; a [`connectonion`](https://github.com/openonion/connectonion)
 Python agent is the other. They speak the same wire language: an **Ed25519-signed handshake over a
@@ -50,6 +52,9 @@ and view models are fully testable against mock networking, identity, and transp
 
 ## Project structure
 
+<details>
+<summary><b>Full source tree</b> — app target, plus widget / shared / config / scripts</summary>
+
 ```text
 ConnectOnion iOS/            # the app target
 ├─ App/                      # @main entry + Factory dependency registrations
@@ -79,6 +84,8 @@ Config/                      # Info.plists + entitlements
 scripts/                     # run_e2e.sh — one-command real-agent E2E
 ```
 
+</details>
+
 ## Requirements
 
 - **Xcode 26** (iOS 26 SDK) on macOS
@@ -103,3 +110,9 @@ To connect to a real agent, host one with the Python framework (`pip install con
 
 CI (`.github/workflows/ios-tests.yml`) runs the unit + UI suites on every push; the E2E test skips
 there because it needs a live agent.
+
+---
+
+<div align="center">
+  <sub>Agents powered by <a href="https://github.com/openonion/connectonion">connectonion</a> · <a href="LICENSE">License</a></sub>
+</div>

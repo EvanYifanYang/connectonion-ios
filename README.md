@@ -18,26 +18,30 @@ WebSocket**, then a stream of typed events.
 ## Architecture
 
 ```mermaid
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif','fontSize':'14px','primaryColor':'#F1EDFB','primaryTextColor':'#312A4D','primaryBorderColor':'#8A74C6','lineColor':'#A99ED0','clusterBkg':'#FBFAFE','clusterBorder':'#E7E1F5','edgeLabelBackground':'#FFFFFF'}}}%%
 flowchart LR
     subgraph app["ConnectOnion iOS"]
         direction TB
-        A["App/ · composition + Factory DI"]
-        F["Features/ · SwiftUI screens<br/>Shell · Chat · Composer · Agents · Settings"]
-        C["Core/ · infrastructure<br/>Network · Crypto · Models · Persistence · Speech"]
+        A["App<br/>composition · Factory DI"]
+        F["Features<br/>Shell · Chat · Composer · Agents"]
+        C["Core<br/>Network · Crypto · Models · Data"]
         A --> F --> C
     end
 
-    subgraph agent["ConnectOnion agent · Python"]
-        H["host() · WebSocket server<br/>LLM + tools"]
-    end
+    H["ConnectOnion agent<br/>host() · WebSocket · LLM + tools"]
 
-    C ==>|"CONNECT / INPUT<br/>(Ed25519-signed, over WebSocket)"| H
-    H ==>|"CONNECTED · tool_call · output · ask_user · …"| C
+    C ==>|"CONNECT / INPUT · Ed25519-signed"| H
+    H ==>|"CONNECTED · events streamed back"| C
 
-    W["Widget + Live Activity"]
     S[("ConnectOnionShared<br/>App Group")]
+    W["Widget · Live Activity"]
     app -.-> S
     W -.-> S
+
+    classDef ext fill:#EDF0F5,stroke:#93A1B5,color:#2B333F;
+    classDef aux fill:#F6F3FC,stroke:#CFC4EC,color:#493D6D;
+    class H ext
+    class S,W aux
 ```
 
 **Layering (one-directional):** `Features` depend on `Core`; `Core` never imports `Features` or

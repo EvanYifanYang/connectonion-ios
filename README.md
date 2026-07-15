@@ -1,19 +1,25 @@
-# ConnectOnion iOS
-
-A SwiftUI iOS client for **ConnectOnion agents** — add a local or remote agent, chat with it, and
-watch tool calls, approvals, attachments, and execution status stream back in real time.
+<div align="center">
+  <img src="docs/logo.png" alt="ConnectOnion" width="112" />
+  <h1>ConnectOnion iOS</h1>
+  <p><em>A SwiftUI client for ConnectOnion agents — chat, tools, approvals, and live status in real time.</em></p>
+  <p>
+    <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-000000?logo=apple&logoColor=white" />
+    <img alt="Swift 6.2" src="https://img.shields.io/badge/Swift-6.2-F05138?logo=swift&logoColor=white" />
+    <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-147EFB?logo=swift&logoColor=white" />
+    <img alt="SwiftData" src="https://img.shields.io/badge/SwiftData-8A2BE2" />
+    <img alt="Xcode 26" src="https://img.shields.io/badge/Xcode-26-1575F9?logo=xcode&logoColor=white" />
+  </p>
+</div>
 
 The app is one end of a protocol; a [`connectonion`](https://github.com/openonion/connectonion)
 Python agent is the other. They speak the same wire language: an **Ed25519-signed handshake over a
 WebSocket**, then a stream of typed events.
 
-`iOS 26+` · `Swift 6.2 / SwiftUI` · `SwiftData` · `Factory DI` · `CryptoKit (Ed25519)`
-
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph app["📱 ConnectOnion iOS"]
+    subgraph app["ConnectOnion iOS"]
         direction TB
         A["App/ · composition + Factory DI"]
         F["Features/ · SwiftUI screens<br/>Shell · Chat · Composer · Agents · Settings"]
@@ -21,14 +27,14 @@ flowchart LR
         A --> F --> C
     end
 
-    subgraph agent["🧅 ConnectOnion agent · Python"]
+    subgraph agent["ConnectOnion agent · Python"]
         H["host() · WebSocket server<br/>LLM + tools"]
     end
 
     C ==>|"CONNECT / INPUT<br/>(Ed25519-signed, over WebSocket)"| H
     H ==>|"CONNECTED · tool_call · output · ask_user · …"| C
 
-    W["🔔 Widget + Live Activity"]
+    W["Widget + Live Activity"]
     S[("ConnectOnionShared<br/>App Group")]
     app -.-> S
     W -.-> S

@@ -10,7 +10,7 @@ WebSocket + Ed25519 handshake + real LLM + real `add` tool call), then tears the
 ## Quick start
 
 ```bash
-./scripts/e2e/run_e2e.sh
+./scripts/run_e2e.sh
 ```
 
 Expected finish: `✓ E2E PASSED — the iOS app talked to a live ConnectOnion agent end-to-end.`
@@ -44,7 +44,7 @@ it works with no extra install. If a prerequisite is missing the script stops ea
 | `DEVELOPER_DIR` | auto-detected | Xcode toolchain (falls back to `/Applications/Xcode.app`) |
 
 ```bash
-E2E_SIMULATOR="iPhone 16" E2E_OS=26.0 ./scripts/e2e/run_e2e.sh
+E2E_SIMULATOR="iPhone 16" E2E_OS=26.0 ./scripts/run_e2e.sh
 ```
 
 ## What it does
@@ -61,7 +61,7 @@ E2E_SIMULATOR="iPhone 16" E2E_OS=26.0 ./scripts/e2e/run_e2e.sh
 |---|---|
 | `'connectonion' package is not installed` | `pip install connectonion` |
 | `No ConnectOnion identity in ~/.co` | `co auth` |
-| `Port 8000 is already in use` | stop the other process, or `E2E_PORT=8010 ./scripts/e2e/run_e2e.sh` |
+| `Port 8000 is already in use` | stop the other process, or `E2E_PORT=8010 ./scripts/run_e2e.sh` |
 | App shows **Disconnected** right after Send (agent log shows `ws+` then `ws-`, no `CONNECT`) | WS handshake didn't complete — usually an iOS-client ↔ backend **protocol/version mismatch**. Point `E2E_CONNECTONION_PATH` at the connectonion version the client targets. |
 | App connected, `CONNECT`/`INPUT` logged, but no `42` | the agent's LLM call failed — check the balance / re-run `co auth` (free tier is Gemini-only) |
 | `No full Xcode found` | install Xcode 26, or `sudo xcode-select -s /Applications/Xcode.app` |

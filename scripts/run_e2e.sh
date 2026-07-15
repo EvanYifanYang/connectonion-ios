@@ -3,7 +3,7 @@
 # One-command local E2E: start a real ConnectOnion agent, run the real-agent XCUITest
 # against it, then tear the agent down.
 #
-#   scripts/e2e/run_e2e.sh
+#   scripts/run_e2e.sh
 #
 # Prerequisites (see README.md next to this script):
 #   - Xcode 26 with an iOS 26 simulator
@@ -27,7 +27,7 @@ ONLY_TESTING="ConnectOnion iOSUITests/ConnectOnion_iOSE2ETests"
 CO_DIR="$HOME/.co"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/../..")"
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/..")"
 PROJECT="$REPO_ROOT/ConnectOnion iOS.xcodeproj"
 AGENT_LOG="$(mktemp -t co-e2e-agent-XXXX).log"
 

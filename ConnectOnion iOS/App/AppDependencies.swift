@@ -21,4 +21,9 @@ extension Container {
         }
         .scope(.singleton)
     }
+
+    var liveActivityController: Factory<AgentReplyLiveActivityController> {
+        self { @MainActor in AgentReplyLiveActivityController() }
+            .scope(.singleton)
+    }
 }

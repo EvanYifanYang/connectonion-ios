@@ -5,10 +5,10 @@
 #
 #   scripts/e2e/run_e2e.sh
 #
-# Prerequisites (see scripts/e2e/README.md):
+# Prerequisites (see README.md next to this script):
 #   - Xcode 26 with an iOS 26 simulator
-#   - python3 with `connectonion` installed        ->  pip install connectonion
-#   - a one-time ConnectOnion identity + API key    ->  co auth
+#   - `connectonion` available to python (pip install connectonion) OR `uv` installed
+#   - a one-time ConnectOnion identity + API key in ~/.co  (co auth)
 #
 # Optional overrides (env vars):
 #   E2E_PORT=8000                 agent port
@@ -24,9 +24,10 @@ SIMULATOR="${E2E_SIMULATOR:-iPhone 17}"
 OS_VERSION="${E2E_OS:-latest}"
 SCHEME="ConnectOnion iOS"
 ONLY_TESTING="ConnectOnion iOSUITests/ConnectOnion_iOSE2ETests"
+CO_DIR="$HOME/.co"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel 2>/dev/null || echo "$SCRIPT_DIR/../..")"
 PROJECT="$REPO_ROOT/ConnectOnion iOS.xcodeproj"
 AGENT_LOG="$(mktemp -t co-e2e-agent-XXXX).log"
 
@@ -45,26 +46,54 @@ if [ -z "${DEVELOPER_DIR:-}" ]; then
 fi
 export DEVELOPER_DIR
 XCODEBUILD="$DEVELOPER_DIR/usr/bin/xcodebuild"
-[ -x "$XCODEBUILD" ] || die "No full Xcode found at DEVELOPER_DIR=$DEVELOPER_DIR (install Xcode 26, or set DEVELOPER_DIR)."
+[ -x "$XCODEBUILD" ] || die "No full Xcode at DEVELOPER_DIR=$DEVELOPER_DIR (install Xcode 26, or set DEVELOPER_DIR)."
 
-# ---------------------------------------------------------------- prerequisite checks
-info "Checking prerequisites…"
-command -v python3 >/dev/null 2>&1 || die "python3 not found."
+# ---------------------------------------------------------------- find connectonion WITH host()
+# NOTE: host() is the agent-server API. The PyPI `connectonion` is behind (0.4.x, no host()); the
+# team's backend checkout (repo/connectonion, v1.2+) has it. So prefer a local checkout.
+info "Locating connectonion (with host())…"
+PYRUN=()
+for py in python3 python; do
+  if command -v "$py" >/dev/null 2>&1 && "$py" -c "from connectonion import host" >/dev/null 2>&1; then
+    PYRUN=("$py"); ok "Using system python: ${py}"; break
+  fi
+done
+if [ ${#PYRUN[@]} -eq 0 ]; then
+  # resolve the connectonion backend source: explicit override → sibling checkout → PyPI (may lack host())
+  CO_SRC="${E2E_CONNECTONION_PATH:-}"
+  if [ -z "$CO_SRC" ] && [ -d "$REPO_ROOT/../connectonion" ]; then
+    CO_SRC="$(cd "$REPO_ROOT/../connectonion" && pwd)"
+  fi
+  [ -n "$CO_SRC" ] || CO_SRC="connectonion"
+  command -v uv >/dev/null 2>&1 \
+    || die "connectonion with host() not importable and 'uv' is not installed. Install the connectonion backend, or set E2E_CONNECTONION_PATH."
+  PYRUN=(uv run --quiet --python 3.12 --with "$CO_SRC" python)
+  ok "Using: uv run --with ${CO_SRC}"
+fi
 
-python3 -c "import connectonion" 2>/dev/null \
-  || die "The 'connectonion' package is not installed. Run:  pip install connectonion"
+# ---------------------------------------------------------------- resolve the agent address + credentials
+[ -d "$CO_DIR" ] || die "No ConnectOnion identity at ~/.co. Run a one-time:  co auth"
 
-AGENT_ADDR="$(python3 - <<'PY'
+# credentials (OPENONION_API_KEY etc.) live in ~/.co/keys.env — export them for the agent's LLM calls
+if [ -f "$CO_DIR/keys.env" ]; then
+  set -a; # shellcheck disable=SC1091
+  . "$CO_DIR/keys.env"; set +a
+fi
+
+AGENT_ADDR="${AGENT_ADDRESS:-}"
+if [ -z "$AGENT_ADDR" ]; then
+  AGENT_ADDR="$("${PYRUN[@]}" - <<'PY' 2>/dev/null || true
 from pathlib import Path
 try:
     from connectonion import address
-    data = address.load(Path.home() / ".co")
-    print(data.get("address", "") if data else "")
+    d = address.load(Path.home() / ".co")
+    print(d.get("address", "") if d else "")
 except Exception:
     print("")
 PY
 )"
-[ -n "$AGENT_ADDR" ] || die "No ConnectOnion identity in ~/.co. Run a one-time:  co auth"
+fi
+[ -n "$AGENT_ADDR" ] || die "Could not resolve the agent address (no AGENT_ADDRESS in ~/.co/keys.env). Run:  co auth"
 ok "Agent identity: ${AGENT_ADDR:0:10}…${AGENT_ADDR: -4}"
 
 # port must be free
@@ -74,7 +103,7 @@ fi
 
 # ---------------------------------------------------------------- start the agent
 info "Starting local agent on $ENDPOINT (log: $AGENT_LOG)…"
-E2E_PORT="$PORT" python3 "$SCRIPT_DIR/agent_server.py" >"$AGENT_LOG" 2>&1 &
+E2E_PORT="$PORT" "${PYRUN[@]}" "$SCRIPT_DIR/agent_server.py" >"$AGENT_LOG" 2>&1 &
 AGENT_PID=$!
 
 cleanup() {
@@ -86,35 +115,42 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# wait until the port accepts connections (or the agent dies)
 info "Waiting for the agent to be ready…"
-for _ in $(seq 1 60); do
+ready=""
+for _ in $(seq 1 120); do
   if ! kill -0 "$AGENT_PID" 2>/dev/null; then
-    fail "Agent process exited early. Last log lines:"; tail -n 20 "$AGENT_LOG" >&2; exit 1
+    fail "Agent process exited early. Last log lines:"; tail -n 25 "$AGENT_LOG" >&2; exit 1
   fi
   if curl -s -o /dev/null "$ENDPOINT" 2>/dev/null; then ready=1; break; fi
   sleep 0.5
 done
-[ "${ready:-}" = "1" ] || { fail "Agent did not become ready in 30s. Log:"; tail -n 20 "$AGENT_LOG" >&2; exit 1; }
+[ "$ready" = "1" ] || { fail "Agent did not become ready in 60s. Log:"; tail -n 25 "$AGENT_LOG" >&2; exit 1; }
 ok "Agent is up."
 
 # ---------------------------------------------------------------- run the E2E test
+# The address reaches the test via XCTest's TEST_RUNNER_ prefix mechanism, which forwards
+# environment variables (prefix stripped) to the runner. They must be ENV VARS for xcodebuild,
+# NOT build-setting arguments — otherwise the test can't read E2E_AGENT_ADDRESS and skips.
 info "Running $ONLY_TESTING against the live agent…"
+XCB_LOG="$(mktemp -t co-e2e-xcb-XXXX).log"
 set +e
+TEST_RUNNER_E2E_AGENT_ADDRESS="$AGENT_ADDR" \
+TEST_RUNNER_E2E_AGENT_ENDPOINT="$ENDPOINT" \
 "$XCODEBUILD" test \
   -project "$PROJECT" \
   -scheme "$SCHEME" \
   -destination "platform=iOS Simulator,name=${SIMULATOR},OS=${OS_VERSION}" \
   -only-testing:"$ONLY_TESTING" \
   -parallel-testing-enabled NO \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
-  TEST_RUNNER_E2E_AGENT_ADDRESS="$AGENT_ADDR" \
-  TEST_RUNNER_E2E_AGENT_ENDPOINT="$ENDPOINT"
-STATUS=$?
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 2>&1 | tee "$XCB_LOG"
+STATUS=${PIPESTATUS[0]}
 set -e
 
 echo
-if [ "$STATUS" -eq 0 ]; then
+if grep -q "test skipped" "$XCB_LOG"; then
+  fail "E2E was SKIPPED — the agent address didn't reach the test runner. Check TEST_RUNNER_ env passing."
+  exit 3
+elif [ "$STATUS" -eq 0 ]; then
   ok "E2E PASSED — the iOS app talked to a live ConnectOnion agent end-to-end."
 else
   fail "E2E FAILED (exit $STATUS). Agent-side log: $AGENT_LOG"

@@ -20,11 +20,19 @@ Expected finish: `✓ E2E PASSED — the iOS app talked to a live ConnectOnion a
 | # | Requirement | How |
 |---|---|---|
 | 1 | Xcode 26 + an iOS 26 simulator | Xcode → Settings → Components |
-| 2 | `connectonion` Python package | `pip install connectonion` |
+| 2 | The **connectonion backend** (must expose `host()`) | see note ↓ |
 | 3 | A ConnectOnion identity + API key | `co auth` (creates `~/.co`, provisions the Gemini free-tier key) |
 
-If a prerequisite is missing the script stops early and tells you exactly which command to run —
-e.g. forgetting step 2 prints `✗ The 'connectonion' package is not installed. Run: pip install connectonion`.
+**Note on step 2 — connectonion source.** The agent uses `host()`, which the **PyPI**
+`connectonion` (0.4.x) does **not** export yet. The script resolves a source that does, in order:
+
+1. a Python where `from connectonion import host` already works, else
+2. `$E2E_CONNECTONION_PATH` (a checkout you point at), else
+3. the sibling backend checkout `../connectonion` (the team's repo layout), else
+4. PyPI `connectonion` (fallback — currently lacks `host()`),
+
+running it via `uv` when needed. So on the team layout (`repo/connectonion` next to this repo)
+it works with no extra install. If a prerequisite is missing the script stops early and says which.
 
 ## Options (env vars)
 
@@ -54,7 +62,8 @@ E2E_SIMULATOR="iPhone 16" E2E_OS=26.0 ./scripts/e2e/run_e2e.sh
 | `'connectonion' package is not installed` | `pip install connectonion` |
 | `No ConnectOnion identity in ~/.co` | `co auth` |
 | `Port 8000 is already in use` | stop the other process, or `E2E_PORT=8010 ./scripts/e2e/run_e2e.sh` |
-| App connected but no `42` answer streamed | the agent's LLM call failed — re-run `co auth`; free tier is Gemini-only |
+| App shows **Disconnected** right after Send (agent log shows `ws+` then `ws-`, no `CONNECT`) | WS handshake didn't complete — usually an iOS-client ↔ backend **protocol/version mismatch**. Point `E2E_CONNECTONION_PATH` at the connectonion version the client targets. |
+| App connected, `CONNECT`/`INPUT` logged, but no `42` | the agent's LLM call failed — check the balance / re-run `co auth` (free tier is Gemini-only) |
 | `No full Xcode found` | install Xcode 26, or `sudo xcode-select -s /Applications/Xcode.app` |
 
 ## Files

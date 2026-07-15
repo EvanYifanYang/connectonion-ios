@@ -122,11 +122,12 @@ final class VoiceInputTranscriber {
             throw VoiceInputError.audioInputUnavailable
         }
         inputNode.removeTap(onBus: 0)
-        try inputNode.__installTap(
+        // Note: the throwing __installTap(onBus:bufferSize:format:error:block:) variant is iOS 27-only;
+        // use the classic non-throwing installTap (iOS 8+) for the iOS 26 build.
+        inputNode.installTap(
             onBus: 0,
             bufferSize: 1024,
             format: format,
-            error: (),
             block: Self.makeAudioTapHandler(bridge: audioTapBridge)
         )
 

@@ -97,8 +97,7 @@ struct SidebarView: View {
                 .labelStyle(.iconOnly)
                 .accessibilityIdentifier(AccessibilityID.settingsButton)
             }
-            .visibilityPriority(.high)
-            .contentMarginsRemoved()
+            // Note: .visibilityPriority/.contentMarginsRemoved are iOS 27-only; omitted for iOS 26 build.
 
             ToolbarItem(placement: .principal) {
                 Text("ConnectOnion")
@@ -106,8 +105,7 @@ struct SidebarView: View {
                     .lineLimit(1)
             }
         }
-        .toolbarMinimizeBehavior(.onScrollDown, for: .navigationBar)
-        .toolbarMinimizationSafeAreaAdjustment(.enabled, for: .navigationBar)
+        // Note: .toolbarMinimizeBehavior/.toolbarMinimizationSafeAreaAdjustment are iOS 27-only; omitted for iOS 26 build.
         .safeAreaInset(edge: .bottom, alignment: .trailing) {
             if !agents.isEmpty {
                 NewChatFloatingButton {

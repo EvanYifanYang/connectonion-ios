@@ -102,8 +102,11 @@ if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------- start the agent
+# Run from a throwaway CWD: connectonion writes eval/session artifacts to ./.co relative to the
+# working directory, so running from the repo would litter (and previously mis-committed) .co/.
 info "Starting local agent on $ENDPOINT (log: $AGENT_LOG)…"
-E2E_PORT="$PORT" "${PYRUN[@]}" "$SCRIPT_DIR/agent_server.py" >"$AGENT_LOG" 2>&1 &
+AGENT_CWD="$(mktemp -d)"
+( cd "$AGENT_CWD" && E2E_PORT="$PORT" "${PYRUN[@]}" "$SCRIPT_DIR/agent_server.py" ) >"$AGENT_LOG" 2>&1 &
 AGENT_PID=$!
 
 cleanup() {

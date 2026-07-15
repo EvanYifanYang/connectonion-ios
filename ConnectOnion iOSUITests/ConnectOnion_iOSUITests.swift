@@ -271,12 +271,6 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
     @MainActor
     func testFirstPromptResendsAfterInviteGate() throws {
-        // Quarantined for iOS 26: the onboarding-resend LOGIC is covered by the Sprint 2 unit test
-        // `firstPromptThatTriggersOnboardingResendsOriginalInputAfterInviteSuccess`. The UI assertion
-        // below (absence of the "What can you do?" static text after the invite gate) is brittle on the
-        // iOS 26 accessibility tree, where the suggestion button's label still resolves as a static text.
-        // TODO: re-author the assertion against the transcript, then remove this skip.
-        try XCTSkipIf(true, "Covered by Sprint2 unit test; UI assertion needs iOS 26 re-authoring.")
         let app = launchUITestApp(scenario: "onboard-first-message")
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -286,7 +280,10 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         app.buttons["What can you do?"].tap()
 
         XCTAssertTrue(app.anyElement(inviteCodeFieldID).waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertFalse(app.staticTexts["What can you do?"].exists)
+        // Note: that the pending user prompt is *suppressed* during the invite gate is asserted precisely
+        // by the Sprint 2 unit test `firstPromptThatTriggersOnboardingResendsOriginalInputAfterInviteSuccess`.
+        // It is not re-checked here because on iOS 26 the suggestion button's label resolves as a static
+        // text, so an absence check at the UI layer is unreliable.
 
         app.anyElement(inviteCodeFieldID).tap()
         app.typeText("OpenOnion")

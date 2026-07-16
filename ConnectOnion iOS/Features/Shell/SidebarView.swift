@@ -108,7 +108,7 @@ struct SidebarView: View {
             ToolbarItem(placement: .principal) {
                 if !isEmpty {
                     Text("ConnectOnion")
-                        .font(AppFont.sectionSerif)
+                        .font(AppFont.wordmark)
                         .lineLimit(1)
                 }
             }
@@ -116,9 +116,9 @@ struct SidebarView: View {
         // Note: .toolbarMinimizeBehavior/.toolbarMinimizationSafeAreaAdjustment are iOS 27-only; omitted for iOS 26 build.
         .safeAreaInset(edge: .bottom, alignment: .trailing) {
             if !agents.isEmpty {
-                NewChatFloatingButton {
+                NewAgentFloatingButton {
                     tick()
-                    onNewConversation()
+                    onAddAgent()
                 }
                 .padding(.trailing, 20)
                 .padding(.bottom, 12)
@@ -155,21 +155,22 @@ struct SidebarView: View {
     }
 }
 
-private struct NewChatFloatingButton: View {
+private struct NewAgentFloatingButton: View {
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "plus")
-                .font(.title3.weight(.semibold))
+            Label("New Agent", systemImage: "plus")
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(width: 54, height: 54)
+                .padding(.horizontal, 18)
+                .frame(height: 50)
         }
             .buttonStyle(.plain)
-            .glassEffect(.regular.tint(.accentColor).interactive(), in: .circle)
-            .contentShape(.circle)
-            .accessibilityLabel("New Chat")
-            .accessibilityIdentifier(AccessibilityID.newChatButton)
+            .glassEffect(.regular.tint(.accentColor).interactive(), in: .capsule)
+            .contentShape(.capsule)
+            .accessibilityLabel("New Agent")
+            .accessibilityIdentifier(AccessibilityID.addAgentButton)
     }
 }
 

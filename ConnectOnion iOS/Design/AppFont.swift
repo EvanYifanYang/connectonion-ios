@@ -10,6 +10,9 @@ enum AppFont {
     /// Smaller serif subtitle paired under `hero` (same typeface, quieter).
     static let heroSubtitle = Font.system(.title3, design: .serif)
 
+    /// Serif wordmark for the top bar — a touch larger than section titles so the brand reads.
+    static let wordmark = Font.system(.title3, design: .serif).weight(.semibold)
+
     /// Serif for prominent in-context titles (e.g. an agent's name in its header).
     static let title = Font.system(.title2, design: .serif).weight(.semibold)
 

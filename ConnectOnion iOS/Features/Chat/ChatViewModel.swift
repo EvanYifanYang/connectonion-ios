@@ -13,6 +13,9 @@ final class ChatViewModel {
     var sessionState: SessionActiveState = .idle
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
+    /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
+    /// the bubble finishes revealing. Nil for restored/older messages, so they render in full.
+    var streamingMessageID: ChatItem.ID?
 
     @ObservationIgnored
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
@@ -93,6 +96,7 @@ final class ChatViewModel {
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
         errorMessage = nil
+        streamingMessageID = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
         let input = AgentInput(prompt: trimmed, images: images, files: files)
@@ -119,6 +123,14 @@ final class ChatViewModel {
             } catch {
                 fail(error.localizedDescription)
             }
+        }
+    }
+
+    /// Called by the agent bubble once its typewriter reveal finishes, so it renders in full and the
+    /// action row appears.
+    func markStreamingComplete(_ id: ChatItem.ID) {
+        if streamingMessageID == id {
+            streamingMessageID = nil
         }
     }
 
@@ -321,7 +333,9 @@ final class ChatViewModel {
                 items = chatItems
             }
             if !result.isEmpty, items.last(where: { $0.kind == .agent })?.content != result {
-                append(ChatItem(kind: .agent, content: result), animated: true, shouldPersist: false)
+                let agentItem = ChatItem(kind: .agent, content: result)
+                append(agentItem, animated: true, shouldPersist: false)
+                streamingMessageID = agentItem.id // reveal this one with the typewriter effect
             }
             conversation.rawSession = session
             sessionState = .connected

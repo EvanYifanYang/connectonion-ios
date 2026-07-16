@@ -37,7 +37,9 @@ struct ChatScreen: View {
                 onApprovalResponse: viewModel.respondToApproval,
                 onOnboardSubmit: viewModel.submitOnboard,
                 onPlanReviewResponse: viewModel.respondToPlanReview,
-                onRegenerate: viewModel.regenerate
+                onRegenerate: viewModel.regenerate,
+                streamingMessageID: viewModel.streamingMessageID,
+                onStreamComplete: viewModel.markStreamingComplete
             )
 
             if let errorMessage = viewModel.errorMessage {

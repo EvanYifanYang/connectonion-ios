@@ -12,6 +12,8 @@ struct ChatMessageList: View {
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
     var onRegenerate: () -> Void = {}
+    var streamingMessageID: ChatItem.ID?
+    var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
@@ -28,12 +30,14 @@ struct ChatMessageList: View {
                             isPendingApproval: item.id == pendingApproval?.id,
                             isPendingOnboard: item.id == pendingOnboard?.id,
                             isPendingPlanReview: item.id == pendingPlanReview?.id,
-                            showAgentActions: item.id == lastAgentID,
+                            showAgentActions: item.id == lastAgentID && item.id != streamingMessageID,
+                            isStreaming: item.id == streamingMessageID,
                             onAskUserResponse: onAskUserResponse,
                             onApprovalResponse: onApprovalResponse,
                             onOnboardSubmit: onOnboardSubmit,
                             onPlanReviewResponse: onPlanReviewResponse,
-                            onRegenerate: onRegenerate
+                            onRegenerate: onRegenerate,
+                            onStreamComplete: { onStreamComplete(item.id) }
                         )
                         .id(item.id)
                         .transition(AppMotion.messageTransition)

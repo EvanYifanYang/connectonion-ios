@@ -4,13 +4,19 @@ import UIKit
 struct AgentBubble: View {
     var item: ChatItem
     var showActions: Bool = false
+    var isStreaming: Bool = false
     var onRegenerate: () -> Void = {}
+    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !item.content.isEmpty {
-                MarkdownMessageView(text: item.content)
-                    .font(.body)
+                if isStreaming {
+                    StreamingMessageText(text: item.content, onComplete: onStreamComplete)
+                } else {
+                    MarkdownMessageView(text: item.content)
+                        .font(.body)
+                }
             }
 
             ForEach(item.images, id: \.self) { image in
@@ -41,6 +47,40 @@ struct AgentBubble: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
+    }
+}
+
+/// Types the reply out client-side (the transport delivers it whole): reveals a growing prefix in the
+/// brand serif with inline Markdown, trailed by an onion caret, then hands off to the full block-level
+/// renderer once complete.
+private struct StreamingMessageText: View {
+    let text: String
+    var onComplete: () -> Void
+
+    @State private var revealed = 0
+
+    var body: some View {
+        (Text(.init(String(text.prefix(revealed)))) + Text("▌").foregroundColor(.onion))
+            .font(.body)
+            .fontDesign(.serif)
+            .lineSpacing(3)
+            .tint(.onion)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .task(id: text) { await reveal() }
+    }
+
+    private func reveal() async {
+        revealed = 0
+        let total = text.count
+        guard total > 0 else { onComplete(); return }
+        let duration = min(2.0, Double(total) * 0.014)
+        let perTick = max(1, Int((Double(total) / (duration * 60)).rounded(.up)))
+        while revealed < total {
+            try? await Task.sleep(for: .milliseconds(16))
+            if Task.isCancelled { return }
+            revealed = min(total, revealed + perTick)
+        }
+        onComplete()
     }
 }
 

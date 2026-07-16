@@ -28,7 +28,7 @@ struct AgentDetailView: View {
                     AgentAvatar(title: agent.displayName(info: info), online: info?.online)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(agent.displayName(info: info))
-                            .font(.headline)
+                            .font(AppFont.sectionSerif)
                             .lineLimit(1)
                         AgentStatusLabel(online: info?.online)
                     }
@@ -36,42 +36,50 @@ struct AgentDetailView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("Name") {
+            Section {
                 TextField("Name", text: $name)
                     .tint(.primary)
                     .textInputAutocapitalization(.words)
+            } header: {
+                Text("Name").font(AppFont.sectionSerif).textCase(nil)
             }
 
             Section {
-                TextField("http://192.168.1.167:8000", text: $endpoint)
+                TextField("http://192.168.0.10:8000", text: $endpoint)
                     .font(.body.monospaced())
                     .tint(.primary)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
             } header: {
-                Text("Endpoint")
+                Text("Endpoint").font(AppFont.sectionSerif).textCase(nil)
             } footer: {
-                Text("For a local agent, use your Mac's LAN address (e.g. http://192.168.1.167:8000) so this iPhone can reach it on the same Wi-Fi.")
+                Text("The agent's LAN address, so this phone can reach it on the same Wi‑Fi.")
             }
 
-            Section("Address") {
+            Section {
                 Text(agent.address)
                     .font(.footnote.monospaced())
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
+            } header: {
+                Text("Address").font(AppFont.sectionSerif).textCase(nil)
             }
 
             Section {
                 Button("Delete Agent", systemImage: "trash", role: .destructive) {
                     confirmingDelete = true
                 }
+                .tint(.red) // keep the trash icon red like the label, not the accent purple
                 .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
             }
         }
-        .navigationTitle("Agent")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("Agent").font(AppFont.wordmark)
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
                     .disabled(!canSave)

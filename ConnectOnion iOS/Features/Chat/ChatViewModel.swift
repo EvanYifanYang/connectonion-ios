@@ -38,6 +38,9 @@ final class ChatViewModel {
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
     @ObservationIgnored private var regenerateBackup: [ChatItem]?
+    // While regenerating we keep the locally-trimmed view (old turn removed + fresh reply) instead of
+    // adopting the server's canonical list, which still contains the turn we just replaced.
+    @ObservationIgnored private var isRegenerating = false
     private var deferredOnboardInput: AgentInput?
 
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
@@ -106,10 +109,11 @@ final class ChatViewModel {
         send(input.prompt, images: input.images, files: input.files)
     }
 
-    func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = []) {
+    func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = [], isRegenerate: Bool = false) {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
+        isRegenerating = isRegenerate
         errorMessage = nil
         streamingMessageID = nil
         automaticReconnectAttempts = 0
@@ -158,7 +162,7 @@ final class ChatViewModel {
         regenerateBackup = items // restore this if the resend fails, so we don't lose the old exchange
         items.removeSubrange(lastUserIndex...)
         persist()
-        send(userItem.content, images: userItem.images, files: userItem.files)
+        send(userItem.content, images: userItem.images, files: userItem.files, isRegenerate: true)
     }
 
     func reconnect() {
@@ -359,9 +363,13 @@ final class ChatViewModel {
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
-            if !chatItems.isEmpty {
-                // Adopting the server's canonical list can re-id the reply we're mid-reveal on; keep the
-                // typewriter pointed at the latest reply (by position) so the reveal survives the swap.
+            let regenerating = isRegenerating
+            isRegenerating = false
+            // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
+            // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
+            if !chatItems.isEmpty, !regenerating {
+                // Adopting the server's list can re-id the reply we're mid-reveal on; keep the typewriter
+                // pointed at the latest reply (by position) so the reveal survives the swap.
                 let wasStreaming = streamingMessageID != nil
                 items = chatItems
                 if wasStreaming {

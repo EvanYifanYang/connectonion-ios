@@ -51,6 +51,9 @@ struct AgentEditorView: View {
                         .accessibilityIdentifier(AccessibilityID.addAgentEndpointField)
                 }
             }
+            // Keep text-entry neutral (black caret/selection) app-wide; purple is reserved for the
+            // primary action below, so the field itself doesn't read as "flashy".
+            .tint(.primary)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -60,15 +63,32 @@ struct AgentEditorView: View {
                         dismiss()
                     }
                 }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
-                        .disabled(!canSave)
-                        .accessibilityIdentifier(AccessibilityID.saveAgentButton)
-                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button(confirmTitle, systemImage: confirmIcon, action: save)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .buttonStyle(.glassProminent)
+                    .disabled(!canSave)
+                    .accessibilityIdentifier(AccessibilityID.saveAgentButton)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
+        // A bottom sheet that doesn't fill the screen, with the standard grabber (multiple detents +
+        // an explicit drag indicator), matching the New-Chat sheet.
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// "Add Agent" when creating (address editable), "Save" when editing an existing agent.
+    private var confirmTitle: String {
+        isAddressEditable ? "Add Agent" : "Save"
+    }
+
+    private var confirmIcon: String {
+        isAddressEditable ? "plus" : "checkmark"
     }
 
     private var canSave: Bool {

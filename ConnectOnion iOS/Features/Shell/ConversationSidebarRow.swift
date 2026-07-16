@@ -55,11 +55,11 @@ struct ConversationSidebarRow: View {
     }
 
     private var renameEditor: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: 12) {
             Image(systemName: "text.bubble")
-                .font(.body)
+                .font(.title3)
                 .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
+                .frame(width: 42, height: 42)
 
             InlineRenameField(
                 text: $draftTitle,
@@ -70,17 +70,18 @@ struct ConversationSidebarRow: View {
             Spacer(minLength: 0)
         }
         .padding(14)
+        .frame(minHeight: 64)
         .sidebarCard(isSelected: isSelected)
         .contentShape(.rect)
     }
 
     private var rowButton: some View {
         Button(action: handleRowTap) {
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 Image(systemName: "text.bubble")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 42, height: 42)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversation.title)
@@ -97,11 +98,16 @@ struct ConversationSidebarRow: View {
                 Menu {
                     menuActions
                 } label: {
-                    Label("Conversation Actions", systemImage: "ellipsis")
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
                 }
-                .labelStyle(.iconOnly)
+                .accessibilityLabel("Conversation Actions")
             }
             .padding(14)
+            .frame(minHeight: 64)
             .sidebarCard(isSelected: isSelected)
             .contentShape(.rect)
         }

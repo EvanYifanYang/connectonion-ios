@@ -87,10 +87,13 @@ private struct StreamingMessageText: View {
         revealed = 0
         let total = text.count
         guard total > 0 else { onComplete(); return }
-        let duration = min(2.0, Double(total) * 0.014)
-        let perTick = max(1, Int((Double(total) / (duration * 60)).rounded(.up)))
+        // Reveal ~1 character per tick so short replies visibly type out; speed up (more per tick) only
+        // for long replies so the whole thing still finishes within ~2.5s.
+        let tickMs = 22
+        let maxTicks = 2500.0 / Double(tickMs)
+        let perTick = max(1, Int((Double(total) / maxTicks).rounded(.up)))
         while revealed < total {
-            try? await Task.sleep(for: .milliseconds(16))
+            try? await Task.sleep(for: .milliseconds(tickMs))
             if Task.isCancelled { return }
             revealed = min(total, revealed + perTick)
         }

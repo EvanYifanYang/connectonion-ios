@@ -1,12 +1,13 @@
 import ActivityKit
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct ConnectOnionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentReplyActivityAttributes.self) { context in
             LiveActivityLockScreenView(context: context)
-                .activityBackgroundTint(.black.opacity(0.08))
+                .activityBackgroundTint(.connectOnionActivityBackground)
                 .activitySystemActionForegroundColor(.primary)
                 .widgetURL(ConnectOnionDeepLink.conversation(id: context.attributes.conversationID))
         } dynamicIsland: { context in
@@ -59,6 +60,13 @@ struct ConnectOnionLiveActivity: Widget {
             .keylineTint(context.state.tint)
         }
     }
+}
+
+private extension Color {
+    static let connectOnionActivityBackground = Color(uiColor: UIColor { traits in
+        let base = UIColor.label.resolvedColor(with: traits)
+        return base.withAlphaComponent(traits.userInterfaceStyle == .dark ? 0.12 : 0.08)
+    })
 }
 
 private struct LiveActivityLockScreenView: View {

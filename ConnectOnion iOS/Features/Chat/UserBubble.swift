@@ -12,11 +12,11 @@ struct UserBubble: View {
             if !item.content.isEmpty {
                 Text(.init(item.content))
                     .font(.body)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(AppTheme.contrastForeground)
                     .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(.primary, in: .rect(cornerRadius: AppTheme.bubbleCornerRadius))
+                    .background(AppTheme.contrastFill, in: .rect(cornerRadius: AppTheme.bubbleCornerRadius))
                     .frame(maxWidth: 620, alignment: .trailing)
             }
         }

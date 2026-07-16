@@ -7,9 +7,9 @@ struct AgentBubble: View {
         HStack(alignment: .top, spacing: 12) {
             Text("O")
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.contrastForeground)
                 .frame(width: 30, height: 30)
-                .background(.primary, in: .rect(cornerRadius: 9))
+                .background(AppTheme.contrastFill, in: .rect(cornerRadius: 9))
 
             VStack(alignment: .leading, spacing: 10) {
                 if !item.content.isEmpty {

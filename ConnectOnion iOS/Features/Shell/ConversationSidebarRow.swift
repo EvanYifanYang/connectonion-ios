@@ -64,7 +64,7 @@ struct ConversationSidebarRow: View {
                 .labelStyle(.iconOnly)
             }
             .padding(10)
-            .background(isSelected ? Color.primary.opacity(0.08) : Color.clear, in: .rect(cornerRadius: 16))
+            .background(isSelected ? AppTheme.selectionFill : Color.clear, in: .rect(cornerRadius: 16))
             .contentShape(.rect)
         }
         .buttonStyle(.plain)

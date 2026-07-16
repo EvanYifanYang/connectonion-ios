@@ -156,7 +156,7 @@ private struct NewChatFloatingButton: View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 54, height: 54)
         }
             .buttonStyle(.plain)

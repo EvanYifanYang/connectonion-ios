@@ -64,7 +64,7 @@ struct NewConversationSheet: View {
                                         .foregroundStyle(selectedAddress == agent.address ? Color.accentColor : Color.secondary)
                                 }
                                 .padding(12)
-                                .background(selectedAddress == agent.address ? Color.primary.opacity(0.08) : Color.clear, in: .rect(cornerRadius: 18))
+                                .background(selectedAddress == agent.address ? AppTheme.selectionFill : Color.clear, in: .rect(cornerRadius: 18))
                                 .contentShape(.rect)
                             }
                             .buttonStyle(.plain)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChatMessageList: View {
     var items: [ChatItem]
@@ -40,6 +41,9 @@ struct ChatMessageList: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .animation(AppMotion.standard, value: items.map(\.id))
+                .contentShape(.rect)
+                // Tapping the transcript (anywhere not on an interactive control) dismisses the keyboard.
+                .onTapGesture { dismissKeyboard() }
             }
             .accessibilityIdentifier(AccessibilityID.chatList)
             .scrollDismissesKeyboard(.interactively)
@@ -52,6 +56,10 @@ struct ChatMessageList: View {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

@@ -22,37 +22,38 @@ struct AttachmentSheet: View {
     @State private var loadTask: Task<Void, Never>?
 
     private let tileSide: CGFloat = 96
-    private let tileColor = Color(.systemGray6)
+    /// Card fill sampled to match the reference: a clearly-visible neutral light gray on the white
+    /// sheet (systemGray6 was too close to white). Adaptive for dark mode.
+    private let tileColor = Color(uiColor: UIColor { trait in
+        trait.userInterfaceStyle == .dark
+            ? UIColor(white: 0.17, alpha: 1)
+            : UIColor(white: 0.925, alpha: 1)
+    })
 
     private var cameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 16) {
             header
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if allowsImages {
-                        photoRow
-                    }
-                    if allowsFiles {
-                        addFilesRow
-                            .padding(.horizontal, 16)
-                    }
-                }
-                .padding(.vertical, 12)
+            if allowsImages {
+                photoRow
             }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-        .safeAreaInset(edge: .bottom) {
+            if allowsFiles {
+                addFilesRow
+                    .padding(.horizontal, 16)
+            }
             if !selected.isEmpty {
                 attachButton
             }
+            Spacer(minLength: 0)
         }
+        .padding(.bottom, 8)
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemBackground)) // opaque white so the gray tiles have contrast
+        .animation(.snappy(duration: 0.22), value: selected.isEmpty)
         .task {
             if allowsImages { recentPhotos.load() }
         }
@@ -196,15 +197,16 @@ struct AttachmentSheet: View {
         .buttonStyle(.plain)
         .disabled(isAttaching)
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
     }
 
+    /// Sized to fit the content snugly so the attach button sits right under "Add files" (no big gap).
+    /// Grows only when a selection appears, so the sheet animates up as the button slides in.
     private var sheetHeight: CGFloat {
         var height: CGFloat = 60 // header
-        if allowsImages { height += tileSide + 28 }
-        if allowsFiles { height += 60 }
-        height += 76 // reserve the attach-button row so the detent doesn't jump on selection
-        return height + 24
+        if allowsImages { height += 16 + tileSide }
+        if allowsFiles { height += 16 + 54 }
+        if !selected.isEmpty { height += 16 + 56 } // spacing + attach button
+        return height + 12
     }
 
     private func toggle(_ asset: PHAsset) {

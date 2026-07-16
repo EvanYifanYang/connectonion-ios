@@ -3,19 +3,23 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
+/// Agent-centric navigation levels (P4): the root lists agents, tapping one pushes its home (chat
+/// list), and a chat / a fresh-chat landing push on top of that.
+enum ShellRoute: Hashable {
+    case agentHome(String)   // agent address
+    case newChat(String)     // agent address — a fresh landing/composer
+    case conversation(UUID)  // conversation id
+}
+
 struct AppShellView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \AgentConfigRecord.createdAt) private var agents: [AgentConfigRecord]
     @Query(sort: \ConversationRecord.updatedAt, order: .reverse) private var conversations: [ConversationRecord]
 
-    @State private var selectedAgentAddress: String?
-    @State private var selectedConversationID: UUID?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
+    @State private var path: [ShellRoute] = []
     @State private var pendingInputs: [UUID: AgentInput] = [:]
     @State private var showingAddAgent = false
-    @State private var showingNewConversation = false
     @State private var showingSettings = false
     @State private var editingAgent: AgentConfigRecord?
     @State private var deletingAgent: AgentConfigRecord?
@@ -24,27 +28,20 @@ struct AppShellView: View {
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
-            SidebarView(
+        NavigationStack(path: $path) {
+            AgentListView(
                 agents: agents,
-                conversations: conversations,
                 infoByAddress: infoStore.infoByAddress,
-                selectedAgentAddress: $selectedAgentAddress,
-                selectedConversationID: $selectedConversationID,
-                onNewChat: newChat,
-                onNewConversation: { showingNewConversation = true },
+                onSelectAgent: { path.append(.agentHome($0.address)) },
                 onAddAgent: { showingAddAgent = true },
+                onSettings: { showingSettings = true },
                 onRenameAgent: { renameAgentName($0, to: $1) },
                 onDeleteAgent: { deletingAgent = $0 },
-                onRenameConversation: { renameConversation($0, to: $1) },
-                onRequestDeleteConversation: { deletingConversation = $0 },
-                onDeleteConversation: deleteConversation,
-                onSettings: { showingSettings = true },
-                onOpenDetail: showDetailColumn,
                 onRefresh: refreshAgentInfo
             )
-        } detail: {
-            detailView
+            .navigationDestination(for: ShellRoute.self) { route in
+                destination(for: route)
+            }
         }
         .accessibilityIdentifier(AccessibilityID.appShell)
         .sheet(isPresented: $showingAddAgent) {
@@ -60,18 +57,6 @@ struct AppShellView: View {
                 isAddressEditable: false
             ) { _, alias, endpoint in
                 renameAgent(agent, alias: alias, endpoint: endpoint)
-            }        }
-        .sheet(isPresented: $showingNewConversation) {
-            NewConversationSheet(
-                agents: agents,
-                infoByAddress: infoStore.infoByAddress,
-                initialAgentAddress: selectedAgentAddress
-            ) { agent, prompt in
-                if prompt.isEmpty {
-                    newChat(for: agent)
-                } else {
-                    startConversation(agent: agent, input: AgentInput(prompt: prompt))
-                }
             }        }
         .sheet(isPresented: $showingSettings) {
             SettingsView(
@@ -118,13 +103,11 @@ struct AppShellView: View {
         }
         .task {
             applyAppearance(appearance)
-            restoreInitialSelection()
             publishWidgetSnapshot()
             consumePendingWidgetRequest()
             configureAgentInfoRefresh()
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
-            restoreInitialSelection()
             publishWidgetSnapshot()
             infoStore.setEndpoints(agentEndpointMap)
             infoStore.startAutoRefresh(addresses: addresses, focusedAddress: focusedAgentAddress)
@@ -144,10 +127,7 @@ struct AppShellView: View {
         .onChange(of: infoStore.infoByAddress) { _, _ in
             publishWidgetSnapshot()
         }
-        .onChange(of: selectedAgentAddress) { _, _ in
-            configureAgentInfoRefresh()
-        }
-        .onChange(of: selectedConversationID) { _, _ in
+        .onChange(of: path) { _, _ in
             configureAgentInfoRefresh()
         }
         .onChange(of: scenePhase) { _, phase in
@@ -193,36 +173,49 @@ struct AppShellView: View {
     }
 
     @ViewBuilder
-    private var detailView: some View {
-        if let conversation = selectedConversation,
-           let agent = agent(for: conversation.agentAddress) {
-            ChatScreen(
-                conversation: conversation,
-                agent: agent,
-                info: infoStore.infoByAddress[agent.address],
-                initialInput: pendingInputs[conversation.id],
-                onInitialInputConsumed: { pendingInputs[conversation.id] = nil }
-            )
-            .id(conversation.id)
-        } else if let agent = selectedAgent {
-            AgentLandingView(
-                agent: agent,
-                info: infoStore.infoByAddress[agent.address],
-                onSend: { input in startConversation(agent: agent, input: input) }
-            )
-        } else {
-            WelcomeView(onAddAgent: { showingAddAgent = true })
+    private func destination(for route: ShellRoute) -> some View {
+        switch route {
+        case .agentHome(let address):
+            if let agent = agent(for: address) {
+                AgentHomeView(
+                    agent: agent,
+                    info: infoStore.infoByAddress[address],
+                    conversations: conversations(for: address),
+                    onNewChat: { path.append(.newChat(address)) },
+                    onOpenConversation: { path.append(.conversation($0.id)) },
+                    onRenameConversation: { renameConversation($0, to: $1) },
+                    onRequestDeleteConversation: { deletingConversation = $0 },
+                    onDeleteConversation: deleteConversation
+                )
+                .accessibilityIdentifier(AccessibilityID.agentHome)
+            }
+
+        case .newChat(let address):
+            if let agent = agent(for: address) {
+                AgentLandingView(
+                    agent: agent,
+                    info: infoStore.infoByAddress[address],
+                    onSend: { input in startConversation(agent: agent, input: input) }
+                )
+            }
+
+        case .conversation(let id):
+            if let conversation = conversations.first(where: { $0.id == id }),
+               let agent = agent(for: conversation.agentAddress) {
+                ChatScreen(
+                    conversation: conversation,
+                    agent: agent,
+                    info: infoStore.infoByAddress[agent.address],
+                    initialInput: pendingInputs[id],
+                    onInitialInputConsumed: { pendingInputs[id] = nil }
+                )
+                .id(id)
+            }
         }
     }
 
-    private var selectedConversation: ConversationRecord? {
-        guard let selectedConversationID else { return nil }
-        return conversations.first { $0.id == selectedConversationID }
-    }
-
-    private var selectedAgent: AgentConfigRecord? {
-        guard let selectedAgentAddress else { return agents.first }
-        return agents.first { $0.address == selectedAgentAddress }
+    private func conversations(for address: String) -> [ConversationRecord] {
+        conversations.filter { $0.agentAddress == address }
     }
 
     private var agentAddresses: [String] {
@@ -230,23 +223,13 @@ struct AppShellView: View {
     }
 
     private var focusedAgentAddress: String? {
-        if let selectedConversation {
-            return selectedConversation.agentAddress
-        }
-        return selectedAgent?.address
-    }
-
-    private func restoreInitialSelection() {
-        if agents.isEmpty {
-            selectedAgentAddress = nil
-            selectedConversationID = nil
-            preferredCompactColumn = .sidebar
-            columnVisibility = .automatic
-            return
-        }
-
-        if selectedConversationID == nil, selectedAgentAddress == nil {
-            selectedAgentAddress = agents.first?.address
+        switch path.last {
+        case .agentHome(let address), .newChat(let address):
+            return address
+        case .conversation(let id):
+            return conversations.first { $0.id == id }?.agentAddress
+        case nil:
+            return nil
         }
     }
 
@@ -284,11 +267,9 @@ struct AppShellView: View {
             modelContext.insert(AgentConfigRecord(address: validAddress.rawValue, alias: alias, preferredEndpoint: endpoint))
         }
 
-        selectedAgentAddress = validAddress.rawValue
-        selectedConversationID = nil
         showingAddAgent = false
         infoStore.refresh(addresses: [validAddress.rawValue])
-        showDetailColumn()
+        path = [.agentHome(validAddress.rawValue)]
     }
 
     private func renameAgent(_ agent: AgentConfigRecord, alias: String, endpoint: URL?) {
@@ -308,21 +289,26 @@ struct AppShellView: View {
 
     private func deleteAgent(_ agent: AgentConfigRecord) {
         let related = conversations.filter { $0.agentAddress == agent.address }
+        let relatedIDs = Set(related.map(\.id))
         related.forEach(modelContext.delete)
         modelContext.delete(agent)
 
-        if selectedAgentAddress == agent.address {
-            selectedAgentAddress = agents.first(where: { $0.address != agent.address })?.address
-            selectedConversationID = nil
+        // If we were viewing (any level of) the deleted agent, pop back to the agent list.
+        let referencesDeleted = path.contains { route in
+            switch route {
+            case .agentHome(let a), .newChat(let a): a == agent.address
+            case .conversation(let id): relatedIDs.contains(id)
+            }
+        }
+        if referencesDeleted {
+            path.removeAll()
         }
     }
 
     private func deleteConversation(_ conversation: ConversationRecord) {
         modelContext.delete(conversation)
-        if selectedConversationID == conversation.id {
-            selectedConversationID = nil
-            selectedAgentAddress = conversation.agentAddress
-        }
+        // Pop the chat if it's open; a delete from the list (not on the stack) is a no-op here.
+        path.removeAll { $0 == .conversation(conversation.id) }
     }
 
     private func renameAgentName(_ agent: AgentConfigRecord, to name: String) {
@@ -337,23 +323,20 @@ struct AppShellView: View {
     }
 
     private func newChat(for agent: AgentConfigRecord) {
-        selectedAgentAddress = agent.address
-        selectedConversationID = nil
-        showDetailColumn()
+        path = [.agentHome(agent.address), .newChat(agent.address)]
     }
 
     private func startConversation(agent: AgentConfigRecord, input: AgentInput) {
         let conversation = ConversationRecord(agentAddress: agent.address, mode: .safe)
         modelContext.insert(conversation)
         pendingInputs[conversation.id] = input
-        selectedAgentAddress = agent.address
-        selectedConversationID = conversation.id
-        showDetailColumn()
-    }
-
-    private func showDetailColumn() {
-        columnVisibility = .detailOnly
-        preferredCompactColumn = .detail
+        // From the fresh-chat landing, replace it with the real conversation so Back returns to the
+        // agent home; otherwise push onto whatever's showing.
+        if case .newChat = path.last {
+            path[path.count - 1] = .conversation(conversation.id)
+        } else {
+            path.append(.conversation(conversation.id))
+        }
     }
 
     private func consumePendingWidgetRequest() {
@@ -371,7 +354,7 @@ struct AppShellView: View {
     }
 
     private func handleNewChatRequest(agentAddress: String?, suggestion: String?) {
-        let agent = agentAddress.flatMap(agent(for:)) ?? selectedAgent ?? agents.first
+        let agent = agentAddress.flatMap(agent(for:)) ?? agents.first
         guard let agent else {
             showingAddAgent = true
             return
@@ -381,6 +364,7 @@ struct AppShellView: View {
         if trimmedSuggestion.isEmpty {
             newChat(for: agent)
         } else {
+            path = [.agentHome(agent.address)]
             startConversation(agent: agent, input: AgentInput(prompt: trimmedSuggestion))
         }
     }
@@ -388,9 +372,7 @@ struct AppShellView: View {
     private func openConversation(id: String) {
         guard let uuid = UUID(uuidString: id),
               let conversation = conversations.first(where: { $0.id == uuid }) else { return }
-        selectedAgentAddress = conversation.agentAddress
-        selectedConversationID = conversation.id
-        showDetailColumn()
+        path = [.agentHome(conversation.agentAddress), .conversation(uuid)]
     }
 
     private func publishWidgetSnapshot() {

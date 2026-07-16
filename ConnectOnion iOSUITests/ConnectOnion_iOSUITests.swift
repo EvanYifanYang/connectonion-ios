@@ -23,6 +23,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let chatAttachmentPhotoButtonID = "connectonion.chat.attachment.photo"
     private let chatAttachmentFilesButtonID = "connectonion.chat.attachment.files"
     private let showSystemInfoSuggestionID = "connectonion.suggestion.show-system-info"
+    private let newChatInAgentButtonID = "connectonion.agent.newchat.button"
     private let seededAgentID = "connectonion.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededNewChatAgentID = "connectonion.chat.new.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededConversationID = "connectonion.conversation.C9F4D04E-6D26-4F70-9808-74F09752D6D1"
@@ -112,9 +113,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     @MainActor
     func testAgentLandingHidesDesktopSkillCommandPalette() throws {
         let app = launchUITestApp()
-
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(seededAgentID, in: app)
+        openLandingComposer(in: app)
 
         XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.staticTexts["/summarize"].exists)
@@ -175,9 +174,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     @MainActor
     func testAgentLandingComposerStartsConversation() throws {
         let app = launchUITestApp()
-
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(seededAgentID, in: app)
+        openLandingComposer(in: app)
 
         let input = waitForElement(chatInputID, in: app)
         input.tap()
@@ -330,8 +327,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     func testFirstPromptResendsAfterInviteGate() throws {
         let app = launchUITestApp(scenario: "onboard-first-message")
 
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(seededAgentID, in: app)
+        openLandingComposer(in: app)
 
         let input = waitForElement(chatInputID, in: app)
         input.tap()
@@ -423,7 +419,17 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         if app.anyElement(chatInputID).waitForExistence(timeout: 1) {
             return
         }
+        tapElement(seededAgentID, in: app) // agent-centric IA: open the agent's home first
         tapElement(seededConversationID, in: app)
+        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
+    }
+
+    /// Agent-centric IA: reach the fresh-chat composer via agent home → "New chat".
+    @MainActor
+    private func openLandingComposer(in app: XCUIApplication) {
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app)
+        tapElement(newChatInAgentButtonID, in: app)
         XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
     }
 

@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 import WidgetKit
 
 struct AppShellView: View {
@@ -49,9 +50,7 @@ struct AppShellView: View {
         .sheet(isPresented: $showingAddAgent) {
             AgentEditorView { address, alias, endpoint in
                 addAgent(address: address, alias: alias, endpoint: endpoint)
-            }
-            .preferredColorScheme(appearance.colorScheme)
-        }
+            }        }
         .sheet(item: $editingAgent) { agent in
             AgentEditorView(
                 title: "Edit Agent",
@@ -61,9 +60,7 @@ struct AppShellView: View {
                 isAddressEditable: false
             ) { _, alias, endpoint in
                 renameAgent(agent, alias: alias, endpoint: endpoint)
-            }
-            .preferredColorScheme(appearance.colorScheme)
-        }
+            }        }
         .sheet(isPresented: $showingNewConversation) {
             NewConversationSheet(
                 agents: agents,
@@ -75,18 +72,14 @@ struct AppShellView: View {
                 } else {
                     startConversation(agent: agent, input: AgentInput(prompt: prompt))
                 }
-            }
-            .preferredColorScheme(appearance.colorScheme)
-        }
+            }        }
         .sheet(isPresented: $showingSettings) {
             SettingsView(
                 agents: agents,
                 infoByAddress: infoStore.infoByAddress,
                 onAddAgent: showAddAgentFromSettings,
                 onDeleteAgent: deleteAgent
-            )
-            .preferredColorScheme(appearance.colorScheme)
-        }
+            )        }
         .confirmationDialog(
             "Delete Agent?",
             isPresented: Binding(
@@ -124,6 +117,7 @@ struct AppShellView: View {
             }
         }
         .task {
+            applyAppearance(appearance)
             restoreInitialSelection()
             publishWidgetSnapshot()
             consumePendingWidgetRequest()
@@ -175,7 +169,27 @@ struct AppShellView: View {
         .onDisappear {
             infoStore.stopAutoRefresh()
         }
-        .preferredColorScheme(appearance.colorScheme)
+        .onChange(of: appearance) { _, mode in
+            applyAppearance(mode)
+        }
+    }
+
+    /// Apply the theme at the window level so it covers the main UI and every presented sheet/popover,
+    /// and so switching back to System (.unspecified) cleanly reverts to the device setting — which
+    /// `.preferredColorScheme(nil)` fails to do live for an already-presented sheet.
+    private func applyAppearance(_ mode: AppearanceMode) {
+        let style: UIUserInterfaceStyle =
+            switch mode {
+            case .system: .unspecified
+            case .light: .light
+            case .dark: .dark
+            }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = style
+            }
+        }
     }
 
     @ViewBuilder

@@ -5,10 +5,12 @@ import SwiftUI
 /// opacity travels from the outer layer inward so the layers look like they're peeling one by one.
 struct OnionThinkingMark: View {
     var active: Bool = true
+    var diameter: CGFloat = 26
 
     private let layerCount = 4
-    private let size = CGSize(width: 26, height: 20)
     private let tilt = Angle.degrees(-25)
+
+    private var size: CGSize { CGSize(width: diameter, height: diameter * 0.77) }
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { timeline in

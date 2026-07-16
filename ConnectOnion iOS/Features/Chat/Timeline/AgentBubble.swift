@@ -5,6 +5,7 @@ struct AgentBubble: View {
     var item: ChatItem
     var showActions: Bool = false
     var isStreaming: Bool = false
+    var modelName: String? = nil
     var onRegenerate: () -> Void = {}
     var onStreamComplete: () -> Void = {}
 
@@ -43,6 +44,16 @@ struct AgentBubble: View {
             if showActions, !item.content.isEmpty {
                 MessageActionsRow(content: item.content, onRegenerate: onRegenerate)
                     .padding(.top, 2)
+
+                if let modelName {
+                    HStack(spacing: 6) {
+                        OnionThinkingMark(active: false, diameter: 16)
+                        Text(modelName)
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

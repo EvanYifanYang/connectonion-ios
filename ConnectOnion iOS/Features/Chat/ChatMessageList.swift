@@ -19,6 +19,11 @@ struct ChatMessageList: View {
         items.last { $0.kind == .agent }?.id
     }
 
+    /// The model that produced the reply, shown as a footer under the latest message.
+    private var responseModel: String? {
+        items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -32,6 +37,7 @@ struct ChatMessageList: View {
                             isPendingPlanReview: item.id == pendingPlanReview?.id,
                             showAgentActions: item.id == lastAgentID && item.id != streamingMessageID,
                             isStreaming: item.id == streamingMessageID,
+                            modelName: item.id == lastAgentID ? responseModel : nil,
                             onAskUserResponse: onAskUserResponse,
                             onApprovalResponse: onApprovalResponse,
                             onOnboardSubmit: onOnboardSubmit,

@@ -7,7 +7,7 @@ struct AgentBubble: View {
         HStack(alignment: .top, spacing: 12) {
             Text("O")
                 .font(.caption.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(.systemBackground))
                 .frame(width: 30, height: 30)
                 .background(.primary, in: .rect(cornerRadius: 9))
 

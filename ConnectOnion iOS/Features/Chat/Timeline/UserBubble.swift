@@ -12,7 +12,7 @@ struct UserBubble: View {
             if !item.content.isEmpty {
                 Text(.init(item.content))
                     .font(.body)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(.systemBackground))
                     .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)

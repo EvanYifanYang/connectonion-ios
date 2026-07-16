@@ -30,7 +30,9 @@ struct AgentLandingView: View {
                 }
             )
         }
-        .navigationTitle(agent.displayName(info: info))
+        // The hero below already shows the agent's name prominently, so the top bar leaves its title
+        // empty rather than repeating it.
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

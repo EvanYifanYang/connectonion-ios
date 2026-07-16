@@ -121,7 +121,11 @@ private struct CodeBlockView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
+        .background(Color.appChatCard, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
     }
 }
 
@@ -152,7 +156,11 @@ private struct MarkdownTableView: View {
             }
             .padding(12)
         }
-        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
+        .background(Color.appChatCard, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
     }
 
     private func cell(_ values: [String], _ column: Int) -> some View {

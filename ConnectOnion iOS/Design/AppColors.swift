@@ -37,6 +37,22 @@ extension Color {
             : .tertiarySystemBackground
     })
 
+    /// In-chat cards (tool-call groups, code blocks, tables) sitting on the PLAIN canvas. The canvas
+    /// is white in light mode, so these need a visible warm paper gray there (appElevated is white —
+    /// it's for cards on the grouped gray canvas). Dark matches the elevated steps.
+    static let appChatCard = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.204, green: 0.196, blue: 0.184, alpha: 1) // ~#34322F
+            : UIColor(red: 0.961, green: 0.953, blue: 0.937, alpha: 1) // ~#F5F3EF
+    })
+
+    /// A nested surface inside an in-chat card (e.g. a tool result inside the group card).
+    static let appChatInset = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.251, green: 0.243, blue: 0.227, alpha: 1) // ~#403E3A
+            : UIColor(red: 0.922, green: 0.914, blue: 0.894, alpha: 1) // ~#EBE9E4
+    })
+
     /// The user's own message bubble — a touch brighter than a card so the turn stands out.
     static let appUserBubble = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark

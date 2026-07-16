@@ -63,7 +63,11 @@ struct ToolCallGroupCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: 660, alignment: .leading)
-        .background(Color.appElevated, in: .rect(cornerRadius: 12))
+        .background(Color.appChatCard, in: .rect(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 42)
         .padding(.vertical, 2)
@@ -99,7 +103,7 @@ struct ToolCallGroupCard: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
-                    .background(Color.appElevated2, in: .rect(cornerRadius: 8))
+                    .background(Color.appChatInset, in: .rect(cornerRadius: 8))
             }
         }
     }

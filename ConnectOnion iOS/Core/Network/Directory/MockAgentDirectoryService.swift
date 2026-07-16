@@ -1,7 +1,7 @@
 import Foundation
 
 struct MockAgentDirectoryService: AgentDirectoryServicing {
-    func fetchAgentInfo(address: String) async -> AgentInfo {
+    func fetchAgentInfo(address: String, preferredEndpoint: URL?) async -> AgentInfo {
         AgentInfo(
             address: address,
             name: "OpenOnion",

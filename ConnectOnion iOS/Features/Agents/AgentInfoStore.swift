@@ -16,6 +16,13 @@ final class AgentInfoStore {
     @ObservationIgnored private var autoRefreshAddresses: [String] = []
     @ObservationIgnored private var focusedAddress: String?
     @ObservationIgnored private var pendingRefreshAddresses = Set<String>()
+    @ObservationIgnored private var endpointsByAddress: [String: URL] = [:]
+
+    /// The user-configured direct endpoints, keyed by agent address, so the status probe can reach a
+    /// relay-less local agent. Call this whenever the agent list changes.
+    func setEndpoints(_ endpoints: [String: URL]) {
+        endpointsByAddress = endpoints
+    }
 
     deinit {
         allRefreshTask?.cancel()
@@ -45,7 +52,7 @@ final class AgentInfoStore {
             pendingRefreshAddresses.removeAll()
 
             for address in batch {
-                let info = await directory.fetchAgentInfo(address: address)
+                let info = await directory.fetchAgentInfo(address: address, preferredEndpoint: endpointsByAddress[address])
                 withAnimation(AppMotion.quick) {
                     infoByAddress[address] = info
                 }

@@ -157,20 +157,32 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testNewChatButtonOpensAgentPickerAndStartsPrompt() throws {
+    func testNewAgentButtonOpensAgentEditor() throws {
+        // The bottom-right "+" is now "New Agent" (it opens the agent editor), replacing the old
+        // New-Chat picker. New chats are started from an agent's landing composer instead.
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(newChatButtonID, in: app)
+        tapElement(addAgentButtonID, in: app)
 
-        XCTAssertTrue(app.anyElement(newChatSheetID).waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.anyElement(seededNewChatAgentID).exists, app.debugDescription)
+        let addressField = waitForElement(addAgentAddressFieldID, in: app)
+        XCTAssertTrue(addressField.isEnabled, app.debugDescription)
+        XCTAssertTrue(app.anyElement(addAgentAliasFieldID).exists, app.debugDescription)
+        app.buttons["Cancel"].tap()
+    }
 
-        app.anyElement(newChatPromptFieldID).tap()
+    @MainActor
+    func testAgentLandingComposerStartsConversation() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app)
+
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
         app.typeText("Start a fresh chat")
-        tapElement(newChatStartButtonID, in: app)
+        tapElement(chatSendButtonID, in: app)
 
-        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
         let response = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Connected. Streaming mock response for: Start a fresh chat")).firstMatch
         XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)

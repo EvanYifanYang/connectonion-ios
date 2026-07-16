@@ -55,11 +55,12 @@ private struct AttachmentRemoveButton: View {
                 .frame(width: 22, height: 22)
                 .background(Color(.label), in: .circle)
                 .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                .frame(width: 36, height: 36) // enlarge the tap target; the visible circle stays 22pt
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(identifier)
-        .padding(5)
     }
 }
 
@@ -67,7 +68,7 @@ private struct ImageAttachmentPreview: View {
     var image: ImageAttachmentDraft
     var onRemove: (UUID) -> Void
 
-    private let side: CGFloat = 84
+    private let side: CGFloat = 88
 
     var body: some View {
         Group {
@@ -101,7 +102,7 @@ private struct FileAttachmentPreview: View {
     var file: FileAttachment
     var onRemove: (String) -> Void
 
-    private let height: CGFloat = 84
+    private let height: CGFloat = 88
 
     private var baseName: String {
         (file.name as NSString).deletingPathExtension
@@ -109,7 +110,7 @@ private struct FileAttachmentPreview: View {
 
     private var badge: String {
         let ext = (file.name as NSString).pathExtension
-        return ext.isEmpty ? "FILE" : ext.uppercased()
+        return ext.isEmpty ? "FILE" : String(ext.uppercased().prefix(6))
     }
 
     var body: some View {
@@ -117,6 +118,7 @@ private struct FileAttachmentPreview: View {
             Text(badge)
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(Color(.systemGray5), in: .rect(cornerRadius: 6))
@@ -126,9 +128,10 @@ private struct FileAttachmentPreview: View {
             Text(baseName)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(2)
+                .minimumScaleFactor(0.85)
                 .foregroundStyle(.primary)
         }
-        .padding(12)
+        .padding(10)
         .frame(width: 148, height: height, alignment: .leading)
         .background(Color(.systemBackground), in: .rect(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(.separator), lineWidth: 1))

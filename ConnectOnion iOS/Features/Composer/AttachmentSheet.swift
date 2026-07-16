@@ -9,6 +9,9 @@ import UIKit
 struct AttachmentSheet: View {
     var allowsImages: Bool
     var allowsFiles: Bool
+    /// How many photos can still be added (the composer's remaining attachment slots). Selection is
+    /// capped to this so the button count is truthful and we never download photos we'll discard.
+    var maxPhotoSelection: Int
     var onCamera: () -> Void
     var onAllPhotos: () -> Void
     var onPhotosData: ([Data]) -> Void
@@ -118,16 +121,19 @@ struct AttachmentSheet: View {
                     enablePhotosTile
                 }
                 ForEach(recentPhotos.assets, id: \.localIdentifier) { asset in
+                    let isSelected = selected.contains(asset.localIdentifier)
                     PhotoThumbnailTile(
                         asset: asset,
                         provider: recentPhotos,
                         side: tileSide,
                         placeholderColor: tileColor,
-                        isSelected: selected.contains(asset.localIdentifier)
+                        isSelected: isSelected
                     ) {
                         toggle(asset)
                     }
-                    .disabled(isAttaching)
+                    // Dim + block the unselected tiles once the remaining-slot cap is reached.
+                    .opacity(!isSelected && atCapacity ? 0.4 : 1)
+                    .disabled(isAttaching || (!isSelected && atCapacity))
                 }
             }
             .padding(.horizontal, 16)
@@ -221,13 +227,18 @@ struct AttachmentSheet: View {
         return height + 12
     }
 
+    private var atCapacity: Bool {
+        selected.count >= maxPhotoSelection
+    }
+
     private func toggle(_ asset: PHAsset) {
         let id = asset.localIdentifier
         if let index = selected.firstIndex(of: id) {
             selected.remove(at: index)
-        } else {
+        } else if selected.count < maxPhotoSelection {
             selected.append(id)
         }
+        // else: already at the remaining-slot cap — ignore (unselected tiles are also disabled)
     }
 
     private func attachSelected() {
@@ -238,17 +249,24 @@ struct AttachmentSheet: View {
         }
         loadTask = Task {
             var datas: [Data] = []
+            var failed = 0
             for asset in assets {
                 if Task.isCancelled { return }
                 if let data = await recentPhotos.fullData(for: asset) {
                     datas.append(data)
+                } else {
+                    failed += 1
                 }
             }
             guard !Task.isCancelled else { return }
-            if datas.isEmpty {
-                onPhotoError("Couldn’t attach those photos. Check your connection and try again.")
-            } else {
+            if !datas.isEmpty {
                 onPhotosData(datas)
+            }
+            if failed > 0 {
+                // Surface partial failures too, not just the all-failed case.
+                onPhotoError(datas.isEmpty
+                    ? "Couldn’t attach those photos. Check your connection and try again."
+                    : "\(failed) photo\(failed == 1 ? "" : "s") couldn’t be attached.")
             }
             dismiss()
         }

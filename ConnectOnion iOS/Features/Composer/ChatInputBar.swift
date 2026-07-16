@@ -149,6 +149,7 @@ struct ChatInputBar: View {
             AttachmentSheet(
                 allowsImages: allowsImages,
                 allowsFiles: allowsFiles,
+                maxPhotoSelection: remainingAttachmentSlots,
                 onCamera: { pendingPicker = .camera },
                 onAllPhotos: { pendingPicker = .photos },
                 onPhotosData: { datas in attachImages(datas) },
@@ -356,19 +357,16 @@ struct ChatInputBar: View {
         }
     }
 
-    /// Attach several picked photos at once, capped at the remaining slots. Surfaces a single
-    /// "limit reached" note if the selection didn't fit rather than one per dropped photo.
+    /// Attach several picked photos at once. Checks the live slot count each iteration so an image
+    /// that `appendImage` rejects (e.g. too large) doesn't waste a slot, and stops with a single
+    /// "limit reached" note if we genuinely run out.
     private func attachImages(_ datas: [Data]) {
-        let slots = remainingAttachmentSlots
-        guard slots > 0 else {
-            showAttachmentError("Attachment limit reached")
-            return
-        }
-        for data in datas.prefix(slots) {
+        for data in datas {
+            guard remainingAttachmentSlots > 0 else {
+                showAttachmentError("Attachment limit reached")
+                return
+            }
             appendImage(data: data)
-        }
-        if datas.count > slots {
-            showAttachmentError("Attachment limit reached")
         }
     }
 

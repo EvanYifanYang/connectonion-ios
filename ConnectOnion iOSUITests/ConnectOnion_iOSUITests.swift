@@ -22,7 +22,6 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let chatAttachmentButtonID = "connectonion.chat.attachment.button"
     private let chatAttachmentPhotoButtonID = "connectonion.chat.attachment.photo"
     private let chatAttachmentFilesButtonID = "connectonion.chat.attachment.files"
-    private let showSystemInfoSuggestionID = "connectonion.suggestion.show-system-info"
     private let newChatInAgentButtonID = "connectonion.agent.newchat.button"
     private let seededAgentID = "connectonion.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededNewChatAgentID = "connectonion.chat.new.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
@@ -351,7 +350,6 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let status = waitForStaticText(onboardStatusID, in: app)
         XCTAssertTrue(status.label.contains("Invite submitted"), status.label)
         XCTAssertTrue(app.staticTexts["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertFalse(app.anyElement(showSystemInfoSuggestionID).exists)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
         XCTAssertFalse(app.anyElement(chatStopButtonID).exists)
     }

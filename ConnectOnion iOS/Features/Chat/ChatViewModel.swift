@@ -96,19 +96,6 @@ final class ChatViewModel {
         (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
     }
 
-    var shouldShowFirstPromptSuggestions: Bool {
-        !hasCommittedUserMessage &&
-            pendingOnboard == nil &&
-            deferredOnboardInput == nil &&
-            errorMessage == nil &&
-            sessionState != .connecting &&
-            sessionState != .reconnecting &&
-            // .active means a turn is running — the first prompt is in flight but only *optimistically*
-            // in `items` (not yet committed), so without this the strip flashes in between CONNECTED
-            // and the first server event.
-            sessionState != .active
-    }
-
     func send(_ input: AgentInput) {
         send(input.prompt, images: input.images, files: input.files)
     }
@@ -279,12 +266,6 @@ final class ChatViewModel {
 
     private var client: ConnectOnionClientProviding {
         clientOverride ?? injectedClient
-    }
-
-    private var hasCommittedUserMessage: Bool {
-        items.contains { item in
-            item.kind == .user && item.id != optimisticUserItemID
-        }
     }
 
     private func handle(_ event: ConnectOnionClientEvent) {

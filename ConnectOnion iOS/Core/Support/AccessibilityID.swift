@@ -35,7 +35,6 @@ enum AccessibilityID {
     static let chatVoiceStatus = "connectonion.chat.voice.status"
     static let chatVoiceError = "connectonion.chat.voice.error"
     static let chatSkillPalette = "connectonion.chat.skill.palette"
-    static let suggestionStrip = "connectonion.suggestion.strip"
     static let settingsButton = "connectonion.settings.button"
     static let reconnectButton = "connectonion.chat.reconnect.button"
     static let inviteCodeField = "connectonion.onboard.invite"
@@ -75,9 +74,6 @@ enum AccessibilityID {
         "connectonion.chat.new.agent.\(address)"
     }
 
-    static func suggestion(_ title: String) -> String {
-        "connectonion.suggestion.\(normalizedComponent(title))"
-    }
 
     static func attachmentRemove(_ id: String) -> String {
         "connectonion.chat.attachment.remove.\(normalizedComponent(id))"

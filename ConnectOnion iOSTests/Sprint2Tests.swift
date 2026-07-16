@@ -170,7 +170,6 @@ struct Sprint2OnboardingTests {
         #expect(!viewModel.items.contains { $0.kind == .user })
         #expect(!conversation.messages.contains { $0.kind == .user })
         #expect(viewModel.pendingOnboard != nil)
-        #expect(!viewModel.shouldShowFirstPromptSuggestions)
 
         viewModel.submitOnboard(inviteCode: "OpenOnion")
         await waitUntil {
@@ -179,7 +178,6 @@ struct Sprint2OnboardingTests {
         }
 
         #expect(viewModel.pendingOnboard == nil)
-        #expect(!viewModel.shouldShowFirstPromptSuggestions)
         #expect(client.sentInputs.map(\.prompt) == ["What can you do?", "What can you do?"])
         #expect(conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" })
         #expect(conversation.title == "What can you do?")

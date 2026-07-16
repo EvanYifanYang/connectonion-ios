@@ -51,16 +51,6 @@ struct ChatScreen: View {
                     .transition(AppMotion.panelTransition)
             }
 
-            if viewModel.shouldShowFirstPromptSuggestions {
-                PromptSuggestionStrip(
-                    suggestions: AgentPromptSuggestions.defaults,
-                    onSelect: { viewModel.send($0) }
-                )
-                .accessibilityIdentifier(AccessibilityID.suggestionStrip)
-                .padding(.bottom, 8)
-                .transition(AppMotion.panelTransition)
-            }
-
             ChatInputBar(
                 placeholder: "Reply to ConnectOnion Agent",
                 isRunning: viewModel.shouldShowStopButton,
@@ -94,7 +84,6 @@ struct ChatScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
-        .animation(AppMotion.standard, value: viewModel.shouldShowFirstPromptSuggestions)
         .task(id: conversation.id) {
             guard let initialInput else { return }
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)

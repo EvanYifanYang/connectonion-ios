@@ -7,39 +7,40 @@ import UIKit
 /// system values, so nothing there changes.
 extension Color {
     /// The app canvas — the backdrop behind the plain (non-Form) screens: agent list, agent home,
-    /// landing, chat. Dark: warm off-black. Light: plain system background (white), as before.
+    /// landing, chat. Dark: warm gray (Claude-like, clearly not black). Light: plain system
+    /// background (white), as before.
     static let appCanvas = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.110, green: 0.106, blue: 0.098, alpha: 1) // ~#1C1B19
+            ? UIColor(red: 0.149, green: 0.145, blue: 0.137, alpha: 1) // ~#262523
             : .systemBackground
     })
 
     /// The canvas behind Form/grouped screens (Settings, agent editor/detail). Dark: same warm
-    /// off-black. Light: the grouped background (#F2F2F7) so white sections still pop, as before.
+    /// gray. Light: the grouped background (#F2F2F7) so white sections still pop, as before.
     static let appGroupedCanvas = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.110, green: 0.106, blue: 0.098, alpha: 1) // ~#1C1B19
+            ? UIColor(red: 0.149, green: 0.145, blue: 0.137, alpha: 1) // ~#262523
             : .systemGroupedBackground
     })
 
     /// One step up from the canvas — cards, rows, grouped sections. Dark: warm gray. Light: white.
     static let appElevated = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.165, green: 0.157, blue: 0.145, alpha: 1) // ~#2A2825
+            ? UIColor(red: 0.204, green: 0.196, blue: 0.184, alpha: 1) // ~#34322F
             : .secondarySystemGroupedBackground
     })
 
     /// Two steps up — inset surfaces (code blocks, nested tiles, inputs). Dark: lighter warm gray.
     static let appElevated2 = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.212, green: 0.200, blue: 0.184, alpha: 1) // ~#363430
+            ? UIColor(red: 0.251, green: 0.243, blue: 0.227, alpha: 1) // ~#403E3A
             : .tertiarySystemBackground
     })
 
     /// The user's own message bubble — a touch brighter than a card so the turn stands out.
     static let appUserBubble = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.188, green: 0.176, blue: 0.161, alpha: 1) // ~#302D29
+            ? UIColor(red: 0.227, green: 0.216, blue: 0.200, alpha: 1) // ~#3A3733
             : .systemGray5
     })
 }

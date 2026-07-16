@@ -39,6 +39,9 @@ struct SettingsView: View {
                         .font(AppFont.sectionSerif)
                         .textCase(nil)
                 }
+                // Match the warm card surface used across the app (the system grouped row color is
+                // cool/bluish in dark and clashes with the warm canvas).
+                .listRowBackground(Color.appElevated)
 
                 Section {
                     AppearancePicker(selection: $appearance)
@@ -48,6 +51,7 @@ struct SettingsView: View {
                         .font(AppFont.sectionSerif)
                         .textCase(nil)
                 }
+                .listRowBackground(Color.appElevated)
 
                 Section {
                 } footer: {

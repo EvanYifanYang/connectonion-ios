@@ -35,6 +35,7 @@ struct AgentDetailView: View {
                 }
                 .padding(.vertical, 4)
             }
+            .listRowBackground(Color.appElevated)
 
             Section {
                 TextField("Name", text: $name)
@@ -43,6 +44,7 @@ struct AgentDetailView: View {
             } header: {
                 Text("Name").font(AppFont.sectionSerif).textCase(nil)
             }
+            .listRowBackground(Color.appElevated)
 
             Section {
                 TextField("http://192.168.0.10:8000", text: $endpoint)
@@ -56,6 +58,7 @@ struct AgentDetailView: View {
             } footer: {
                 Text("The agent's LAN address, so this phone can reach it on the same Wi‑Fi.")
             }
+            .listRowBackground(Color.appElevated)
 
             Section {
                 Text(agent.address)
@@ -65,6 +68,7 @@ struct AgentDetailView: View {
             } header: {
                 Text("Address").font(AppFont.sectionSerif).textCase(nil)
             }
+            .listRowBackground(Color.appElevated)
 
             Section {
                 Button {
@@ -78,6 +82,7 @@ struct AgentDetailView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
             }
+            .listRowBackground(Color.appElevated)
         }
         .scrollContentBackground(.hidden)
         .background(Color.appGroupedCanvas)

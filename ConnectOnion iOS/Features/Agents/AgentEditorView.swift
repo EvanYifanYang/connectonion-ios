@@ -50,6 +50,7 @@ struct AgentEditorView: View {
                         .keyboardType(.URL)
                         .accessibilityIdentifier(AccessibilityID.addAgentEndpointField)
                 }
+                .listRowBackground(Color.appElevated)
             }
             // Keep text-entry neutral (black caret/selection) app-wide; purple is reserved for the
             // primary action below, so the field itself doesn't read as "flashy".

@@ -7,28 +7,37 @@ import SwiftUI
 private struct SidebarCardModifier: ViewModifier {
     var isSelected: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private let radius: Double = 20
+
+    /// Persistent selection only makes sense in a split view (iPad / regular width), where the
+    /// selected row mirrors the detail pane. In compact width the sidebar is push-navigation — tapping
+    /// a row *enters* it — so a highlight left behind on return would read as a stuck state. There we
+    /// rely on the momentary press feedback instead and never paint a resting selection.
+    private var showSelected: Bool {
+        isSelected && sizeClass == .regular
+    }
 
     func body(content: Content) -> some View {
         content
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: radius))
             .overlay {
                 RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(borderColor, lineWidth: isSelected ? 1.5 : 1)
+                    .strokeBorder(borderColor, lineWidth: showSelected ? 1.5 : 1)
             }
-            .shadow(color: shadowColor, radius: isSelected ? 12 : 7, x: 0, y: isSelected ? 4 : 3)
+            .shadow(color: shadowColor, radius: showSelected ? 12 : 7, x: 0, y: showSelected ? 4 : 3)
     }
 
     private var borderColor: Color {
-        if isSelected { return .onion.opacity(0.55) }
+        if showSelected { return .onion.opacity(0.55) }
         return .primary.opacity(scheme == .dark ? 0.12 : 0.05)
     }
 
     private var shadowColor: Color {
         // Shadows don't read on a near-black grouped background, so selection leans on an onion glow
         // in dark mode and a soft neutral drop in light mode.
-        if isSelected { return .onion.opacity(scheme == .dark ? 0.30 : 0.20) }
+        if showSelected { return .onion.opacity(scheme == .dark ? 0.30 : 0.20) }
         return .black.opacity(scheme == .dark ? 0 : 0.06)
     }
 }

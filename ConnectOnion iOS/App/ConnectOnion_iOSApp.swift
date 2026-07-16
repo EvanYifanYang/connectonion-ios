@@ -43,8 +43,28 @@ struct ConnectOnion_iOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppShellView()
+            RootView()
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+/// Hosts the app with the launch splash overlaid on top (option B: the app sits behind and is
+/// revealed as the splash's backdrop fades during disassembly). The splash is skipped under UI
+/// testing so element queries aren't delayed.
+private struct RootView: View {
+    @State private var showSplash = !ProcessInfo.processInfo.arguments.contains("--ui-testing")
+
+    var body: some View {
+        ZStack {
+            AppShellView()
+
+            if showSplash {
+                LaunchSplashView {
+                    withAnimation(.easeOut(duration: 0.25)) { showSplash = false }
+                }
+                .transition(.opacity)
+            }
+        }
     }
 }

@@ -23,12 +23,11 @@ struct AgentLandingView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // The brand logo over a single warm, serif greeting — no repeated agent hero.
+            // The brand logo over a single warm, serif greeting — no repeated agent hero. The onion
+            // assembles itself layer-by-layer when the landing appears.
             VStack(spacing: 18) {
-                Image("logo")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 56, height: 56)
+                OnionRevealView(trigger: greeting)
+                    .frame(width: 60, height: 60)
                 Text(greeting)
                     .font(.system(.title, design: .serif).weight(.medium))
                     .lineLimit(1)

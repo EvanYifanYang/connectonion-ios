@@ -13,11 +13,8 @@ struct AgentBubble: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 if !item.content.isEmpty {
-                    Text(.init(item.content))
+                    MarkdownMessageView(text: item.content)
                         .font(.body)
-                        .lineSpacing(3)
-                        .textSelection(.enabled)
-                        .contentTransition(.opacity)
                 }
 
                 ForEach(item.images, id: \.self) { image in

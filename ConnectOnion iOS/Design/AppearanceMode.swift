@@ -3,9 +3,9 @@ import SwiftUI
 /// The user's theme preference, persisted via `@AppStorage(AppearanceMode.storageKey)` and applied
 /// with `.preferredColorScheme` at the app root.
 enum AppearanceMode: String, CaseIterable, Identifiable {
-    case system
     case light
     case dark
+    case system
 
     static let storageKey = "appearanceMode"
 

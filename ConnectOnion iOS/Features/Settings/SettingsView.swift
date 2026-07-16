@@ -61,11 +61,11 @@ struct SettingsView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("About", systemImage: "info.circle") { showingInfo = true }
                         .labelStyle(.iconOnly)
+                        .popover(isPresented: $showingInfo) {
+                            SettingsInfoView(identity: identity, appVersion: appVersion)
+                                .presentationCompactAdaptation(.popover)
+                        }
                 }
-            }
-            .popover(isPresented: $showingInfo) {
-                SettingsInfoView(identity: identity, appVersion: appVersion)
-                    .presentationCompactAdaptation(.popover)
             }
             .task {
                 loadIdentity()

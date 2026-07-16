@@ -63,32 +63,20 @@ struct AgentEditorView: View {
                         dismiss()
                     }
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Button(confirmTitle, systemImage: confirmIcon, action: save)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .buttonStyle(.glassProminent)
-                    .disabled(!canSave)
-                    .accessibilityIdentifier(AccessibilityID.saveAgentButton)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
+
+                // Symmetric to Cancel: a bold accent "Save" on the trailing side (no bottom button).
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save", action: save)
+                        .disabled(!canSave)
+                        .accessibilityIdentifier(AccessibilityID.saveAgentButton)
+                }
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
-        // A bottom sheet that doesn't fill the screen, with the standard grabber (multiple detents +
-        // an explicit drag indicator), matching the New-Chat sheet.
-        .presentationDetents([.medium, .large])
+        // A compact bottom sheet sized to the fields (no wasted vertical space), still draggable up
+        // to full height, with the standard grabber.
+        .presentationDetents([.height(300), .large])
         .presentationDragIndicator(.visible)
-    }
-
-    /// "Add Agent" when creating (address editable), "Save" when editing an existing agent.
-    private var confirmTitle: String {
-        isAddressEditable ? "Add Agent" : "Save"
-    }
-
-    private var confirmIcon: String {
-        isAddressEditable ? "plus" : "checkmark"
     }
 
     private var canSave: Bool {

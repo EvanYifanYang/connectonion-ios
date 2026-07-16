@@ -8,6 +8,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let addAgentEndpointFieldID = "connectonion.agent.add.endpoint"
     private let agentActionsButtonID = "connectonion.agent.actions.button"
     private let renameAgentButtonID = "connectonion.agent.rename.button"
+    private let renameConversationButtonID = "connectonion.chat.rename.button"
     private let deleteAgentButtonID = "connectonion.agent.delete.button"
     private let newChatButtonID = "connectonion.chat.new.button"
     private let newChatSheetID = "connectonion.chat.new.sheet"
@@ -209,6 +210,28 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         deleteButton.tap()
 
         XCTAssertFalse(app.anyElement(seededConversationID).waitForExistence(timeout: 2), app.debugDescription)
+    }
+
+    @MainActor
+    func testConversationMenuRenameUpdatesTitle() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        _ = waitForElement(seededConversationID, in: app)
+        app.buttons["Conversation Actions"].firstMatch.tap()
+
+        tapElement(renameConversationButtonID, in: app)
+
+        let field = app.alerts.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+        field.tap()
+        if let currentValue = field.value as? String {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count))
+        }
+        field.typeText("Renamed by test")
+        app.alerts.buttons["Save"].tap()
+
+        XCTAssertTrue(app.staticTexts["Renamed by test"].waitForExistence(timeout: 5), app.debugDescription)
     }
 
     @MainActor

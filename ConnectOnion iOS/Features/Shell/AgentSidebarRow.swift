@@ -31,7 +31,7 @@ struct AgentSidebarRow: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
-                                .font(.body)
+                                .font(AppFont.rowName)
                                 .lineLimit(1)
 
                             if let remoteProfileName {

@@ -16,7 +16,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Agents") {
+                Section {
                     ForEach(agents) { agent in
                         NavigationLink {
                             AgentDetailView(agent: agent, info: infoByAddress[agent.address]) {
@@ -34,16 +34,28 @@ struct SettingsView: View {
                         }
                         .accessibilityIdentifier(AccessibilityID.addAgentButton)
                     }
+                } header: {
+                    Text("Agents")
+                        .font(AppFont.sectionSerif)
+                        .textCase(nil)
                 }
 
-                Section("Appearance") {
+                Section {
                     AppearancePicker(selection: $appearance)
                         .padding(.vertical, 6)
+                } header: {
+                    Text("Appearance")
+                        .font(AppFont.sectionSerif)
+                        .textCase(nil)
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text("Settings")
+                        .font(AppFont.wordmark)
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close", systemImage: "xmark") { dismiss() }
                         .labelStyle(.iconOnly)
@@ -78,7 +90,7 @@ private struct AgentSettingsRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(agent.displayName(info: info))
-                    .font(.body)
+                    .font(AppFont.rowName)
                     .lineLimit(1)
                 Text(endpointText)
                     .font(.footnote.monospaced())

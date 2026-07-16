@@ -24,4 +24,7 @@ enum AppFont {
 
     /// Small monospaced (short/truncated addresses, captions).
     static let monoCaption = Font.system(.caption, design: .monospaced)
+
+    /// Serif for agent names in list rows (sidebar + settings).
+    static let rowName = Font.system(.body, design: .serif)
 }

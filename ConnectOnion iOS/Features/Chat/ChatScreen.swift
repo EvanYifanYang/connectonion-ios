@@ -36,7 +36,8 @@ struct ChatScreen: View {
                 onAskUserResponse: viewModel.respondToAskUser,
                 onApprovalResponse: viewModel.respondToApproval,
                 onOnboardSubmit: viewModel.submitOnboard,
-                onPlanReviewResponse: viewModel.respondToPlanReview
+                onPlanReviewResponse: viewModel.respondToPlanReview,
+                onRegenerate: viewModel.regenerate
             )
 
             if let errorMessage = viewModel.errorMessage {

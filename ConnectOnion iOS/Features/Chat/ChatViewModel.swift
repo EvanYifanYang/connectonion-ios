@@ -122,6 +122,17 @@ final class ChatViewModel {
         }
     }
 
+    /// Re-run the most recent user turn: drop it and its reply, then send the same input again so a
+    /// fresh response streams in its place (no duplicate user bubble). `send` already cancels any
+    /// in-flight stream.
+    func regenerate() {
+        guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
+        let userItem = items[lastUserIndex]
+        items.removeSubrange(lastUserIndex...)
+        persist()
+        send(userItem.content, images: userItem.images, files: userItem.files)
+    }
+
     func reconnect() {
         errorMessage = nil
         sessionState = .reconnecting

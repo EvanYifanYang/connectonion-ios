@@ -11,6 +11,11 @@ struct ChatMessageList: View {
     var onApprovalResponse: (Bool, String, String?, String?) -> Void
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
+    var onRegenerate: () -> Void = {}
+
+    private var lastAgentID: ChatItem.ID? {
+        items.last { $0.kind == .agent }?.id
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -23,10 +28,12 @@ struct ChatMessageList: View {
                             isPendingApproval: item.id == pendingApproval?.id,
                             isPendingOnboard: item.id == pendingOnboard?.id,
                             isPendingPlanReview: item.id == pendingPlanReview?.id,
+                            showAgentActions: item.id == lastAgentID,
                             onAskUserResponse: onAskUserResponse,
                             onApprovalResponse: onApprovalResponse,
                             onOnboardSubmit: onOnboardSubmit,
-                            onPlanReviewResponse: onPlanReviewResponse
+                            onPlanReviewResponse: onPlanReviewResponse,
+                            onRegenerate: onRegenerate
                         )
                         .id(item.id)
                         .transition(AppMotion.messageTransition)

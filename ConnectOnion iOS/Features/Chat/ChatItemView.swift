@@ -6,17 +6,19 @@ struct ChatItemView: View {
     var isPendingApproval: Bool
     var isPendingOnboard: Bool
     var isPendingPlanReview: Bool
+    var showAgentActions: Bool = false
     var onAskUserResponse: (String) -> Void
     var onApprovalResponse: (Bool, String, String?, String?) -> Void
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
+    var onRegenerate: () -> Void = {}
 
     var body: some View {
         switch item.kind {
         case .user:
             UserBubble(item: item)
         case .agent:
-            AgentBubble(item: item)
+            AgentBubble(item: item, showActions: showAgentActions, onRegenerate: onRegenerate)
         case .thinking:
             ThinkingRow(item: item)
         case .toolCall:

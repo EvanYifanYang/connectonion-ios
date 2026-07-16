@@ -1,7 +1,10 @@
 import SwiftUI
+import UIKit
 
 struct AgentBubble: View {
     var item: ChatItem
+    var showActions: Bool = false
+    var onRegenerate: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -30,13 +33,57 @@ struct AgentBubble: View {
                     .clipShape(.rect(cornerRadius: 18))
                 }
             }
+
+            if showActions, !item.content.isEmpty {
+                MessageActionsRow(content: item.content, onRegenerate: onRegenerate)
+                    .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 8)
     }
 }
 
+/// The small Copy / Regenerate / Share row under the latest assistant reply (Claude-style).
+private struct MessageActionsRow: View {
+    var content: String
+    var onRegenerate: () -> Void
+
+    @State private var copied = false
+
+    var body: some View {
+        HStack(spacing: 20) {
+            Button {
+                UIPasteboard.general.string = content
+                copied = true
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+            }
+            .accessibilityLabel(copied ? "Copied" : "Copy")
+
+            Button(action: onRegenerate) {
+                Image(systemName: "arrow.clockwise")
+            }
+            .accessibilityLabel("Regenerate")
+
+            ShareLink(item: content) {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .accessibilityLabel("Share")
+        }
+        .font(.system(size: 15))
+        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: copied)
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(1.6))
+            copied = false
+        }
+    }
+}
+
 #Preview("Agent Bubble") {
-    AgentBubble(item: PreviewFixtures.sampleAgentMessage)
+    AgentBubble(item: PreviewFixtures.sampleAgentMessage, showActions: true)
         .padding()
 }

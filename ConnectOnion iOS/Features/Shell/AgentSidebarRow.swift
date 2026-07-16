@@ -73,9 +73,11 @@ struct AgentSidebarRow: View {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
-                        .contentShape(.rect)
+                        .contentShape(.circle)
                 }
-                .buttonStyle(.plain)
+                // No system press platter behind the glyph — it flashed as a stray square on the card.
+                .menuStyle(.button)
+                .buttonStyle(QuietPressButtonStyle())
                 .accessibilityLabel("Agent Actions")
                 .accessibilityIdentifier(AccessibilityID.agentActionsButton)
             }

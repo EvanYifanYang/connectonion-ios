@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The top-bar brand wordmark: "Connect" + the onion logo standing in for the capital O + "nion".
 struct ConnectOnionWordmark: View {
-    var logoSize: CGFloat = 27
+    var logoSize: CGFloat = 30
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
@@ -14,8 +14,8 @@ struct ConnectOnionWordmark: View {
                 .padding(.horizontal, 1)
             Text("nion")
         }
-        // A touch larger than the other nav titles so the brand reads at the top of the agent list.
-        .font(.system(.title2, design: .serif).weight(.semibold))
+        // Larger than the other nav titles so the brand reads at the top of the agent list.
+        .font(.system(size: 26, weight: .semibold, design: .serif))
         .lineLimit(1)
         .accessibilityLabel("ConnectOnion")
     }

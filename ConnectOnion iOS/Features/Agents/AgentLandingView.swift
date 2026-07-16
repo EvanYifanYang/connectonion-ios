@@ -11,15 +11,16 @@ struct AgentLandingView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // A light identity only — the agent's home already showed the full hero, so don't repeat it.
+            // A warm, serif greeting instead of repeating the agent hero.
             VStack(spacing: 10) {
-                AgentAvatar(title: agent.displayName(info: info), online: nil)
-                    .scaleEffect(1.1)
-                Text("New chat with \(agent.displayName(info: info))")
-                    .font(.subheadline)
+                Text(greeting)
+                    .font(.system(.largeTitle, design: .serif).weight(.medium))
+                Text("What shall we think through?")
+                    .font(.system(.title3, design: .serif))
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
 
             Spacer(minLength: 0)
 
@@ -34,8 +35,16 @@ struct AgentLandingView: View {
         // Tapping the empty area (anywhere outside the composer's controls) dismisses the keyboard.
         .contentShape(.rect)
         .onTapGesture { dismissKeyboard() }
-        .navigationTitle(agent.displayName(info: info))
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date.now) {
+        case 5..<12: "Good morning"
+        case 12..<17: "Good afternoon"
+        default: "Good evening"
+        }
     }
 
     private func dismissKeyboard() {

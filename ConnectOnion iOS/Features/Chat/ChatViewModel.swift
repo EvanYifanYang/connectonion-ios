@@ -359,12 +359,12 @@ final class ChatViewModel {
             clearInFlightInput()
             clearOptimisticPlaceholder()
             if !chatItems.isEmpty {
-                // Adopting the server's canonical list can re-id the reply we're mid-reveal on; re-point
-                // the typewriter to the same content so the reveal survives the swap.
-                let streamingContent = streamingMessageID.flatMap { id in items.first { $0.id == id }?.content }
+                // Adopting the server's canonical list can re-id the reply we're mid-reveal on; keep the
+                // typewriter pointed at the latest reply (by position) so the reveal survives the swap.
+                let wasStreaming = streamingMessageID != nil
                 items = chatItems
-                if let streamingContent, !streamingContent.isEmpty {
-                    streamingMessageID = items.last { $0.kind == .agent && $0.content == streamingContent }?.id
+                if wasStreaming {
+                    streamingMessageID = items.last { $0.kind == .agent }?.id
                 }
             }
             if !result.isEmpty, items.last(where: { $0.kind == .agent })?.content != result {

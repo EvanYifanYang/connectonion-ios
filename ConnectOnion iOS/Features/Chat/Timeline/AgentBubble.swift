@@ -78,9 +78,6 @@ private struct StreamingMessageText: View {
             .tint(.onion)
             .frame(maxWidth: .infinity, alignment: .leading)
             .task(id: text) { await reveal() }
-            // If the bubble is torn down mid-reveal (scrolled out of the lazy list), settle it so it
-            // renders in full on return instead of replaying the typewriter from the start.
-            .onDisappear { onComplete() }
     }
 
     private func reveal() async {

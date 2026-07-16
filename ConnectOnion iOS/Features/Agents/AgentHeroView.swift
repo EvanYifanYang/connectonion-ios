@@ -17,9 +17,10 @@ struct AgentHeroView: View {
 
             if let online = info?.online {
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(online ? Color.green : Color.secondary)
-                        .frame(width: 7, height: 7)
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(online ? Color.green : Color.secondary)
+                        .symbolEffect(.pulse, options: .repeating, isActive: online) // gentle breathing while connected
                     Text(online ? "Connected" : "Offline")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(online ? Color.green : Color.secondary)

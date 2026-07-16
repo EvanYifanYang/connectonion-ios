@@ -8,11 +8,8 @@ struct SettingsView: View {
     var onDeleteAgent: (AgentConfigRecord) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
-    @Injected(\.identityStore) private var identityStore: IdentityProviding
 
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
-    @State private var identity: ClientIdentity?
-    @State private var errorMessage: String?
     @State private var showingInfo = false
     @State private var feedbackTrigger = 0
 
@@ -43,13 +40,6 @@ struct SettingsView: View {
                     AppearancePicker(selection: $appearance)
                         .padding(.vertical, 6)
                 }
-
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
-                    }
-                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -62,13 +52,10 @@ struct SettingsView: View {
                     Button("About", systemImage: "info.circle") { showingInfo = true }
                         .labelStyle(.iconOnly)
                         .popover(isPresented: $showingInfo) {
-                            SettingsInfoView(identity: identity, appVersion: appVersion)
+                            SettingsInfoView(appVersion: appVersion)
                                 .presentationCompactAdaptation(.popover)
                         }
                 }
-            }
-            .task {
-                loadIdentity()
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
@@ -78,14 +65,6 @@ struct SettingsView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
-    }
-
-    private func loadIdentity() {
-        do {
-            identity = try identityStore.currentIdentity
-        } catch {
-            errorMessage = error.localizedDescription
-        }
     }
 }
 
@@ -122,8 +101,10 @@ private struct AgentSettingsRow: View {
 }
 
 private struct SettingsInfoView: View {
-    var identity: ClientIdentity?
     var appVersion: String
+
+    @Injected(\.identityStore) private var identityStore: IdentityProviding
+    @State private var identity: ClientIdentity?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -137,6 +118,7 @@ private struct SettingsInfoView: View {
         }
         .frame(width: 280)
         .padding(.vertical, 6)
+        .onAppear { identity = try? identityStore.currentIdentity }
     }
 
     private func infoRow(_ label: String, value: String) -> some View {

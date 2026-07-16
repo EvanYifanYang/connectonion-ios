@@ -15,14 +15,10 @@ struct ChatMessageList: View {
     var streamingMessageID: ChatItem.ID?
     var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
     var isGenerating: Bool = false
+    var responseModel: String?
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
-    }
-
-    /// The model that produced the reply, shown as a footer under the latest message.
-    private var responseModel: String? {
-        items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
     }
 
     var body: some View {

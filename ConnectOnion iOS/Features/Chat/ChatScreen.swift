@@ -40,7 +40,8 @@ struct ChatScreen: View {
                 onRegenerate: viewModel.regenerate,
                 streamingMessageID: viewModel.streamingMessageID,
                 onStreamComplete: viewModel.markStreamingComplete,
-                isGenerating: viewModel.shouldShowStopButton
+                isGenerating: viewModel.shouldShowStopButton,
+                responseModel: viewModel.lastResponseModel
             )
 
             if let errorMessage = viewModel.errorMessage {

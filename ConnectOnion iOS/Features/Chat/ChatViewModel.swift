@@ -16,6 +16,9 @@ final class ChatViewModel {
     /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
     /// the bubble finishes revealing. Nil for restored/older messages, so they render in full.
     var streamingMessageID: ChatItem.ID?
+    /// The model that produced the latest reply, shown as a footer under it. Captured from events (the
+    /// server's final `chatItems` may drop the thinking row that carries it).
+    var lastResponseModel: String?
 
     @ObservationIgnored
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
@@ -43,6 +46,7 @@ final class ChatViewModel {
         items = conversation.messages
         clientOverride = client
         finalizeRunningItems() // restored items must never resume the live "running" animation
+        lastResponseModel = items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
         sessionState = items.isEmpty ? .idle : .connected
     }
 
@@ -311,6 +315,7 @@ final class ChatViewModel {
 
         case .server(let event):
             regenerateBackup = nil // the resend is producing events, so drop the restore snapshot
+            let previousAgentID = items.last(where: { $0.kind == .agent })?.id
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 deferredOnboardInput = inFlightInput
                 discardInFlightUserPrompt()
@@ -320,6 +325,16 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             if let newState = ChatEventReducer.apply(event, to: &items) {
                 sessionState = newState
+            }
+            // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
+            // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
+            if event.type == "assistant",
+               let lastAgent = items.last(where: { $0.kind == .agent }),
+               lastAgent.id != previousAgentID {
+                streamingMessageID = lastAgent.id
+            }
+            if let model = items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model {
+                lastResponseModel = model
             }
             updateLiveActivity(for: event)
             if let eventID = event.id {

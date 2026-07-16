@@ -1,56 +1,57 @@
 import SwiftUI
 
-/// A small "peeling onion" loading mark for the thinking row, built from the logo: concentric tilted
-/// onion-layer rings (purple, lighter toward the centre) with white separators. A wave of scale +
-/// opacity travels from the outer layer inward so the layers look like they're peeling one by one.
+/// The "thinking" onion, built from the real logo layers. The black peel stays put (so the silhouette
+/// reads at any size) while the inner rings accumulate outward→inward and then peel back off, looping
+/// — a little onion breathing itself together while the agent works. Paused (and shown whole) when
+/// inactive, so it settles and the app can reach idle (XCUITest-safe); also reused, static, as the
+/// small mark under the model footer.
 struct OnionThinkingMark: View {
     var active: Bool = true
     var diameter: CGFloat = 26
 
-    private let layerCount = 4
-    private let tilt = Angle.degrees(-25)
-
-    private var size: CGSize { CGSize(width: diameter, height: diameter * 0.77) }
+    // OUTER → INNER, matching OnionRevealView / the launch splash.
+    private let layers = [
+        "onion_1_black", "onion_2_purple", "onion_3_white", "onion_4_purple",
+        "onion_5_white", "onion_6_purple", "onion_7_white", "onion_8_core"
+    ]
+    private let period: Double = 2.2 // one build + peel cycle
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            ZStack {
-                // Outer layer first (back) → inner layer last (front).
-                ForEach(0..<layerCount, id: \.self) { index in
-                    layer(index, time)
-                }
-            }
-            .rotationEffect(tilt)
-            .frame(width: diameter, height: diameter)
+            content(builtRings: builtRings(at: timeline.date))
         }
+        .frame(width: diameter, height: diameter)
+        .accessibilityHidden(true)
     }
 
-    private func layer(_ index: Int, _ time: Double) -> some View {
-        // 1.0 for the outermost ring, shrinking toward the centre.
-        let fraction = CGFloat(layerCount - index) / CGFloat(layerCount)
-        // Peel wave travels outer → inner; when paused it rests calmly lit.
-        let phase = active ? time * 2.6 - Double(index) * 0.7 : 0
-        let pulse = active ? (sin(phase) + 1) / 2 : 0.6
-        let scale = 0.92 + 0.12 * pulse
-        let isInnermost = index == layerCount - 1
+    /// How many inner rings (0…7) are currently built. Ping-pongs 0→7→0 while active; all 7 when paused.
+    private func builtRings(at date: Date) -> Double {
+        guard active else { return Double(layers.count - 1) }
+        let t = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: period) / period // 0..1
+        let p = t * 2
+        return (p <= 1 ? p : 2 - p) * Double(layers.count - 1) // 0→7→0
+    }
 
-        return Ellipse()
-            .fill(Color.onion.opacity(0.2 + 0.6 * Double(fraction)))
-            .overlay {
-                if !isInnermost {
-                    Ellipse().stroke(.white, lineWidth: 1.1)
-                }
+    private func content(builtRings: Double) -> some View {
+        ZStack {
+            Image(layers[0]) // black peel — always present
+                .resizable()
+                .scaledToFit()
+            ForEach(1..<layers.count, id: \.self) { index in
+                Image(layers[index])
+                    .resizable()
+                    .scaledToFit()
+                    // Ring `index` fades in as the build count passes it (and back out on the peel).
+                    .opacity(min(1, max(0, builtRings - Double(index - 1))))
             }
-            .frame(width: size.width * fraction, height: size.height * fraction)
-            .scaleEffect(scale)
-            .opacity(0.55 + 0.45 * pulse)
+        }
     }
 }
 
 #Preview("Onion Thinking Mark") {
     HStack(spacing: 24) {
-        OnionThinkingMark(active: true)
+        OnionThinkingMark(active: true, diameter: 48)
         OnionThinkingMark(active: false, diameter: 40)
     }
     .padding()

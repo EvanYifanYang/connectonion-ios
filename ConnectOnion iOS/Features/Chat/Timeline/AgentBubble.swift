@@ -78,6 +78,9 @@ private struct StreamingMessageText: View {
             .tint(.onion)
             .frame(maxWidth: .infinity, alignment: .leading)
             .task(id: text) { await reveal() }
+            // If the bubble is torn down mid-reveal (scrolled out of the lazy list), settle it so it
+            // renders in full on return instead of replaying the typewriter from the start.
+            .onDisappear { onComplete() }
     }
 
     private func reveal() async {
@@ -125,7 +128,7 @@ private struct MessageActionsRow: View {
         .font(.system(size: 15))
         .foregroundStyle(.secondary)
         .buttonStyle(.plain)
-        .sensoryFeedback(.success, trigger: copied)
+        .sensoryFeedback(.success, trigger: copied) { _, isCopied in isCopied }
         .task(id: copied) {
             guard copied else { return }
             try? await Task.sleep(for: .seconds(1.6))

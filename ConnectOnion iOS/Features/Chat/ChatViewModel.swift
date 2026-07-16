@@ -34,6 +34,7 @@ final class ChatViewModel {
     @ObservationIgnored private var optimisticUserItemID: String?
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var regenerateBackup: [ChatItem]?
     private var deferredOnboardInput: AgentInput?
 
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
@@ -41,7 +42,16 @@ final class ChatViewModel {
         self.agent = agent
         items = conversation.messages
         clientOverride = client
+        finalizeRunningItems() // restored items must never resume the live "running" animation
         sessionState = items.isEmpty ? .idle : .connected
+    }
+
+    /// Any item persisted / left mid-flight as `.running` would keep the peeling-onion animation
+    /// spinning forever; settle them to `.done` when a turn ends or on load.
+    private func finalizeRunningItems() {
+        for index in items.indices where items[index].status == .running {
+            items[index].status = .done
+        }
     }
 
     deinit {
@@ -140,6 +150,7 @@ final class ChatViewModel {
     func regenerate() {
         guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
         let userItem = items[lastUserIndex]
+        regenerateBackup = items // restore this if the resend fails, so we don't lose the old exchange
         items.removeSubrange(lastUserIndex...)
         persist()
         send(userItem.content, images: userItem.images, files: userItem.files)
@@ -242,6 +253,7 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
+        finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
         liveActivity.end(
@@ -298,6 +310,7 @@ final class ChatViewModel {
             errorMessage = nil
 
         case .server(let event):
+            regenerateBackup = nil // the resend is producing events, so drop the restore snapshot
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 deferredOnboardInput = inFlightInput
                 discardInFlightUserPrompt()
@@ -326,6 +339,7 @@ final class ChatViewModel {
         case .output(let result, let session, let chatItems):
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
+            regenerateBackup = nil // the resend produced a reply, so drop the restore snapshot
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
@@ -337,6 +351,7 @@ final class ChatViewModel {
                 append(agentItem, animated: true, shouldPersist: false)
                 streamingMessageID = agentItem.id // reveal this one with the typewriter effect
             }
+            finalizeRunningItems()
             conversation.rawSession = session
             sessionState = .connected
             stopTimer()
@@ -423,8 +438,22 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
+
+        // A failed regenerate: restore the exchange we optimistically removed rather than losing it.
+        if let backup = regenerateBackup {
+            regenerateBackup = nil
+            items = backup
+            finalizeRunningItems()
+            errorMessage = userFacingError(message)
+            sessionState = items.isEmpty ? .idle : .connected
+            stopTimer()
+            persist()
+            return
+        }
+
         commitOptimisticUserPrompt()
         clearOptimisticPlaceholder()
+        finalizeRunningItems()
         errorMessage = userFacingError(message)
         sessionState = .disconnected
         stopTimer()

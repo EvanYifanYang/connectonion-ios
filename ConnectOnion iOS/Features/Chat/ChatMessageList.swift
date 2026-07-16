@@ -14,6 +14,7 @@ struct ChatMessageList: View {
     var onRegenerate: () -> Void = {}
     var streamingMessageID: ChatItem.ID?
     var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
+    var isGenerating: Bool = false
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
@@ -35,7 +36,7 @@ struct ChatMessageList: View {
                             isPendingApproval: item.id == pendingApproval?.id,
                             isPendingOnboard: item.id == pendingOnboard?.id,
                             isPendingPlanReview: item.id == pendingPlanReview?.id,
-                            showAgentActions: item.id == lastAgentID && item.id != streamingMessageID,
+                            showAgentActions: item.id == lastAgentID && item.id != streamingMessageID && !isGenerating,
                             isStreaming: item.id == streamingMessageID,
                             modelName: item.id == lastAgentID ? responseModel : nil,
                             onAskUserResponse: onAskUserResponse,
@@ -71,6 +72,15 @@ struct ChatMessageList: View {
             }
             .task {
                 proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            // The typewriter reveal grows a bubble's height without mutating `items`, so follow the
+            // bottom while a reply streams in (the task auto-cancels when streaming clears).
+            .task(id: streamingMessageID) {
+                guard streamingMessageID != nil else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
             }
         }
     }

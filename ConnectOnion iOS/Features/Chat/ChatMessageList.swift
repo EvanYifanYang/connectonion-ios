@@ -107,20 +107,15 @@ struct ChatMessageList: View {
             }
             .accessibilityIdentifier(AccessibilityID.chatList)
             .scrollDismissesKeyboard(.interactively)
+            // Open pinned to the newest message, and stay pinned while content grows — the typewriter
+            // reveal grows a bubble's height without mutating `items`, and the system anchor tracks
+            // that natively. This replaces the old 50ms scrollTo loop, which fought LazyVStack layout
+            // mid-reveal and bounced the viewport between the current and the previous turn (the
+            // "two positions flickering" bug).
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .onChange(of: items) { _, _ in
                 withAnimation(.smooth(duration: 0.22)) {
-                    proxy.scrollTo("bottom", anchor: .bottom)
-                }
-            }
-            .task {
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
-            // The typewriter reveal grows a bubble's height without mutating `items`, so follow the
-            // bottom while a reply streams in (the task auto-cancels when streaming clears).
-            .task(id: streamingMessageID) {
-                guard streamingMessageID != nil else { return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(50))
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }

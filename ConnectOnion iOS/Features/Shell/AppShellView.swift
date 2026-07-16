@@ -18,6 +18,8 @@ struct AppShellView: View {
     @Query(sort: \ConversationRecord.updatedAt, order: .reverse) private var conversations: [ConversationRecord]
 
     @State private var path: [ShellRoute] = []
+    /// Pairs each agent card with its pushed home for the zoom navigation transition.
+    @Namespace private var agentZoomNamespace
     @State private var pendingInputs: [UUID: AgentInput] = [:]
     @State private var showingAddAgent = false
     @State private var showingSettings = false
@@ -32,6 +34,7 @@ struct AppShellView: View {
             AgentListView(
                 agents: agents,
                 infoByAddress: infoStore.infoByAddress,
+                zoomNamespace: agentZoomNamespace,
                 onSelectAgent: { path.append(.agentHome($0.address)) },
                 onAddAgent: { showingAddAgent = true },
                 onSettings: { showingSettings = true },
@@ -202,6 +205,8 @@ struct AppShellView: View {
                     },
                     onDeleteConversation: deleteConversation
                 )
+                // The agent card expands into its home (and shrinks back on pop).
+                .navigationTransition(.zoom(sourceID: address, in: agentZoomNamespace))
             }
 
         case .newChat(let address):

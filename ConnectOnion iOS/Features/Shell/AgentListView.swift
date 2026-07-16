@@ -6,6 +6,7 @@ import UIKit
 struct AgentListView: View {
     var agents: [AgentConfigRecord]
     var infoByAddress: [String: AgentInfo]
+    var zoomNamespace: Namespace.ID
     var onSelectAgent: (AgentConfigRecord) -> Void
     var onAddAgent: () -> Void
     var onSettings: () -> Void
@@ -67,6 +68,8 @@ struct AgentListView: View {
                                 onDeleteAgent(agent)
                             }
                         )
+                        // Source anchor for the zoom push into this agent's home.
+                        .matchedTransitionSource(id: agent.address, in: zoomNamespace)
                         .transition(AppMotion.panelTransition)
                     }
                 }

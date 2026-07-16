@@ -6,8 +6,17 @@ import UIKit
 /// bias over blue, à la Claude) with clearly-separated elevation steps. Light mode keeps the exact
 /// system values, so nothing there changes.
 extension Color {
-    /// The app canvas — the backdrop behind every screen. Dark: warm off-black. Light: grouped bg.
+    /// The app canvas — the backdrop behind the plain (non-Form) screens: agent list, agent home,
+    /// landing, chat. Dark: warm off-black. Light: plain system background (white), as before.
     static let appCanvas = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.110, green: 0.106, blue: 0.098, alpha: 1) // ~#1C1B19
+            : .systemBackground
+    })
+
+    /// The canvas behind Form/grouped screens (Settings, agent editor/detail). Dark: same warm
+    /// off-black. Light: the grouped background (#F2F2F7) so white sections still pop, as before.
+    static let appGroupedCanvas = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.110, green: 0.106, blue: 0.098, alpha: 1) // ~#1C1B19
             : .systemGroupedBackground

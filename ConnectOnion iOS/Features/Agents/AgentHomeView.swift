@@ -21,6 +21,7 @@ struct AgentHomeView: View {
             newChatButton
                 .padding(20)
         }
+        .background(Color.appCanvas.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

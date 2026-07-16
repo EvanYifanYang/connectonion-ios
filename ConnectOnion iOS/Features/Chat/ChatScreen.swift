@@ -72,6 +72,7 @@ struct ChatScreen: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
+        .background(Color.appCanvas.ignoresSafeArea())
         // Keep the transparent bar, but fade the transcript out under the status bar / back button so
         // scrolled content doesn't clash with them.
         .overlay(alignment: .top) {

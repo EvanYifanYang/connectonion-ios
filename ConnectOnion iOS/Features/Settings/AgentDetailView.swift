@@ -80,7 +80,7 @@ struct AgentDetailView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Color.appCanvas)
+        .background(Color.appGroupedCanvas)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

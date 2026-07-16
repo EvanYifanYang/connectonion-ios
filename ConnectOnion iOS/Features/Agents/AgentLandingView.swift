@@ -50,6 +50,7 @@ struct AgentLandingView: View {
         // Tapping the empty area (anywhere outside the composer's controls) dismisses the keyboard.
         .contentShape(.rect)
         .onTapGesture { dismissKeyboard() }
+        .background(Color.appCanvas.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
     }

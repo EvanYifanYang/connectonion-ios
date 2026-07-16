@@ -84,6 +84,7 @@ struct AgentListView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: feedbackTrigger)
+        .background(Color.appCanvas.ignoresSafeArea())
     }
 
     private var newAgentButton: some View {

@@ -55,7 +55,7 @@ struct AgentEditorView: View {
             // primary action below, so the field itself doesn't read as "flashy".
             .tint(.primary)
             .scrollContentBackground(.hidden)
-            .background(Color.appCanvas)
+            .background(Color.appGroupedCanvas)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -79,7 +79,7 @@ struct AgentEditorView: View {
         // to full height, with the standard grabber.
         .presentationDetents([.height(300), .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Color.appCanvas)
+        .presentationBackground(Color.appGroupedCanvas)
     }
 
     private var canSave: Bool {

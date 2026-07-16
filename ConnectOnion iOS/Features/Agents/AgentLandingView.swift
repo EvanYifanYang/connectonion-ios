@@ -24,10 +24,12 @@ struct AgentLandingView: View {
             Spacer(minLength: 0)
 
             // The onion mark over a single warm, serif greeting — no repeated agent hero.
-            VStack(spacing: 22) {
-                OnionThinkingMark(active: false, diameter: 54)
+            VStack(spacing: 20) {
+                OnionThinkingMark(active: false, diameter: 42)
                 Text(greeting)
-                    .font(.system(.largeTitle, design: .serif).weight(.medium))
+                    .font(.system(.title, design: .serif).weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
                     .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 24)

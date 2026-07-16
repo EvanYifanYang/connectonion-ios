@@ -12,6 +12,7 @@ struct SidebarView: View {
     var onRenameAgent: (AgentConfigRecord) -> Void
     var onDeleteAgent: (AgentConfigRecord) -> Void
     var onRenameConversation: (ConversationRecord) -> Void
+    var onRequestDeleteConversation: (ConversationRecord) -> Void
     var onDeleteConversation: (ConversationRecord) -> Void
     var onSettings: () -> Void
     var onOpenDetail: () -> Void
@@ -76,6 +77,10 @@ struct SidebarView: View {
                             onRename: {
                                 tick()
                                 onRenameConversation(conversation)
+                            },
+                            onRequestDelete: {
+                                tick()
+                                onRequestDeleteConversation(conversation)
                             },
                             onDelete: {
                                 tick()
@@ -202,6 +207,7 @@ private struct SidebarEmptyState: View {
         onRenameAgent: { _ in },
         onDeleteAgent: { _ in },
         onRenameConversation: { _ in },
+        onRequestDeleteConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
         onOpenDetail: {},
@@ -222,6 +228,7 @@ private struct SidebarEmptyState: View {
         onRenameAgent: { _ in },
         onDeleteAgent: { _ in },
         onRenameConversation: { _ in },
+        onRequestDeleteConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
         onOpenDetail: {},

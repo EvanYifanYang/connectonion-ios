@@ -6,6 +6,7 @@ struct ConversationSidebarRow: View {
     var isSelected: Bool
     var onSelect: () -> Void
     var onRename: () -> Void
+    var onRequestDelete: () -> Void
     var onDelete: () -> Void
 
     @GestureState private var dragTranslation: CGFloat = 0
@@ -65,10 +66,10 @@ struct ConversationSidebarRow: View {
 
                 Spacer(minLength: 0)
 
-                Menu("Conversation Actions", systemImage: "ellipsis") {
-                    Button("Rename", systemImage: "pencil", action: onRename)
-                        .accessibilityIdentifier(AccessibilityID.renameConversationButton)
-                    Button("Delete", systemImage: "trash", role: .destructive, action: commitDelete)
+                Menu {
+                    menuActions
+                } label: {
+                    Label("Conversation Actions", systemImage: "ellipsis")
                 }
                 .labelStyle(.iconOnly)
             }
@@ -78,6 +79,14 @@ struct ConversationSidebarRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(conversation.title)
+        .contextMenu { menuActions }
+    }
+
+    @ViewBuilder
+    private var menuActions: some View {
+        Button("Rename", systemImage: "pencil", action: onRename)
+            .accessibilityIdentifier(AccessibilityID.renameConversationButton)
+        Button("Delete Chat", systemImage: "trash", role: .destructive, action: onRequestDelete)
     }
 
     private var deleteAction: some View {
@@ -157,6 +166,7 @@ struct ConversationSidebarRow: View {
         isSelected: true,
         onSelect: {},
         onRename: {},
+        onRequestDelete: {},
         onDelete: {}
     )
     .padding()
@@ -169,6 +179,7 @@ struct ConversationSidebarRow: View {
         isSelected: false,
         onSelect: {},
         onRename: {},
+        onRequestDelete: {},
         onDelete: {}
     )
     .padding()

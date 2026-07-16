@@ -20,6 +20,7 @@ struct AppShellView: View {
     @State private var deletingAgent: AgentConfigRecord?
     @State private var renamingConversation: ConversationRecord?
     @State private var renameConversationTitle = ""
+    @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
 
     var body: some View {
@@ -36,6 +37,7 @@ struct AppShellView: View {
                 onRenameAgent: { editingAgent = $0 },
                 onDeleteAgent: { deletingAgent = $0 },
                 onRenameConversation: startRenamingConversation,
+                onRequestDeleteConversation: { deletingConversation = $0 },
                 onDeleteConversation: deleteConversation,
                 onSettings: { showingSettings = true },
                 onOpenDetail: showDetailColumn,
@@ -101,6 +103,23 @@ struct AppShellView: View {
                 .tint(.primary)
             Button("Cancel", role: .cancel) { renamingConversation = nil }
             Button("Save") { commitConversationRename() }
+        }
+        .confirmationDialog(
+            "Delete Chat?",
+            isPresented: Binding(
+                get: { deletingConversation != nil },
+                set: { if !$0 { deletingConversation = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: deletingConversation
+        ) { conversation in
+            Button("Delete Chat", role: .destructive) {
+                deleteConversation(conversation)
+                deletingConversation = nil
+            }
+            Button("Cancel", role: .cancel) {
+                deletingConversation = nil
+            }
         }
         .task {
             restoreInitialSelection()

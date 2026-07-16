@@ -370,9 +370,11 @@ final class ChatViewModel {
             if !chatItems.isEmpty, !regenerating {
                 items = chatItems
             }
-            // Some paths deliver the reply only in `result` (not as a chat item) — make sure it exists as
-            // the last agent item so it can be revealed.
-            if !result.isEmpty, items.last(where: { $0.kind == .agent })?.content != result {
+            // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
+            // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
+            // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
+            // is the last item, so we still append the fresh bubble below it.
+            if !result.isEmpty, !(items.last?.kind == .agent && items.last?.content == result) {
                 let agentItem = ChatItem(kind: .agent, content: result)
                 append(agentItem, animated: true, shouldPersist: false)
             }

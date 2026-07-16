@@ -27,13 +27,6 @@ struct ChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatHeaderView(
-                agent: agent,
-                info: info,
-                state: viewModel.sessionState,
-                elapsedTime: viewModel.elapsedTime
-            )
-
             ChatMessageList(
                 items: viewModel.items,
                 pendingAskUser: viewModel.pendingAskUser,

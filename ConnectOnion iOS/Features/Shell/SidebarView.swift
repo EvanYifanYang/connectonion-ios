@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SidebarView: View {
     var agents: [AgentConfigRecord]
@@ -94,7 +95,13 @@ struct SidebarView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .contentShape(.rect)
+            // Tapping empty space commits an in-progress inline rename (resigns the field, which
+            // triggers its commit-on-blur) — SwiftUI won't dismiss the keyboard on its own.
+            .onTapGesture { dismissKeyboard() }
         }
+        .scrollDismissesKeyboard(.immediately)
         .scrollIndicators(.hidden)
         .refreshable {
             await onRefresh()
@@ -155,6 +162,10 @@ struct SidebarView: View {
 
     private func tick() {
         feedbackTrigger += 1
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private func agentName(for address: String) -> String {

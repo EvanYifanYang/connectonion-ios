@@ -19,6 +19,7 @@ struct ChatInputBar: View {
     @State private var showingAttachmentOptions = false
     @State private var showingPhotoPicker = false
     @State private var showingFileImporter = false
+    @State private var showingCamera = false
     @State private var attachmentError: String?
     @State private var voiceSeedText = ""
     @State private var feedbackTrigger = 0
@@ -71,65 +72,67 @@ struct ChatInputBar: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
 
-            if voiceInput.isActive {
-                VoiceInputStatusPill(state: voiceInput.state, duration: voiceInput.duration, transcript: voiceInput.transcript)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             if shouldShowSkillPalette {
                 SkillCommandPalette(skills: filteredSkills, onSelect: selectSkill)
                     .transition(AppMotion.panelTransition)
             }
 
-            // Row 1: the text field spans the full width.
-            TextField(placeholder, text: $text, axis: .vertical)
-                .lineLimit(1...6)
-                .textFieldStyle(.plain)
-                .tint(.primary)
-                .focused($isFocused)
-                .submitLabel(.send)
-                .onSubmit(send)
-                .padding(.horizontal, 6)
-                .padding(.top, 8)
-                .disabled(voiceInput.isActive)
-                .accessibilityIdentifier(AccessibilityID.chatInput)
+            if voiceInput.isActive {
+                VoiceRecordingBar(
+                    state: voiceInput.state,
+                    duration: voiceInput.duration,
+                    onCancel: cancelVoiceInput,
+                    onConfirm: confirmVoiceInput
+                )
+                .transition(.opacity)
+            } else {
+                // Row 1: the text field spans the full width.
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...6)
+                    .textFieldStyle(.plain)
+                    .tint(.primary)
+                    .focused($isFocused)
+                    .submitLabel(.send)
+                    .onSubmit(send)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 8)
+                    .accessibilityIdentifier(AccessibilityID.chatInput)
 
-            // Row 2: attach on the left, mic + send (or stop) on the right.
-            HStack(spacing: 10) {
-                if allowsAttachments {
-                    Button("Add attachment", systemImage: "plus", action: showAttachmentMenu)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 38, height: 38)
-                        .buttonStyle(.glass)
-                        .disabled(remainingAttachmentSlots == 0 || voiceInput.isActive)
-                        .accessibilityIdentifier(AccessibilityID.chatAttachmentButton)
-                }
+                // Row 2: attach on the left, mic + send (or stop) on the right.
+                HStack(spacing: 10) {
+                    if allowsAttachments {
+                        Button("Add attachment", systemImage: "plus", action: showAttachmentMenu)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 38, height: 38)
+                            .buttonStyle(.glass)
+                            .disabled(remainingAttachmentSlots == 0)
+                            .accessibilityIdentifier(AccessibilityID.chatAttachmentButton)
+                    }
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                if isRunning {
-                    Button("Stop", systemImage: "stop.fill", action: stop)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 40, height: 40)
-                        .buttonStyle(.glass)
-                        .accessibilityIdentifier(AccessibilityID.chatStopButton)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                } else {
-                    Button(voiceButtonTitle, systemImage: voiceButtonSystemImage, action: toggleVoiceInput)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 40, height: 40)
-                        .buttonStyle(.glass)
-                        .foregroundStyle(voiceInput.state == .recording ? .red : .primary)
-                        .disabled(voiceInput.state == .requestingPermission || voiceInput.state == .transcribing)
-                        .accessibilityIdentifier(AccessibilityID.chatVoiceButton)
+                    if isRunning {
+                        Button("Stop", systemImage: "stop.fill", action: stop)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glass)
+                            .accessibilityIdentifier(AccessibilityID.chatStopButton)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    } else {
+                        Button(voiceButtonTitle, systemImage: voiceButtonSystemImage, action: toggleVoiceInput)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glass)
+                            .accessibilityIdentifier(AccessibilityID.chatVoiceButton)
 
-                    Button("Send", systemImage: "arrow.up", action: send)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 40, height: 40)
-                        .buttonStyle(.glassProminent)
-                        .disabled(!canSend)
-                        .accessibilityIdentifier(AccessibilityID.chatSendButton)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        Button("Send", systemImage: "arrow.up", action: send)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glassProminent)
+                            .disabled(!canSend)
+                            .accessibilityIdentifier(AccessibilityID.chatSendButton)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
                 }
             }
         }
@@ -137,24 +140,18 @@ struct ChatInputBar: View {
         .frame(maxWidth: AppTheme.composerMaxWidth)
         .glassSurface(cornerRadius: 28, isInteractive: true)
         .frame(maxWidth: .infinity)
-        .confirmationDialog("Add attachment", isPresented: $showingAttachmentOptions, titleVisibility: .visible) {
-            if allowsImages {
-                Button("Photo Library", systemImage: "photo") {
-                    showingPhotoPicker = true
-                }
-                .accessibilityIdentifier(AccessibilityID.chatAttachmentPhotoButton)
-            }
-
-            if allowsFiles {
-                Button("Files", systemImage: "doc") {
-                    showingFileImporter = true
-                }
-                .accessibilityIdentifier(AccessibilityID.chatAttachmentFilesButton)
-            }
-
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Attach up to \(maxAttachmentCount) items.")
+        .sheet(isPresented: $showingAttachmentOptions) {
+            AttachmentSheet(
+                allowsImages: allowsImages,
+                allowsFiles: allowsFiles,
+                onCamera: { presentPicker { showingCamera = true } },
+                onPhotos: { presentPicker { showingPhotoPicker = true } },
+                onFiles: { presentPicker { showingFileImporter = true } }
+            )
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraPicker { data in appendImage(data: data) }
+                .ignoresSafeArea()
         }
         .photosPicker(
             isPresented: $showingPhotoPicker,
@@ -425,6 +422,27 @@ struct ChatInputBar: View {
         guard !transcript.isEmpty else { return }
         let separator = voiceSeedText.isEmpty ? "" : " "
         text = voiceSeedText + separator + transcript
+    }
+
+    /// ✓ — keep the dictated text: stop recording so the final transcript settles into the field.
+    private func confirmVoiceInput() {
+        tick()
+        if voiceInput.state == .recording {
+            voiceInput.stopRecording()
+        }
+    }
+
+    /// ✕ — discard the dictation and restore whatever was typed before recording started.
+    private func cancelVoiceInput() {
+        tick()
+        voiceInput.cancel()
+        text = voiceSeedText
+    }
+
+    /// Dismiss the attachment sheet first, then present the chosen picker on the next runloop so the
+    /// two sheet transitions don't collide.
+    private func presentPicker(_ present: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: present)
     }
 
     private func selectSkill(_ skill: SkillInfo) {

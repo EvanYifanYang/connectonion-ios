@@ -67,8 +67,10 @@ struct ChatScreen: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
-        .navigationTitle(conversation.title)
+        // No chat title + a transparent bar, so the transcript runs to the top (Claude-style).
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
         .animation(AppMotion.standard, value: viewModel.shouldShowFirstPromptSuggestions)
         .task(id: conversation.id) {

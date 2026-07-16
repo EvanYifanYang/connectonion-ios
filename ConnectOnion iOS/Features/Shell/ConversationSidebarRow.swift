@@ -83,18 +83,17 @@ struct ConversationSidebarRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 42, height: 42)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(conversation.title)
-                        .font(.body)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Text(agentName)
-                        .font(.footnote)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
+                Text(conversation.title)
+                    .font(.body)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Spacer(minLength: 0)
+
+                Text(relativeTime)
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
 
                 Menu {
                     menuActions
@@ -151,6 +150,18 @@ struct ConversationSidebarRow: View {
         .accessibilityLabel("Delete \(conversation.title)")
         .accessibilityIdentifier(AccessibilityID.deleteConversation(conversation.id))
         .accessibilityHidden(currentOffset == 0)
+    }
+
+    /// Compact "time since the last activity" for the row (e.g. 5m, 3h, 2d), like a messaging app.
+    private var relativeTime: String {
+        let seconds = Date.now.timeIntervalSince(conversation.updatedAt)
+        switch seconds {
+        case ..<60: return "now"
+        case ..<3600: return "\(Int(seconds / 60))m"
+        case ..<86_400: return "\(Int(seconds / 3600))h"
+        case ..<604_800: return "\(Int(seconds / 86_400))d"
+        default: return "\(Int(seconds / 604_800))w"
+        }
     }
 
     private var currentOffset: CGFloat {

@@ -187,7 +187,6 @@ struct AppShellView: View {
                     onRequestDeleteConversation: { deletingConversation = $0 },
                     onDeleteConversation: deleteConversation
                 )
-                .accessibilityIdentifier(AccessibilityID.agentHome)
             }
 
         case .newChat(let address):

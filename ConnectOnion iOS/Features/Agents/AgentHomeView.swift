@@ -14,6 +14,16 @@ struct AgentHomeView: View {
     var onDeleteConversation: (ConversationRecord) -> Void
 
     var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            content
+            newChatButton
+                .padding(20)
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 AgentHeroView(agent: agent, info: info)
@@ -44,12 +54,6 @@ struct AgentHomeView: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
             .padding(.bottom, 100) // clear the floating New Chat button
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .overlay(alignment: .bottomTrailing) {
-            newChatButton
-                .padding(20)
         }
     }
 

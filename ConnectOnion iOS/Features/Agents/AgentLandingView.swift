@@ -9,18 +9,19 @@ struct AgentLandingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 22) {
-                    AgentHeroView(agent: agent, info: info)
+            Spacer(minLength: 0)
 
-                    AgentCapabilityLine(info: info)
-                }
-                .frame(maxWidth: 540)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.top, 58)
-                .padding(.bottom, 28)
+            // A light identity only — the agent's home already showed the full hero, so don't repeat it.
+            VStack(spacing: 10) {
+                AgentAvatar(title: agent.displayName(info: info), online: nil)
+                    .scaleEffect(1.1)
+                Text("New chat with \(agent.displayName(info: info))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
+
+            Spacer(minLength: 0)
 
             LandingComposer(
                 acceptedInputs: info?.acceptedInputs,
@@ -33,9 +34,7 @@ struct AgentLandingView: View {
         // Tapping the empty area (anywhere outside the composer's controls) dismisses the keyboard.
         .contentShape(.rect)
         .onTapGesture { dismissKeyboard() }
-        // The hero below already shows the agent's name prominently, so the top bar leaves its title
-        // empty rather than repeating it.
-        .navigationTitle("")
+        .navigationTitle(agent.displayName(info: info))
         .navigationBarTitleDisplayMode(.inline)
     }
 

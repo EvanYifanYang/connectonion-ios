@@ -6,20 +6,26 @@ struct AgentHeroView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            AgentAvatar(title: displayName, online: info?.online)
+            // No status dot on the avatar — the single "Connected" line below is the one status source.
+            AgentAvatar(title: displayName, online: nil)
                 .scaleEffect(1.2)
                 .padding(.bottom, 8)
 
-            HStack(spacing: 8) {
-                Text(displayName)
-                    .font(AppFont.title)
-                    .lineLimit(1)
+            Text(displayName)
+                .font(AppFont.title)
+                .lineLimit(1)
 
-                if let online = info?.online {
-                    Image(systemName: online ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(online ? .green : .secondary)
-                        .accessibilityLabel(online ? "Online" : "Offline")
+            if let online = info?.online {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(online ? Color.green : Color.secondary)
+                        .frame(width: 7, height: 7)
+                    Text(online ? "Connected" : "Offline")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(online ? Color.green : Color.secondary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(online ? "Connected" : "Offline")
             }
 
             if let remoteProfileName {

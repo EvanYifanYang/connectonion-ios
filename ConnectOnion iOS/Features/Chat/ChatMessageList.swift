@@ -21,29 +21,75 @@ struct ChatMessageList: View {
         items.last { $0.kind == .agent }?.id
     }
 
+    /// A run of consecutive tool calls renders as one grouped, collapsible card; everything else renders
+    /// as its own item.
+    private enum RenderUnit: Identifiable {
+        case item(ChatItem)
+        case toolGroup(id: String, items: [ChatItem])
+
+        var id: String {
+            switch self {
+            case .item(let item): item.id
+            case .toolGroup(let id, _): id
+            }
+        }
+    }
+
+    private var renderUnits: [RenderUnit] {
+        var units: [RenderUnit] = []
+        var group: [ChatItem] = []
+        func flush() {
+            guard !group.isEmpty else { return }
+            units.append(.toolGroup(id: "tools-\(group[0].id)", items: group))
+            group.removeAll()
+        }
+        for item in items {
+            if item.kind == .toolCall {
+                group.append(item)
+            } else {
+                flush()
+                units.append(.item(item))
+            }
+        }
+        flush()
+        return units
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(items) { item in
-                        ChatItemView(
-                            item: item,
-                            isPendingAskUser: item.id == pendingAskUser?.id,
-                            isPendingApproval: item.id == pendingApproval?.id,
-                            isPendingOnboard: item.id == pendingOnboard?.id,
-                            isPendingPlanReview: item.id == pendingPlanReview?.id,
-                            showAgentActions: item.id == lastAgentID && item.id != streamingMessageID && !isGenerating,
-                            isStreaming: item.id == streamingMessageID,
-                            modelName: item.id == lastAgentID ? responseModel : nil,
-                            onAskUserResponse: onAskUserResponse,
-                            onApprovalResponse: onApprovalResponse,
-                            onOnboardSubmit: onOnboardSubmit,
-                            onPlanReviewResponse: onPlanReviewResponse,
-                            onRegenerate: onRegenerate,
-                            onStreamComplete: { onStreamComplete(item.id) }
-                        )
-                        .id(item.id)
-                        .transition(AppMotion.messageTransition)
+                    ForEach(renderUnits) { unit in
+                        switch unit {
+                        case .item(let item):
+                            ChatItemView(
+                                item: item,
+                                isPendingAskUser: item.id == pendingAskUser?.id,
+                                isPendingApproval: item.id == pendingApproval?.id,
+                                isPendingOnboard: item.id == pendingOnboard?.id,
+                                isPendingPlanReview: item.id == pendingPlanReview?.id,
+                                showAgentActions: item.id == lastAgentID && item.id != streamingMessageID && !isGenerating,
+                                isStreaming: item.id == streamingMessageID,
+                                modelName: item.id == lastAgentID ? responseModel : nil,
+                                onAskUserResponse: onAskUserResponse,
+                                onApprovalResponse: onApprovalResponse,
+                                onOnboardSubmit: onOnboardSubmit,
+                                onPlanReviewResponse: onPlanReviewResponse,
+                                onRegenerate: onRegenerate,
+                                onStreamComplete: { onStreamComplete(item.id) }
+                            )
+                            .id(unit.id)
+                            .transition(AppMotion.messageTransition)
+
+                        case .toolGroup(_, let toolItems):
+                            ToolCallGroupCard(
+                                items: toolItems,
+                                pendingApprovalID: pendingApproval?.id,
+                                onApprovalResponse: onApprovalResponse
+                            )
+                            .id(unit.id)
+                            .transition(AppMotion.messageTransition)
+                        }
                     }
 
                     Color.clear

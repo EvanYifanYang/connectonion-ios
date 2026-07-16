@@ -30,8 +30,8 @@ struct MarkdownMessageView: View {
         case .bulletList(let items):
             listView(items.map { (marker: "•", text: $0) })
 
-        case .orderedList(let items):
-            listView(items.enumerated().map { (marker: "\($0.offset + 1).", text: $0.element) })
+        case .orderedList(let start, let items):
+            listView(items.enumerated().map { (marker: "\(start + $0.offset).", text: $0.element) })
 
         case .codeBlock(let language, let code):
             CodeBlockView(language: language, code: code)
@@ -153,7 +153,7 @@ private struct MarkdownTableView: View {
     private func cell(_ values: [String], _ column: Int) -> some View {
         Group {
             if column < values.count {
-                Text((try? AttributedString(markdown: values[column])) ?? AttributedString(values[column]))
+                MarkdownInlineText(values[column])
             } else {
                 Text("")
             }

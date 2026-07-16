@@ -5,7 +5,7 @@ enum MarkdownBlock: Equatable {
     case heading(level: Int, text: String)
     case paragraph(String)
     case bulletList([String])
-    case orderedList([String])
+    case orderedList(start: Int, [String])
     case codeBlock(language: String?, code: String)
     case quote(String)
     case table(header: [String], rows: [[String]])
@@ -92,7 +92,7 @@ enum MarkdownParser {
                     items.append(item.text)
                     i += 1
                 }
-                blocks.append(first.ordered ? .orderedList(items) : .bulletList(items))
+                blocks.append(first.ordered ? .orderedList(start: first.number ?? 1, items) : .bulletList(items))
                 continue
             }
 
@@ -128,12 +128,14 @@ enum MarkdownParser {
     }
 
     private static func parseHeading(_ line: String) -> (level: Int, text: String)? {
-        var level = 0
-        for ch in line where ch == "#" { level += 1 }
+        let level = line.prefix { $0 == "#" }.count
         guard level >= 1, level <= 6, line.count > level else { return nil }
         let rest = String(line.dropFirst(level))
         guard rest.hasPrefix(" ") else { return nil }
-        return (level, rest.trimmingCharacters(in: .whitespaces))
+        // Strip an optional ATX closing-hash sequence (e.g. "## Notes ##").
+        var text = rest.trimmingCharacters(in: .whitespaces)
+        while text.hasSuffix("#") { text.removeLast() }
+        return (level, text.trimmingCharacters(in: .whitespaces))
     }
 
     private static func isTableSeparator(_ line: String) -> Bool {
@@ -149,13 +151,13 @@ enum MarkdownParser {
         return s.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
-    private static func listItem(_ line: String) -> (ordered: Bool, text: String)? {
+    private static func listItem(_ line: String) -> (ordered: Bool, number: Int?, text: String)? {
         let trimmed = line.drop { $0 == " " || $0 == "\t" }
 
         if let first = trimmed.first, first == "-" || first == "*" || first == "+" {
             let after = trimmed.dropFirst()
             if after.hasPrefix(" ") {
-                return (false, String(after).trimmingCharacters(in: .whitespaces))
+                return (false, nil, String(after).trimmingCharacters(in: .whitespaces))
             }
         }
 
@@ -165,7 +167,7 @@ enum MarkdownParser {
             if let marker = after.first, marker == "." || marker == ")" {
                 let rest = after.dropFirst()
                 if rest.hasPrefix(" ") {
-                    return (true, String(rest).trimmingCharacters(in: .whitespaces))
+                    return (true, Int(digits), String(rest).trimmingCharacters(in: .whitespaces))
                 }
             }
         }

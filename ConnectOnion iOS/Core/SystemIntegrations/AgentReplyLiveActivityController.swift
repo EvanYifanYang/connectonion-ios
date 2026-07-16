@@ -3,13 +3,11 @@ import Foundation
 
 @MainActor
 final class AgentReplyLiveActivityController {
-    static let shared = AgentReplyLiveActivityController()
-
     private var activityIDs: [UUID: String] = [:]
     private var latestStates: [UUID: AgentReplyActivityAttributes.ContentState] = [:]
     private var currentConversationID: UUID?
 
-    private init() {}
+    init() {}
 
     func start(conversationID: UUID, agentAddress: String, agentName: String) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }

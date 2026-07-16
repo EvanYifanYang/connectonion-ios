@@ -17,6 +17,9 @@ final class ChatViewModel {
     @ObservationIgnored
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
 
+    @ObservationIgnored
+    @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
+
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
@@ -228,10 +231,6 @@ final class ChatViewModel {
 
     private var client: ConnectOnionClientProviding {
         clientOverride ?? injectedClient
-    }
-
-    private var liveActivity: AgentReplyLiveActivityController {
-        AgentReplyLiveActivityController.shared
     }
 
     private var hasCommittedUserMessage: Bool {

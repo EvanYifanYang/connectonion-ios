@@ -1,5 +1,6 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 /// One agent's home: its identity, a "New chat" action, and the list of conversations that belong to
 /// this agent. Pushed when an agent is tapped in the agent-centric navigation (P4).
@@ -50,6 +51,8 @@ struct AgentHomeView: View {
                     SidebarSectionTitle(title: "Chats")
                     LazyVStack(spacing: 10) {
                         ForEach(conversations) { conversation in
+                            // No container-level id here — the row applies its own id to its select
+                            // button (a container id shadows onto the inner menu button).
                             ConversationSidebarRow(
                                 conversation: conversation,
                                 agentName: agent.displayName(info: info),
@@ -59,7 +62,6 @@ struct AgentHomeView: View {
                                 onRequestDelete: { onRequestDeleteConversation(conversation) },
                                 onDelete: { onDeleteConversation(conversation) }
                             )
-                            .accessibilityIdentifier(AccessibilityID.conversation(conversation.id))
                         }
                     }
                 }
@@ -68,7 +70,15 @@ struct AgentHomeView: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
             .padding(.bottom, 100) // clear the floating New Chat button
+            // Tapping empty space dismisses the keyboard (which also commits an in-progress inline
+            // rename via focus loss) — same affordance as the agent list.
+            .contentShape(.rect)
+            .onTapGesture { dismissKeyboard() }
         }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     /// Matches the "+ New Agent" floating button on the agent list — same shape, size, and position.

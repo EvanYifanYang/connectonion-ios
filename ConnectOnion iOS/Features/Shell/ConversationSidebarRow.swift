@@ -105,6 +105,7 @@ struct ConversationSidebarRow: View {
                         .contentShape(.rect)
                 }
                 .accessibilityLabel("Conversation Actions")
+                .accessibilityIdentifier(AccessibilityID.conversationActionsButton)
             }
             .padding(14)
             .frame(minHeight: 64)
@@ -113,6 +114,10 @@ struct ConversationSidebarRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(conversation.title)
+        // The id lives on the SELECT button itself (like AgentSidebarRow): a container-level id
+        // shadows onto child buttons, so firstMatch could resolve to the ellipsis menu and a row
+        // "tap" would open the actions menu instead of the chat.
+        .accessibilityIdentifier(AccessibilityID.conversation(conversation.id))
         .contextMenu { menuActions }
     }
 

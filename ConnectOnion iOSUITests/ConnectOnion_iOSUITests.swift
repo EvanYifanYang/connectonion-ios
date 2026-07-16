@@ -53,9 +53,12 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     func testSeededAgentLaunchesIntoUsableShell() throws {
         let app = launchUITestApp()
 
+        // Agent-centric IA: the root lists agents only; conversations live on the agent's home.
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["OpenOnion"].exists)
-        XCTAssertTrue(app.anyElement(seededConversationID).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["OpenOnion"].waitForExistence(timeout: 5))
+
+        tapElement(seededAgentID, in: app)
+        XCTAssertTrue(app.anyElement(seededConversationID).waitForExistence(timeout: 5), app.debugDescription)
 
         app.anyElement(seededConversationID).tap()
 
@@ -192,6 +195,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
         let conversation = waitForElement(seededConversationID, in: app)
         // A plain swipeLeft() doesn't reliably reveal SwiftUI swipeActions on iOS 26; a deliberate
         // right-to-left coordinate drag across the row does.
@@ -214,14 +218,13 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
         _ = waitForElement(seededConversationID, in: app)
         app.buttons["Conversation Actions"].firstMatch.tap()
 
         tapElement(renameConversationButtonID, in: app)
 
-        // When the row collapses to just the inline editor, the row-level identifier is what the
-        // TextField exposes, so target the field by the conversation id.
-        let field = app.textFields[seededConversationID]
+        let field = app.textFields[conversationRenameFieldID]
         XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
         // Tap near the right edge so the caret lands at the end, then clear generously before typing.
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
@@ -236,19 +239,20 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
         _ = waitForElement(seededConversationID, in: app)
         app.buttons["Conversation Actions"].firstMatch.tap()
         tapElement(renameConversationButtonID, in: app)
 
-        let field = app.textFields[seededConversationID]
+        let field = app.textFields[conversationRenameFieldID]
         XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
         field.typeText("Tapped away")
 
-        // No Return: tapping empty (non-interactive) sidebar space above the keyboard — here the
-        // "Agents" section header — should dismiss the keyboard and commit the rename.
-        app.staticTexts["Agents"].tap()
+        // No Return: tapping empty (non-interactive) space above the keyboard — here the "Chats"
+        // section header on the agent home — should dismiss the keyboard and commit the rename.
+        app.staticTexts["Chats"].tap()
 
         XCTAssertTrue(app.staticTexts["Tapped away"].waitForExistence(timeout: 5), app.debugDescription)
     }

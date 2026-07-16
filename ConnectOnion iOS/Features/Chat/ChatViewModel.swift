@@ -46,7 +46,8 @@ final class ChatViewModel {
         items = conversation.messages
         clientOverride = client
         finalizeRunningItems() // restored items must never resume the live "running" animation
-        lastResponseModel = items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
+        lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
+            ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
         sessionState = items.isEmpty ? .idle : .connected
     }
 
@@ -373,6 +374,12 @@ final class ChatViewModel {
                 streamingMessageID = agentItem.id // reveal this one with the typewriter effect
             }
             finalizeRunningItems()
+            // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
+            // that carries it may not be present in the server's canonical list.
+            if let model = lastResponseModel ?? items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model,
+               let index = items.lastIndex(where: { $0.kind == .agent }) {
+                items[index].model = model
+            }
             conversation.rawSession = session
             sessionState = .connected
             stopTimer()

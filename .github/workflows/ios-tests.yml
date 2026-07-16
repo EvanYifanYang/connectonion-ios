@@ -31,8 +31,13 @@ jobs:
       - name: Run All Tests
         run: |
           set -o pipefail
+          # GitHub's shared macOS runners are slow/contended (a mock stream that takes ~8s locally
+          # can take ~27s here), so UI tests occasionally time out. Retry a failed test up to 3x;
+          # if it passes on a retry the run is green. Unit tests are hermetic and won't need it.
           xcodebuild test \
             -project "ConnectOnion iOS.xcodeproj" \
             -scheme "ConnectOnion iOS" \
             -destination "platform=iOS Simulator,name=iPhone 17 Pro,OS=latest" \
-            -parallel-testing-enabled NO
+            -parallel-testing-enabled NO \
+            -retry-tests-on-failure \
+            -test-iterations 3

@@ -8,11 +8,12 @@ struct MarkdownMessageView: View {
     var text: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             ForEach(Array(MarkdownParser.parse(text).enumerated()), id: \.offset) { item in
                 view(for: item.element)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -55,14 +56,15 @@ struct MarkdownMessageView: View {
     }
 
     private func listView(_ items: [(marker: String, text: String)]) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(item.marker)
                         .foregroundStyle(.secondary)
-                        .frame(minWidth: 16, alignment: .trailing)
+                        .frame(minWidth: 20, alignment: .trailing)
                     MarkdownInlineText(item.text)
-                    Spacer(minLength: 0)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }

@@ -14,6 +14,9 @@ struct MarkdownMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Agent replies read in the brand serif (New York) for an editorial feel; the code block sets
+        // its own monospaced font, so code stays mono.
+        .fontDesign(.serif)
     }
 
     @ViewBuilder
@@ -72,10 +75,10 @@ struct MarkdownMessageView: View {
 
     private func headingFont(_ level: Int) -> Font {
         switch level {
-        case 1: .title2
-        case 2: .title3
-        case 3: .headline
-        default: .body.weight(.semibold)
+        case 1: .system(.title2, design: .serif)
+        case 2: .system(.title3, design: .serif)
+        case 3: .system(.headline, design: .serif)
+        default: .system(.body, design: .serif).weight(.semibold)
         }
     }
 }

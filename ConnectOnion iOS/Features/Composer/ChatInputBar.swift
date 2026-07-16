@@ -81,38 +81,43 @@ struct ChatInputBar: View {
                     .transition(AppMotion.panelTransition)
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
+            // Row 1: the text field spans the full width.
+            TextField(placeholder, text: $text, axis: .vertical)
+                .lineLimit(1...6)
+                .textFieldStyle(.plain)
+                .tint(.primary)
+                .focused($isFocused)
+                .submitLabel(.send)
+                .onSubmit(send)
+                .padding(.horizontal, 6)
+                .padding(.top, 8)
+                .disabled(voiceInput.isActive)
+                .accessibilityIdentifier(AccessibilityID.chatInput)
+
+            // Row 2: attach on the left, mic + send (or stop) on the right.
+            HStack(spacing: 10) {
                 if allowsAttachments {
                     Button("Add attachment", systemImage: "plus", action: showAttachmentMenu)
                         .labelStyle(.iconOnly)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 38, height: 38)
                         .buttonStyle(.glass)
                         .disabled(remainingAttachmentSlots == 0 || voiceInput.isActive)
                         .accessibilityIdentifier(AccessibilityID.chatAttachmentButton)
                 }
 
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .tint(.primary)
-                    .focused($isFocused)
-                    .submitLabel(.send)
-                    .onSubmit(send)
-                    .padding(.vertical, 12)
-                    .disabled(voiceInput.isActive)
-                    .accessibilityIdentifier(AccessibilityID.chatInput)
+                Spacer(minLength: 0)
 
                 if isRunning {
                     Button("Stop", systemImage: "stop.fill", action: stop)
                         .labelStyle(.iconOnly)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 40, height: 40)
                         .buttonStyle(.glass)
                         .accessibilityIdentifier(AccessibilityID.chatStopButton)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
                     Button(voiceButtonTitle, systemImage: voiceButtonSystemImage, action: toggleVoiceInput)
                         .labelStyle(.iconOnly)
-                        .frame(width: 42, height: 42)
+                        .frame(width: 40, height: 40)
                         .buttonStyle(.glass)
                         .foregroundStyle(voiceInput.state == .recording ? .red : .primary)
                         .disabled(voiceInput.state == .requestingPermission || voiceInput.state == .transcribing)
@@ -120,7 +125,7 @@ struct ChatInputBar: View {
 
                     Button("Send", systemImage: "arrow.up", action: send)
                         .labelStyle(.iconOnly)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 40, height: 40)
                         .buttonStyle(.glassProminent)
                         .disabled(!canSend)
                         .accessibilityIdentifier(AccessibilityID.chatSendButton)
@@ -128,7 +133,7 @@ struct ChatInputBar: View {
                 }
             }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: AppTheme.composerMaxWidth)
         .glassSurface(cornerRadius: 28, isInteractive: true)
         .frame(maxWidth: .infinity)

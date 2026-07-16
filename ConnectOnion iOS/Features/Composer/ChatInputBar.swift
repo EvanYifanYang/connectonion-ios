@@ -86,13 +86,23 @@ struct ChatInputBar: View {
 
             // Row 1: the text field spans the full width. It stays visible during dictation so the
             // streaming transcript is readable while the keyboard remains up.
-            TextField(placeholder, text: $text, axis: .vertical)
+            TextField("", text: $text, axis: .vertical)
                 .lineLimit(1...6)
                 .textFieldStyle(.plain)
                 .tint(.primary)
                 .focused($isFocused)
                 .submitLabel(.send)
                 .onSubmit(send)
+                // Custom placeholder: the system placeholder (~30% white) is nearly invisible on the
+                // dark glass bar. A concrete light gray reads clearly and resists the glass vibrancy.
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .foregroundStyle(Color(.systemGray))
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
                 .padding(.horizontal, 6)
                 .padding(.top, 8)
                 .accessibilityIdentifier(AccessibilityID.chatInput)

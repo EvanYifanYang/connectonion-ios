@@ -69,9 +69,18 @@ private struct StreamingMessageText: View {
     var onComplete: () -> Void
 
     @State private var revealed = 0
+    // The inline markdown parsed ONCE (bold / italic / code / links). Revealing a growing prefix of the
+    // already-formatted text keeps its layout stable — re-parsing a partial prefix every tick (the old
+    // `Text(.init(prefix))`) reflowed the instant a token like `**` closed, and that reflow is the
+    // flicker. Block syntax (lists, code fences) is left for the final MarkdownMessageView.
+    @State private var attributed = AttributedString()
 
     var body: some View {
-        (Text(.init(String(text.prefix(revealed)))) + Text("▌").foregroundColor(.onion))
+        let count = attributed.characters.count
+        let end = attributed.index(attributed.startIndex, offsetByCharacters: min(revealed, count))
+        let shown = AttributedString(attributed[attributed.startIndex..<end])
+
+        return (Text(shown) + caret(visible: revealed < count))
             .font(.body)
             .fontDesign(.serif)
             .lineSpacing(3)
@@ -80,9 +89,17 @@ private struct StreamingMessageText: View {
             .task(id: text) { await reveal() }
     }
 
+    private func caret(visible: Bool) -> Text {
+        visible ? Text("▌").foregroundColor(.onion) : Text("")
+    }
+
     private func reveal() async {
+        attributed = (try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
         revealed = 0
-        let total = text.count
+        let total = attributed.characters.count
         guard total > 0 else { onComplete(); return }
         // Reveal ~1 character per tick so short replies visibly type out; speed up (more per tick) only
         // for long replies so the whole thing still finishes within ~2.5s.

@@ -44,20 +44,31 @@ struct AttachmentSheet: View {
                 addFilesRow
                     .padding(.horizontal, 16)
             }
-            if !selected.isEmpty {
-                attachButton
-            }
+            buttonZone
             Spacer(minLength: 0)
         }
         .padding(.bottom, 8)
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .presentationBackground(Color(.systemBackground)) // opaque white so the gray tiles have contrast
-        .animation(.snappy(duration: 0.22), value: selected.isEmpty)
         .task {
             if allowsImages { recentPhotos.load() }
         }
         .onDisappear { loadTask?.cancel() }
+    }
+
+    /// The attach button lives in an always-reserved fixed-height slot, so selecting a photo fades the
+    /// button in WITHOUT changing the sheet height or resizing the cards above it.
+    private var buttonZone: some View {
+        ZStack {
+            if !selected.isEmpty {
+                attachButton
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 56)
+        .animation(.easeInOut(duration: 0.2), value: selected.isEmpty)
     }
 
     private var header: some View {
@@ -199,13 +210,14 @@ struct AttachmentSheet: View {
         .padding(.horizontal, 16)
     }
 
-    /// Sized to fit the content snugly so the attach button sits right under "Add files" (no big gap).
-    /// Grows only when a selection appears, so the sheet animates up as the button slides in.
+    /// Fixed height that always reserves the attach-button slot, so the sheet never resizes when a
+    /// selection appears (the button just fades into its reserved slot). Snug enough to keep the slot
+    /// right under "Add files" without a big empty gap.
     private var sheetHeight: CGFloat {
         var height: CGFloat = 60 // header
         if allowsImages { height += 16 + tileSide }
         if allowsFiles { height += 16 + 54 }
-        if !selected.isEmpty { height += 16 + 56 } // spacing + attach button
+        height += 16 + 56 // spacing + reserved attach-button slot (always)
         return height + 12
     }
 

@@ -84,36 +84,7 @@ struct AgentEditorView: View {
     }
 
     private var normalizedEndpointURL: URL?? {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .some(nil) }
-
-        let candidate = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
-        guard var components = URLComponents(string: candidate), let scheme = components.scheme?.lowercased() else {
-            return nil
-        }
-
-        switch scheme {
-        case "http", "https":
-            break
-        case "ws":
-            components.scheme = "http"
-        case "wss":
-            components.scheme = "https"
-        default:
-            return nil
-        }
-
-        guard components.host != nil else { return nil }
-
-        let path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if path == "info" || path == "ws" {
-            components.path = ""
-        }
-        components.query = nil
-        components.fragment = nil
-
-        guard let url = components.url else { return nil }
-        return .some(url)
+        AgentEndpoint.normalized(from: endpoint)
     }
 
     private func save() {

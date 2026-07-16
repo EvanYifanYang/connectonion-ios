@@ -20,6 +20,7 @@ struct AppShellView: View {
     @State private var deletingAgent: AgentConfigRecord?
     @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
+    @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $preferredCompactColumn) {
@@ -75,7 +76,12 @@ struct AppShellView: View {
             }
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(onAddAgent: showAddAgentFromSettings)
+            SettingsView(
+                agents: agents,
+                infoByAddress: infoStore.infoByAddress,
+                onAddAgent: showAddAgentFromSettings,
+                onDeleteAgent: deleteAgent
+            )
         }
         .confirmationDialog(
             "Delete Agent?",
@@ -122,7 +128,14 @@ struct AppShellView: View {
         .onChange(of: agents.map(\.address)) { _, addresses in
             restoreInitialSelection()
             publishWidgetSnapshot()
+            infoStore.setEndpoints(agentEndpointMap)
             infoStore.startAutoRefresh(addresses: addresses, focusedAddress: focusedAgentAddress)
+        }
+        .onChange(of: agents.map(\.preferredEndpoint)) { _, _ in
+            // Re-probe every agent (not just the focused one) so a just-edited endpoint updates its
+            // status immediately instead of waiting for the ~60s all-refresh cycle.
+            configureAgentInfoRefresh()
+            infoStore.refresh(addresses: agentAddresses)
         }
         .onChange(of: agents.map(\.updatedAt)) { _, _ in
             publishWidgetSnapshot()
@@ -158,6 +171,7 @@ struct AppShellView: View {
         .onDisappear {
             infoStore.stopAutoRefresh()
         }
+        .preferredColorScheme(appearance.colorScheme)
     }
 
     @ViewBuilder
@@ -222,7 +236,14 @@ struct AppShellView: View {
         await infoStore.refreshNow(addresses: agentAddresses)
     }
 
+    private var agentEndpointMap: [String: URL] {
+        Dictionary(uniqueKeysWithValues: agents.compactMap { agent in
+            agent.preferredEndpoint.map { (agent.address, $0) }
+        })
+    }
+
     private func configureAgentInfoRefresh(refreshImmediately: Bool = true) {
+        infoStore.setEndpoints(agentEndpointMap)
         infoStore.startAutoRefresh(
             addresses: agentAddresses,
             focusedAddress: focusedAgentAddress,

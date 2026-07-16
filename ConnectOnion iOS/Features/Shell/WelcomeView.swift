@@ -3,28 +3,10 @@ import SwiftUI
 struct WelcomeView: View {
     var onAddAgent: () -> Void
 
-    @State private var feedbackTrigger = 0
-
     var body: some View {
-        VStack(spacing: 18) {
-            ConnectOnionLogoMark()
-
-            Text("Add your first agent")
-                .font(AppFont.hero)
-                .multilineTextAlignment(.center)
-
-            Button("Add Agent", systemImage: "plus", action: addAgent)
-                .buttonStyle(.glassProminent)
-                .accessibilityIdentifier(AccessibilityID.addAgentButton)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
-        .sensoryFeedback(.selection, trigger: feedbackTrigger)
-    }
-
-    private func addAgent() {
-        feedbackTrigger += 1
-        onAddAgent()
+        EmptyStateHero(onAddAgent: onAddAgent)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
     }
 }
 

@@ -18,6 +18,12 @@ struct SidebarView: View {
 
     @State private var feedbackTrigger = 0
 
+    /// The empty state already shows the brand hero, so the top bar drops its "ConnectOnion" title
+    /// to avoid the name appearing twice on one screen.
+    private var isEmpty: Bool {
+        agents.isEmpty && conversations.isEmpty
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
@@ -86,7 +92,7 @@ struct SidebarView: View {
         .accessibilityIdentifier(AccessibilityID.sidebar)
         .animation(AppMotion.standard, value: agents.map(\.address))
         .animation(AppMotion.standard, value: conversations.map(\.id))
-        .navigationTitle("ConnectOnion")
+        .navigationTitle(isEmpty ? "" : "ConnectOnion")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -100,9 +106,11 @@ struct SidebarView: View {
             // Note: .visibilityPriority/.contentMarginsRemoved are iOS 27-only; omitted for iOS 26 build.
 
             ToolbarItem(placement: .principal) {
-                Text("ConnectOnion")
-                    .font(.headline)
-                    .lineLimit(1)
+                if !isEmpty {
+                    Text("ConnectOnion")
+                        .font(.headline)
+                        .lineLimit(1)
+                }
             }
         }
         // Note: .toolbarMinimizeBehavior/.toolbarMinimizationSafeAreaAdjustment are iOS 27-only; omitted for iOS 26 build.
@@ -169,21 +177,9 @@ private struct SidebarEmptyState: View {
     var onAddAgent: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            ConnectOnionLogoMark()
-
-            Text("Add your first agent")
-                .font(AppFont.hero)
-                .multilineTextAlignment(.center)
-
-            Button("Add Agent", systemImage: "plus", action: onAddAgent)
-                .buttonStyle(.glassProminent)
-                .accessibilityIdentifier(AccessibilityID.addAgentButton)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 520)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 48)
+        EmptyStateHero(onAddAgent: onAddAgent)
+            .frame(minHeight: 520)
+            .padding(.vertical, 48)
     }
 }
 

@@ -146,7 +146,10 @@ struct ChatInputBar: View {
         }
         .padding(10)
         .frame(maxWidth: AppTheme.composerMaxWidth)
-        .glassSurface(cornerRadius: 28, isInteractive: true)
+        // The bar is a container, not a control — `.interactive()` glass here rests in a dim/flat state
+        // and only "wakes up" (renders the full material, placeholder legible) once it's touched. Plain
+        // regular glass renders correctly from first appearance. The inner buttons stay interactive.
+        .glassSurface(cornerRadius: 28)
         .frame(maxWidth: .infinity)
         .sheet(isPresented: $showingAttachmentOptions, onDismiss: presentPendingPicker) {
             AttachmentSheet(

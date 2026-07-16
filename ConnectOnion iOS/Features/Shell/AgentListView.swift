@@ -105,13 +105,16 @@ struct AgentListView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Settings", systemImage: "gearshape") {
-                    feedbackTrigger += 1
-                    onSettings()
+            // Settings manages agents/appearance — no need on the new-user welcome (no agents yet).
+            if !agents.isEmpty {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Settings", systemImage: "gearshape") {
+                        feedbackTrigger += 1
+                        onSettings()
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier(AccessibilityID.settingsButton)
                 }
-                .labelStyle(.iconOnly)
-                .accessibilityIdentifier(AccessibilityID.settingsButton)
             }
             ToolbarItem(placement: .principal) {
                 if !agents.isEmpty {

@@ -102,7 +102,11 @@ final class ChatViewModel {
             deferredOnboardInput == nil &&
             errorMessage == nil &&
             sessionState != .connecting &&
-            sessionState != .reconnecting
+            sessionState != .reconnecting &&
+            // .active means a turn is running — the first prompt is in flight but only *optimistically*
+            // in `items` (not yet committed), so without this the strip flashes in between CONNECTED
+            // and the first server event.
+            sessionState != .active
     }
 
     func send(_ input: AgentInput) {

@@ -103,6 +103,7 @@ struct AttachmentSheet: View {
                             .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier(AccessibilityID.chatAttachmentPhotoButton)
                 }
             }
         }
@@ -194,6 +195,7 @@ struct AttachmentSheet: View {
             .background(tileColor, in: .rect(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(AccessibilityID.chatAttachmentFilesButton)
     }
 
     private var attachButton: some View {

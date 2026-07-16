@@ -35,10 +35,9 @@ struct AgentSidebarRow: View {
                                 .lineLimit(1)
 
                             if let model = info?.model, !model.isEmpty {
-                                Label {
-                                    Text(model).lineLimit(1)
-                                } icon: {
+                                HStack(spacing: 4) {
                                     Image(systemName: "cpu").imageScale(.small)
+                                    Text(model).lineLimit(1)
                                 }
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)

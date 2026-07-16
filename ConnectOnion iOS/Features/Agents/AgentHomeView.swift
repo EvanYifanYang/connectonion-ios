@@ -28,10 +28,11 @@ struct AgentHomeView: View {
                 Button("Agent Info", systemImage: "info.circle") { showingInfo = true }
                     .labelStyle(.iconOnly)
                     .accessibilityIdentifier(AccessibilityID.agentInfoButton)
+                    .popover(isPresented: $showingInfo) {
+                        AgentInfoPopover(agent: agent, info: info)
+                            .presentationCompactAdaptation(.popover)
+                    }
             }
-        }
-        .sheet(isPresented: $showingInfo) {
-            AgentInfoSheet(agent: agent, info: info)
         }
     }
 

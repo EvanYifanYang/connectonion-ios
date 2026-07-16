@@ -29,7 +29,8 @@ struct AttachmentSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            header
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if allowsImages {
@@ -43,35 +44,55 @@ struct AttachmentSheet: View {
                 .padding(.vertical, 12)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .navigationTitle("Add to Chat")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly)
-                }
-                if allowsImages {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("All photos") {
-                            dismiss()
-                            onAllPhotos()
-                        }
-                        .tint(.primary)
-                    }
-                }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if !selected.isEmpty {
+                attachButton
             }
-            .safeAreaInset(edge: .bottom) {
-                if !selected.isEmpty {
-                    attachButton
-                }
-            }
-            .onDisappear { loadTask?.cancel() }
         }
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
         .task {
             if allowsImages { recentPhotos.load() }
         }
+        .onDisappear { loadTask?.cancel() }
+    }
+
+    private var header: some View {
+        ZStack {
+            Text("Add to Chat")
+                .font(.headline)
+
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 36, height: 36)
+                        .background(Color(.systemBackground), in: .circle)
+                        .overlay(Circle().stroke(Color(.systemGray4), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+
+                Spacer()
+
+                if allowsImages {
+                    Button {
+                        dismiss()
+                        onAllPhotos()
+                    } label: {
+                        Text("All photos")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 8)
     }
 
     private var photoRow: some View {
@@ -255,18 +276,9 @@ private struct PhotoThumbnailTile: View {
             }
             .frame(width: side, height: side)
             .clipShape(.rect(cornerRadius: 16))
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.primary, lineWidth: 3)
-                }
-            }
             .overlay(alignment: .topTrailing) {
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color(.systemBackground), Color.primary)
+                    selectionBadge
                         .padding(6)
                 }
             }
@@ -276,5 +288,18 @@ private struct PhotoThumbnailTile: View {
             image = await provider.thumbnail(for: asset, pixelSide: side * displayScale)
             didLoad = true
         }
+    }
+
+    /// A small white circle with a dark check — Claude's selection mark. Fixed colors (not appearance-
+    /// adaptive) since it always sits over a photo; a soft shadow keeps it visible on light images.
+    private var selectionBadge: some View {
+        ZStack {
+            Circle().fill(.white)
+            Image(systemName: "checkmark")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color.black.opacity(0.8))
+        }
+        .frame(width: 24, height: 24)
+        .shadow(color: .black.opacity(0.2), radius: 1, y: 0.5)
     }
 }

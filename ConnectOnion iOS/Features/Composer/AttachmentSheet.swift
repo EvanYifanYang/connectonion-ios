@@ -52,6 +52,7 @@ struct AttachmentSheet: View {
         }
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
+        .presentationBackground(Color(.systemBackground)) // opaque white so the gray tiles have contrast
         .task {
             if allowsImages { recentPhotos.load() }
         }
@@ -190,7 +191,7 @@ struct AttachmentSheet: View {
             .foregroundStyle(Color(.systemBackground))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color.primary, in: .capsule)
+            .background(Color(.label), in: .capsule) // concrete color; Color.primary goes vibrant-gray on the inset material
         }
         .buttonStyle(.plain)
         .disabled(isAttaching)

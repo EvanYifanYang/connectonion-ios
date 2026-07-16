@@ -8,7 +8,9 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let addAgentEndpointFieldID = "connectonion.agent.add.endpoint"
     private let agentActionsButtonID = "connectonion.agent.actions.button"
     private let renameAgentButtonID = "connectonion.agent.rename.button"
+    private let agentRenameFieldID = "connectonion.agent.rename.field"
     private let renameConversationButtonID = "connectonion.chat.rename.button"
+    private let conversationRenameFieldID = "connectonion.chat.rename.field"
     private let deleteAgentButtonID = "connectonion.agent.delete.button"
     private let newChatButtonID = "connectonion.chat.new.button"
     private let newChatSheetID = "connectonion.chat.new.sheet"
@@ -121,7 +123,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testAgentLongPressExposesRenameDeleteAndEndpointEditing() throws {
+    func testAgentLongPressExposesRenameAndDelete() throws {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -132,15 +134,11 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(deleteAgentButtonID).exists, app.debugDescription)
 
         tapElement(renameAgentButtonID, in: app)
-        let addressField = waitForElement(addAgentAddressFieldID, in: app)
-        XCTAssertFalse(addressField.isEnabled)
-        XCTAssertTrue(app.anyElement(addAgentAliasFieldID).exists, app.debugDescription)
-        XCTAssertTrue(app.anyElement(addAgentEndpointFieldID).exists, app.debugDescription)
-        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.anyElement(agentRenameFieldID).waitForExistence(timeout: 5), app.debugDescription)
     }
 
     @MainActor
-    func testAgentActionsMenuExposesRenameDeleteAndEndpointEditing() throws {
+    func testAgentActionsMenuRenamesInline() throws {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -150,11 +148,13 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(deleteAgentButtonID).exists, app.debugDescription)
 
         tapElement(renameAgentButtonID, in: app)
-        let addressField = waitForElement(addAgentAddressFieldID, in: app)
-        XCTAssertFalse(addressField.isEnabled)
-        XCTAssertTrue(app.anyElement(addAgentAliasFieldID).exists, app.debugDescription)
-        XCTAssertTrue(app.anyElement(addAgentEndpointFieldID).exists, app.debugDescription)
-        app.buttons["Cancel"].tap()
+        let field = waitForElement(agentRenameFieldID, in: app)
+        // Tap near the right edge so the caret lands at the end, then clear generously before typing.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Renamed Agent\n")
+
+        XCTAssertTrue(app.staticTexts["Renamed Agent"].waitForExistence(timeout: 5), app.debugDescription)
     }
 
     @MainActor
@@ -213,7 +213,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
-    func testConversationMenuRenameUpdatesTitle() throws {
+    func testConversationMenuRenamesInline() throws {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -222,14 +222,14 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         tapElement(renameConversationButtonID, in: app)
 
-        let field = app.alerts.textFields.firstMatch
+        // When the row collapses to just the inline editor, the row-level identifier is what the
+        // TextField exposes, so target the field by the conversation id.
+        let field = app.textFields[seededConversationID]
         XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
-        field.tap()
-        if let currentValue = field.value as? String {
-            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count))
-        }
-        field.typeText("Renamed by test")
-        app.alerts.buttons["Save"].tap()
+        // Tap near the right edge so the caret lands at the end, then clear generously before typing.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Renamed by test\n")
 
         XCTAssertTrue(app.staticTexts["Renamed by test"].waitForExistence(timeout: 5), app.debugDescription)
     }

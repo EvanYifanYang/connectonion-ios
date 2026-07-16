@@ -82,27 +82,28 @@ struct ChatInputBar: View {
                     .transition(AppMotion.panelTransition)
             }
 
+            // Row 1: the text field spans the full width. It stays visible during dictation so the
+            // streaming transcript is readable while the keyboard remains up.
+            TextField(placeholder, text: $text, axis: .vertical)
+                .lineLimit(1...6)
+                .textFieldStyle(.plain)
+                .tint(.primary)
+                .focused($isFocused)
+                .submitLabel(.send)
+                .onSubmit(send)
+                .padding(.horizontal, 6)
+                .padding(.top, 8)
+                .accessibilityIdentifier(AccessibilityID.chatInput)
+
             if voiceInput.isActive {
+                // Row 2 (dictation): cancel ✕, live waveform, confirm ✓.
                 VoiceRecordingBar(
-                    state: voiceInput.state,
-                    duration: voiceInput.duration,
+                    levels: voiceInput.levels,
                     onCancel: cancelVoiceInput,
                     onConfirm: confirmVoiceInput
                 )
                 .transition(.opacity)
             } else {
-                // Row 1: the text field spans the full width.
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .tint(.primary)
-                    .focused($isFocused)
-                    .submitLabel(.send)
-                    .onSubmit(send)
-                    .padding(.horizontal, 6)
-                    .padding(.top, 8)
-                    .accessibilityIdentifier(AccessibilityID.chatInput)
-
                 // Row 2: attach on the left, mic + send (or stop) on the right.
                 HStack(spacing: 10) {
                     if allowsAttachments {
@@ -432,7 +433,7 @@ struct ChatInputBar: View {
             voiceInput.stopRecording()
         case .idle:
             voiceSeedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            isFocused = false
+            isFocused = true // keep the keyboard up; the transcript streams into the field live
             voiceInput.startRecording()
         case .requestingPermission, .transcribing:
             break

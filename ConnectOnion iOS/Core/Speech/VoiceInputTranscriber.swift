@@ -17,6 +17,10 @@ final class VoiceInputTranscriber {
     var transcript = ""
     var errorMessage: String?
     var duration: TimeInterval = 0
+    /// Rolling window of recent normalized mic levels (0...1), newest last — drives the live waveform.
+    var levels: [CGFloat] = []
+
+    @ObservationIgnored private let maxLevelSamples = 44
 
     @ObservationIgnored private let recognizer: SFSpeechRecognizer?
     @ObservationIgnored private let audioEngine = AVAudioEngine()
@@ -40,6 +44,7 @@ final class VoiceInputTranscriber {
         errorMessage = nil
         transcript = ""
         duration = 0
+        levels = []
         state = .requestingPermission
 
         Task {
@@ -66,6 +71,7 @@ final class VoiceInputTranscriber {
         state = .idle
         transcript = ""
         errorMessage = nil
+        levels = []
     }
 
     private func requestPermissions() async throws {
@@ -181,10 +187,18 @@ final class VoiceInputTranscriber {
         timerTask?.cancel()
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
+                try? await Task.sleep(for: .milliseconds(50))
                 guard let self, let startedAt else { return }
                 duration = Date.now.timeIntervalSince(startedAt)
+                appendLevelSample(CGFloat(audioTapBridge?.level ?? 0))
             }
+        }
+    }
+
+    private func appendLevelSample(_ level: CGFloat) {
+        levels.append(level)
+        if levels.count > maxLevelSamples {
+            levels.removeFirst(levels.count - maxLevelSamples)
         }
     }
 
@@ -269,17 +283,49 @@ final class VoiceInputTranscriber {
 
 private final class AudioTapBridge: @unchecked Sendable {
     private let request: SFSpeechAudioBufferRecognitionRequest
+    private let lock = NSLock()
+    private var _level: Float = 0
 
     init(request: SFSpeechAudioBufferRecognitionRequest) {
         self.request = request
     }
 
+    /// Latest normalized mic level (0...1), sampled by the transcriber's timer for the waveform.
+    var level: Float {
+        lock.lock(); defer { lock.unlock() }
+        return _level
+    }
+
     func append(_ buffer: AVAudioPCMBuffer) {
         request.append(buffer)
+        let level = Self.normalizedPower(of: buffer)
+        lock.lock()
+        _level = level
+        lock.unlock()
     }
 
     func endAudio() {
         request.endAudio()
+    }
+
+    /// RMS of the buffer mapped from dBFS onto 0...1 so quiet ≈ 0 and normal speech ≈ 1.
+    private static func normalizedPower(of buffer: AVAudioPCMBuffer) -> Float {
+        guard let channelData = buffer.floatChannelData else { return 0 }
+        let frameLength = Int(buffer.frameLength)
+        guard frameLength > 0 else { return 0 }
+
+        let samples = channelData[0]
+        var sumOfSquares: Float = 0
+        for index in 0..<frameLength {
+            let sample = samples[index]
+            sumOfSquares += sample * sample
+        }
+
+        let rms = sqrt(sumOfSquares / Float(frameLength))
+        let decibels = 20 * log10(max(rms, 1e-7))
+        let floorDecibels: Float = -50
+        let clamped = max(floorDecibels, min(0, decibels))
+        return (clamped - floorDecibels) / (0 - floorDecibels)
     }
 }
 

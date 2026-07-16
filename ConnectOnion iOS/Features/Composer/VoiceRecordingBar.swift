@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// The in-composer dictation UI: a cancel (✕), an animated waveform with the elapsed time, and a
-/// confirm (✓) that commits the transcript. Shown in place of the text field while recording.
+/// The in-composer dictation control row: a cancel (✕), a live mic-level waveform, and a confirm (✓).
+/// Sits below the text field (which keeps showing the streaming transcript) while recording.
 struct VoiceRecordingBar: View {
-    var state: VoiceInputTranscriber.RecordingState
-    var duration: TimeInterval
+    var levels: [CGFloat]
     var onCancel: () -> Void
     var onConfirm: () -> Void
 
@@ -21,13 +20,8 @@ struct VoiceRecordingBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Cancel dictation")
 
-            HStack(spacing: 10) {
-                RecordingWaveform(active: state == .recording)
-                    .frame(maxWidth: .infinity)
-                Text(formattedDuration)
-                    .font(.footnote.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
+            RecordingWaveform(levels: levels)
+                .frame(maxWidth: .infinity)
 
             Button(action: onConfirm) {
                 Image(systemName: "checkmark")
@@ -43,38 +37,39 @@ struct VoiceRecordingBar: View {
         .padding(.horizontal, 4)
         .padding(.vertical, 6)
     }
-
-    private var formattedDuration: String {
-        let total = max(0, Int(duration.rounded(.down)))
-        return "\(total / 60):\(String(format: "%02d", total % 60))"
-    }
 }
 
-/// A faux audio waveform — a row of bars whose heights ride a travelling sine wave while recording,
-/// and rest flat when paused. (The transcriber doesn't expose live audio levels, so this is cosmetic.)
+/// A live waveform driven by real mic levels. Fills the available width; the newest samples sit on the
+/// right and scroll left, with quiet stretches rendered as small dots — like the system dictation bar.
 private struct RecordingWaveform: View {
-    var active: Bool
+    var levels: [CGFloat]
 
-    private let barCount = 22
+    private let barWidth: CGFloat = 3
+    private let spacing: CGFloat = 3
+    private let maxHeight: CGFloat = 28
+    private let minHeight: CGFloat = 3
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05, paused: !active)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 3) {
-                ForEach(0..<barCount, id: \.self) { index in
+        GeometryReader { geometry in
+            let unit = barWidth + spacing
+            let count = max(1, Int(geometry.size.width / unit))
+            HStack(spacing: spacing) {
+                ForEach(0..<count, id: \.self) { index in
                     Capsule()
-                        .fill(Color.onion.opacity(active ? 0.75 : 0.3))
-                        .frame(width: 3, height: height(index, t))
+                        .fill(Color.primary.opacity(0.8))
+                        .frame(width: barWidth, height: height(at: index, total: count))
                 }
             }
-            .frame(height: 26, alignment: .center)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
         }
+        .frame(height: maxHeight)
+        .animation(.linear(duration: 0.06), value: levels)
     }
 
-    private func height(_ index: Int, _ time: Double) -> CGFloat {
-        guard active else { return 4 }
-        let phase = Double(index) * 0.55
-        let wave = (sin(time * 6 + phase) + 1) / 2 // 0...1
-        return 5 + wave * 20
+    private func height(at index: Int, total: Int) -> CGFloat {
+        let leadingPad = total - levels.count
+        let levelIndex = index - leadingPad
+        guard levelIndex >= 0, levelIndex < levels.count else { return minHeight }
+        return minHeight + levels[levelIndex] * (maxHeight - minHeight)
     }
 }

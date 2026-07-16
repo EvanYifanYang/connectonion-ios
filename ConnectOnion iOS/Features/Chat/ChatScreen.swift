@@ -70,6 +70,22 @@ struct ChatScreen: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
+        // Keep the transparent bar, but fade the transcript out under the status bar / back button so
+        // scrolled content doesn't clash with them.
+        .overlay(alignment: .top) {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(.systemBackground), location: 0),
+                    .init(color: Color(.systemBackground), location: 0.55),
+                    .init(color: .clear, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 92)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
         // No chat title + a transparent bar, so the transcript runs to the top (Claude-style).
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -81,10 +97,6 @@ struct ChatScreen: View {
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)
             onInitialInputConsumed()
         }
-    }
-
-    private var displayName: String {
-        agent.displayName(info: info)
     }
 }
 

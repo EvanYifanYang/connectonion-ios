@@ -20,11 +20,16 @@ struct ChatInputBar: View {
     @State private var showingPhotoPicker = false
     @State private var showingFileImporter = false
     @State private var showingCamera = false
+    @State private var pendingPicker: PendingPicker?
     @State private var attachmentError: String?
     @State private var voiceSeedText = ""
     @State private var feedbackTrigger = 0
     @State private var errorFeedbackTrigger = 0
     @FocusState private var isFocused: Bool
+
+    /// Which picker the attachment sheet asked for — presented from the sheet's `onDismiss` so the two
+    /// modal transitions never overlap.
+    private enum PendingPicker { case camera, photos, files }
 
     init(
         placeholder: String,
@@ -140,14 +145,15 @@ struct ChatInputBar: View {
         .frame(maxWidth: AppTheme.composerMaxWidth)
         .glassSurface(cornerRadius: 28, isInteractive: true)
         .frame(maxWidth: .infinity)
-        .sheet(isPresented: $showingAttachmentOptions) {
+        .sheet(isPresented: $showingAttachmentOptions, onDismiss: presentPendingPicker) {
             AttachmentSheet(
                 allowsImages: allowsImages,
                 allowsFiles: allowsFiles,
-                onCamera: { presentPicker { showingCamera = true } },
-                onAllPhotos: { presentPicker { showingPhotoPicker = true } },
+                onCamera: { pendingPicker = .camera },
+                onAllPhotos: { pendingPicker = .photos },
                 onPhotoData: { data in appendImage(data: data) },
-                onFiles: { presentPicker { showingFileImporter = true } }
+                onPhotoError: { message in showAttachmentError(message) },
+                onFiles: { pendingPicker = .files }
             )
         }
         .fullScreenCover(isPresented: $showingCamera) {
@@ -440,10 +446,16 @@ struct ChatInputBar: View {
         text = voiceSeedText
     }
 
-    /// Dismiss the attachment sheet first, then present the chosen picker on the next runloop so the
-    /// two sheet transitions don't collide.
-    private func presentPicker(_ present: @escaping () -> Void) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: present)
+    /// Present whichever picker the attachment sheet requested, now that the sheet has fully dismissed
+    /// (called from the sheet's `onDismiss`, so the host view is free to present the next modal).
+    private func presentPendingPicker() {
+        guard let picker = pendingPicker else { return }
+        pendingPicker = nil
+        switch picker {
+        case .camera: showingCamera = true
+        case .photos: showingPhotoPicker = true
+        case .files: showingFileImporter = true
+        }
     }
 
     private func selectSkill(_ skill: SkillInfo) {

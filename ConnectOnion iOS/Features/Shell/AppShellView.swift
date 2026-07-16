@@ -36,7 +36,7 @@ struct AppShellView: View {
                 onAddAgent: { showingAddAgent = true },
                 onSettings: { showingSettings = true },
                 onRenameAgent: { renameAgentName($0, to: $1) },
-                onDeleteAgent: { deletingAgent = $0 },
+                onDeleteAgent: { agent in afterMenuDismiss { deletingAgent = agent } },
                 onRefresh: refreshAgentInfo
             )
             .navigationDestination(for: ShellRoute.self) { route in
@@ -160,6 +160,16 @@ struct AppShellView: View {
     /// Apply the theme at the window level so it covers the main UI and every presented sheet/popover,
     /// and so switching back to System (.unspecified) cleanly reverts to the device setting — which
     /// `.preferredColorScheme(nil)` fails to do live for an already-presented sheet.
+    /// Presenting a confirmation dialog while the row's menu is still animating out drops the dialog's
+    /// slide-up transition (it pops in on a single frame). Give the menu a beat to finish dismissing,
+    /// then present.
+    private func afterMenuDismiss(_ present: @escaping () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(280))
+            present()
+        }
+    }
+
     private func applyAppearance(_ mode: AppearanceMode) {
         let style: UIUserInterfaceStyle =
             switch mode {
@@ -187,7 +197,9 @@ struct AppShellView: View {
                     onNewChat: { path.append(.newChat(address)) },
                     onOpenConversation: { path.append(.conversation($0.id)) },
                     onRenameConversation: { renameConversation($0, to: $1) },
-                    onRequestDeleteConversation: { deletingConversation = $0 },
+                    onRequestDeleteConversation: { conversation in
+                        afterMenuDismiss { deletingConversation = conversation }
+                    },
                     onDeleteConversation: deleteConversation
                 )
             }

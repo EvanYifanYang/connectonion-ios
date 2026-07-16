@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		07FA00012FDBE00000000001 /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 07FA00032FDBE00000000003 /* Factory */; };
 		07FA100C2FDBE0000000001C /* ConnectOnionWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 07FA10032FDBE00000000013 /* ConnectOnionWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		07FB00012FDBE00000000001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 07FB00032FDBE00000000003 /* Lottie */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,14 +39,12 @@
 /* Begin PBXCopyFilesBuildPhase section */
 		07FA100B2FDBE0000000001B /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
 			dstPath = "";
-			dstSubfolderSpec = 13;
+			dstSubfolder = PlugIns;
 			files = (
 				07FA100C2FDBE0000000001C /* ConnectOnionWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -89,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				07FA00012FDBE00000000001 /* Factory in Frameworks */,
+				07FB00012FDBE00000000001 /* Lottie in Frameworks */,
 			);
 		};
 		0732346E2FDBD99100BDE6B4 /* Frameworks */ = {
@@ -156,6 +156,7 @@
 			name = "ConnectOnion iOS";
 			packageProductDependencies = (
 				07FA00032FDBE00000000003 /* Factory */,
+				07FB00032FDBE00000000003 /* Lottie */,
 			);
 			productName = "ConnectOnion iOS";
 			productReference = 073234622FDBD98F00BDE6B4 /* ConnectOnion iOS.app */;
@@ -214,8 +215,8 @@
 			buildRules = (
 			);
 			fileSystemSynchronizedGroups = (
-				07FA10022FDBE00000000012 /* ConnectOnionWidget */,
 				07FA10012FDBE00000000011 /* ConnectOnionShared */,
+				07FA10022FDBE00000000012 /* ConnectOnionWidget */,
 			);
 			name = ConnectOnionWidget;
 			productName = ConnectOnionWidget;
@@ -259,6 +260,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				07FA00022FDBE00000000002 /* XCRemoteSwiftPackageReference "Factory" */,
+				07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 073234632FDBD98F00BDE6B4 /* Products */;
@@ -476,7 +478,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -504,7 +506,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOS";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -525,7 +527,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOSTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOSTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -547,7 +549,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOSTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOSTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -567,7 +569,7 @@
 				DEVELOPMENT_TEAM = GQAQ5635CV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOSUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOSUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -587,7 +589,7 @@
 				DEVELOPMENT_TEAM = GQAQ5635CV;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOSUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOSUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -617,7 +619,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOS.Widget";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOS.Widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -647,7 +649,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.romantcD.ConnectOnion-iOS.Widget";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.junhuadi.ConnectOnion-iOS.Widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -713,6 +715,14 @@
 				minimumVersion = 2.5.0;
 			};
 		};
+		07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-spm.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -720,6 +730,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 07FA00022FDBE00000000002 /* XCRemoteSwiftPackageReference "Factory" */;
 			productName = Factory;
+		};
+		07FB00032FDBE00000000003 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */;
+			productName = Lottie;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum AppTheme {
     static let sidebarWidth: Double = 320
@@ -8,4 +9,18 @@ enum AppTheme {
     static let bubbleCornerRadius: Double = 22
     static let compactRadius: Double = 14
     static let standardSpacing: Double = 12
+
+    static let contrastFill = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor.secondarySystemFill : UIColor.label
+    })
+
+    static let contrastForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor.label : UIColor.systemBackground
+    })
+
+    static let selectionFill = Color(uiColor: UIColor { traits in
+        UIColor.label
+            .resolvedColor(with: traits)
+            .withAlphaComponent(traits.userInterfaceStyle == .dark ? 0.14 : 0.08)
+    })
 }

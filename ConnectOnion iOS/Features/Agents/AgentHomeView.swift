@@ -20,8 +20,6 @@ struct AgentHomeView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 24)
 
-                newChatButton
-
                 if conversations.isEmpty {
                     emptyState
                 } else {
@@ -45,20 +43,26 @@ struct AgentHomeView: View {
             .frame(maxWidth: 540)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.bottom, 100) // clear the floating New Chat button
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottomTrailing) {
+            newChatButton
+                .padding(20)
+        }
     }
 
+    /// Matches the "+ New Agent" floating button on the agent list — same shape, size, and position.
     private var newChatButton: some View {
         Button(action: onNewChat) {
-            Label("New chat", systemImage: "square.and.pencil")
+            Label("New Chat", systemImage: "plus")
                 .font(.headline)
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 22)
                 .padding(.vertical, 14)
                 .background(Color.onion, in: .capsule)
+                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(AccessibilityID.newChatInAgentButton)

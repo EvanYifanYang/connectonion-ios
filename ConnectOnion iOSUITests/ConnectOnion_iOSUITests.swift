@@ -116,7 +116,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
         tapElement(seededAgentID, in: app)
 
-        XCTAssertTrue(app.buttons["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.staticTexts["/summarize"].exists)
         XCTAssertFalse(app.staticTexts["/debug"].exists)
         XCTAssertFalse(app.staticTexts["Bash"].exists)
@@ -333,8 +333,10 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
         tapElement(seededAgentID, in: app)
 
-        XCTAssertTrue(app.buttons["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.buttons["What can you do?"].tap()
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
+        app.typeText("What can you do?")
+        tapElement(chatSendButtonID, in: app)
 
         XCTAssertTrue(app.anyElement(inviteCodeFieldID).waitForExistence(timeout: 5), app.debugDescription)
         // Note: that the pending user prompt is *suppressed* during the invite gate is asserted precisely

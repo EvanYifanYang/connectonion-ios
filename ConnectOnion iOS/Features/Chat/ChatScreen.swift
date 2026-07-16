@@ -57,7 +57,7 @@ struct ChatScreen: View {
             }
 
             ChatInputBar(
-                placeholder: "Message \(displayName)",
+                placeholder: "Reply to ConnectOnion Agent",
                 isRunning: viewModel.shouldShowStopButton,
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],

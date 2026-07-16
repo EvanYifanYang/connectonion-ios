@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct AgentLandingView: View {
     var agent: AgentConfigRecord
@@ -22,7 +23,6 @@ struct AgentLandingView: View {
             }
 
             LandingComposer(
-                suggestions: AgentPromptSuggestions.defaults,
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],
                 onSend: { prompt, images, files in
@@ -30,10 +30,17 @@ struct AgentLandingView: View {
                 }
             )
         }
+        // Tapping the empty area (anywhere outside the composer's controls) dismisses the keyboard.
+        .contentShape(.rect)
+        .onTapGesture { dismissKeyboard() }
         // The hero below already shows the agent's name prominently, so the top bar leaves its title
         // empty rather than repeating it.
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

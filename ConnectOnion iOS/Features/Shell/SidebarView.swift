@@ -124,9 +124,7 @@ struct SidebarView: View {
 
             ToolbarItem(placement: .principal) {
                 if !isEmpty {
-                    Text("ConnectOnion")
-                        .font(AppFont.wordmark)
-                        .lineLimit(1)
+                    ConnectOnionWordmark()
                 }
             }
         }

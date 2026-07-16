@@ -48,6 +48,15 @@ struct SettingsView: View {
                         .font(AppFont.sectionSerif)
                         .textCase(nil)
                 }
+
+                Section {
+                } footer: {
+                    Text("Powered by OpenOnion")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 8)
+                }
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)

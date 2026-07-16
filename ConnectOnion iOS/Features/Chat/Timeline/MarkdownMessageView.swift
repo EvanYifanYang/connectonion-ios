@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Renders an assistant message as block-level Markdown — headings, bullet/ordered lists, fenced code
 /// blocks, blockquotes, tables, and horizontal rules — with inline formatting (bold, italic, code,
@@ -104,15 +105,42 @@ private struct CodeBlockView: View {
     var language: String?
     var code: String
 
+    @State private var copied = false
+    @State private var expanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let language, !language.isEmpty {
-                Text(language)
-                    .font(.caption2.monospaced())
+            // Header: language label + copy / expand actions (Claude-style).
+            HStack(spacing: 16) {
+                Text(language?.nilIfEmpty ?? "code")
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    UIPasteboard.general.string = code
+                    copied = true
+                } label: {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                }
+                .accessibilityLabel(copied ? "Copied" : "Copy code")
+
+                Button {
+                    expanded = true
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                }
+                .accessibilityLabel("Expand code")
             }
+            .font(.system(size: 14))
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+
+            Divider()
+
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(.callout.monospaced())
@@ -121,10 +149,53 @@ private struct CodeBlockView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.appChatCard, in: .rect(cornerRadius: 12))
+        .background(Color.appCodeBlock, in: .rect(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+        }
+        .sensoryFeedback(.success, trigger: copied) { _, isCopied in isCopied }
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(1.6))
+            copied = false
+        }
+        .sheet(isPresented: $expanded) {
+            CodeBlockExpandedView(language: language, code: code)
+        }
+    }
+}
+
+/// Full-screen reading view for a code block: scrolls both axes, selectable, with a Done button.
+private struct CodeBlockExpandedView: View {
+    var language: String?
+    var code: String
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                Text(code)
+                    .font(.callout.monospaced())
+                    .textSelection(.enabled)
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(Color.appCanvas)
+            .navigationTitle(language?.nilIfEmpty ?? "Code")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    ShareLink(item: code) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share code")
+                }
+            }
         }
     }
 }
@@ -154,13 +225,9 @@ private struct MarkdownTableView: View {
                     }
                 }
             }
-            .padding(12)
+            .padding(.vertical, 4)
         }
-        .background(Color.appChatCard, in: .rect(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        // Tables render plain (dividers only, no card fill) — an editorial table, not a panel.
     }
 
     private func cell(_ values: [String], _ column: Int) -> some View {

@@ -77,8 +77,8 @@ struct ChatScreen: View {
         .overlay(alignment: .top) {
             LinearGradient(
                 stops: [
-                    .init(color: Color(.systemBackground), location: 0),
-                    .init(color: Color(.systemBackground), location: 0.55),
+                    .init(color: Color.appCanvas, location: 0),
+                    .init(color: Color.appCanvas, location: 0.55),
                     .init(color: .clear, location: 1)
                 ],
                 startPoint: .top,

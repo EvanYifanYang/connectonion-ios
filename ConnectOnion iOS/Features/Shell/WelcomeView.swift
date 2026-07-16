@@ -7,7 +7,7 @@ struct WelcomeView: View {
         EmptyStateHero(onAddAgent: onAddAgent)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding()
-            .background(Color(.systemGroupedBackground))
+            .background(Color.appCanvas)
     }
 }
 

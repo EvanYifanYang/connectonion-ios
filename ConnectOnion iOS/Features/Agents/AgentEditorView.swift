@@ -54,6 +54,8 @@ struct AgentEditorView: View {
             // Keep text-entry neutral (black caret/selection) app-wide; purple is reserved for the
             // primary action below, so the field itself doesn't read as "flashy".
             .tint(.primary)
+            .scrollContentBackground(.hidden)
+            .background(Color.appCanvas)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -77,6 +79,7 @@ struct AgentEditorView: View {
         // to full height, with the standard grabber.
         .presentationDetents([.height(300), .large])
         .presentationDragIndicator(.visible)
+        .presentationBackground(Color.appCanvas)
     }
 
     private var canSave: Bool {

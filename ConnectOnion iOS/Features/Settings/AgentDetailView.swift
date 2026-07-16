@@ -79,6 +79,8 @@ struct AgentDetailView: View {
                 .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.appCanvas)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

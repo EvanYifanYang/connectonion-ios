@@ -121,7 +121,7 @@ private struct CodeBlockView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
     }
 }
 
@@ -152,7 +152,7 @@ private struct MarkdownTableView: View {
             }
             .padding(12)
         }
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
     }
 
     private func cell(_ values: [String], _ column: Int) -> some View {

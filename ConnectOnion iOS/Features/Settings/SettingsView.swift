@@ -58,6 +58,8 @@ struct SettingsView: View {
                         .padding(.top, 8)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.appCanvas)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -80,6 +82,7 @@ struct SettingsView: View {
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
+        .presentationBackground(Color.appCanvas)
     }
 
     private var appVersion: String {

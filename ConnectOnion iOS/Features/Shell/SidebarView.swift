@@ -141,7 +141,7 @@ struct SidebarView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: feedbackTrigger)
-        .background(Color(.systemGroupedBackground))
+        .background(Color.appCanvas)
     }
 
     private func select(agent: AgentConfigRecord) {

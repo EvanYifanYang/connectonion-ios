@@ -17,7 +17,7 @@ struct LandingComposer: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 14)
-        .background(.background)
+        .background(Color.appCanvas)
     }
 }
 

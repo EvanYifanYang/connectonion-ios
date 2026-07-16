@@ -95,5 +95,5 @@ private struct BreathingLogoMark: View {
 
 #Preview("Empty State Hero") {
     EmptyStateHero(onAddAgent: {})
-        .background(Color(.systemGroupedBackground))
+        .background(Color.appCanvas)
 }

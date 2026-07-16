@@ -21,7 +21,7 @@ private struct SidebarCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: radius))
+            .background(Color.appElevated, in: .rect(cornerRadius: radius))
             .overlay {
                 RoundedRectangle(cornerRadius: radius)
                     .strokeBorder(borderColor, lineWidth: showSelected ? 1.5 : 1)

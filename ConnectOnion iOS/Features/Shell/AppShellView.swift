@@ -43,6 +43,9 @@ struct AppShellView: View {
                 destination(for: route)
             }
         }
+        // Warm off-black canvas behind the whole stack (the transparent scroll screens show it through),
+        // replacing iOS's pure-black dark background.
+        .background(Color.appCanvas.ignoresSafeArea())
         .accessibilityIdentifier(AccessibilityID.appShell)
         .sheet(isPresented: $showingAddAgent) {
             AgentEditorView { address, alias, endpoint in

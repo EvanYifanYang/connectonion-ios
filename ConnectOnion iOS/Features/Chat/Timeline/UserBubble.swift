@@ -16,7 +16,7 @@ struct UserBubble: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(Color(.systemGray5), in: .rect(cornerRadius: AppTheme.bubbleCornerRadius))
+                    .background(Color.appUserBubble, in: .rect(cornerRadius: AppTheme.bubbleCornerRadius))
                     .frame(maxWidth: 620, alignment: .trailing)
             }
         }

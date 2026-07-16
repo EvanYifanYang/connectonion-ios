@@ -94,6 +94,7 @@ struct ChatInputBar: View {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.plain)
+                    .tint(.primary)
                     .focused($isFocused)
                     .submitLabel(.send)
                     .onSubmit(send)

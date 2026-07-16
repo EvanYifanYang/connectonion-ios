@@ -80,6 +80,7 @@ struct NewConversationSheet: View {
                     TextField("First message", text: $prompt, axis: .vertical)
                         .lineLimit(1...4)
                         .textFieldStyle(.plain)
+                        .tint(.primary)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                         .background(.secondary.opacity(0.08), in: .rect(cornerRadius: 16))

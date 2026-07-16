@@ -145,7 +145,8 @@ struct ChatInputBar: View {
                 allowsImages: allowsImages,
                 allowsFiles: allowsFiles,
                 onCamera: { presentPicker { showingCamera = true } },
-                onPhotos: { presentPicker { showingPhotoPicker = true } },
+                onAllPhotos: { presentPicker { showingPhotoPicker = true } },
+                onPhotoData: { data in appendImage(data: data) },
                 onFiles: { presentPicker { showingFileImporter = true } }
             )
         }

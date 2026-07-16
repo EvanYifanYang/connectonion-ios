@@ -50,6 +50,12 @@ struct AgentSidebarRow: View {
                         }
 
                         Spacer(minLength: 0)
+
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.onion.opacity(0.7))
+                        }
                     }
                     .contentShape(.rect)
                 }
@@ -76,7 +82,7 @@ struct AgentSidebarRow: View {
         }
         .padding(14)
         .frame(minHeight: 64)
-        .sidebarCard(isSelected: isSelected)
+        .sidebarCard(isSelected: isSelected, isPinned: isPinned)
         .contentShape(.rect)
     }
 
@@ -84,12 +90,23 @@ struct AgentSidebarRow: View {
         agent.displayName(info: info)
     }
 
+    private var isPinned: Bool {
+        agent.pinnedAt != nil
+    }
+
     @ViewBuilder
     private var actions: some View {
+        Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin() }
         Button("Rename", systemImage: "pencil") { startRename() }
             .accessibilityIdentifier(AccessibilityID.renameAgentButton)
         Button("Delete Agent", systemImage: "trash", role: .destructive, action: onDelete)
             .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
+    }
+
+    private func togglePin() {
+        withAnimation(AppMotion.standard) {
+            agent.pinnedAt = isPinned ? nil : .now
+        }
     }
 
     private func startRename() {

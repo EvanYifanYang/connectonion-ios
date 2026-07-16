@@ -19,8 +19,13 @@ struct AgentHomeView: View {
 
     private var filteredConversations: [ConversationRecord] {
         let query = searchQuery.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return conversations }
-        return conversations.filter { $0.title.localizedCaseInsensitiveContains(query) }
+        let base = query.isEmpty
+            ? conversations
+            : conversations.filter { $0.title.localizedCaseInsensitiveContains(query) }
+        // Pinned chats first (most recent pin on top), everything else in its usual order.
+        let pinned = base.filter { $0.pinnedAt != nil }
+            .sorted { ($0.pinnedAt ?? .distantPast) > ($1.pinnedAt ?? .distantPast) }
+        return pinned + base.filter { $0.pinnedAt == nil }
     }
 
     var body: some View {

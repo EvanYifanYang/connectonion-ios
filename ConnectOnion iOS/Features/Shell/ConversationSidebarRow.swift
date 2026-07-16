@@ -90,6 +90,12 @@ struct ConversationSidebarRow: View {
 
                 Spacer(minLength: 0)
 
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color.onion.opacity(0.7))
+                }
+
                 Text(relativeTime)
                     .font(.caption)
                     .monospacedDigit()
@@ -109,7 +115,7 @@ struct ConversationSidebarRow: View {
             }
             .padding(14)
             .frame(minHeight: 64)
-            .sidebarCard(isSelected: isSelected)
+            .sidebarCard(isSelected: isSelected, isPinned: isPinned)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -121,11 +127,22 @@ struct ConversationSidebarRow: View {
         .contextMenu { menuActions }
     }
 
+    private var isPinned: Bool {
+        conversation.pinnedAt != nil
+    }
+
     @ViewBuilder
     private var menuActions: some View {
+        Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin() }
         Button("Rename", systemImage: "pencil") { startRename() }
             .accessibilityIdentifier(AccessibilityID.renameConversationButton)
         Button("Delete Chat", systemImage: "trash", role: .destructive, action: onRequestDelete)
+    }
+
+    private func togglePin() {
+        withAnimation(AppMotion.standard) {
+            conversation.pinnedAt = isPinned ? nil : .now
+        }
     }
 
     private func startRename() {

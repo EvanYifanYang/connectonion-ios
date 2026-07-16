@@ -6,6 +6,7 @@ import SwiftUI
 /// clearly without the heavy filled highlight it replaces.
 private struct SidebarCardModifier: ViewModifier {
     var isSelected: Bool
+    var isPinned: Bool = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -31,6 +32,9 @@ private struct SidebarCardModifier: ViewModifier {
 
     private var borderColor: Color {
         if showSelected { return .onion.opacity(0.55) }
+        // A pinned row keeps a quiet onion hairline in every width class — it marks the row itself,
+        // not a navigation state, so the compact-width no-resting-selection rule doesn't apply.
+        if isPinned { return .onion.opacity(0.45) }
         return .primary.opacity(scheme == .dark ? 0.12 : 0.05)
     }
 
@@ -44,8 +48,8 @@ private struct SidebarCardModifier: ViewModifier {
 
 extension View {
     /// Wrap a sidebar row's content in the shared card surface (see `SidebarCardModifier`).
-    func sidebarCard(isSelected: Bool = false) -> some View {
-        modifier(SidebarCardModifier(isSelected: isSelected))
+    func sidebarCard(isSelected: Bool = false, isPinned: Bool = false) -> some View {
+        modifier(SidebarCardModifier(isSelected: isSelected, isPinned: isPinned))
     }
 }
 

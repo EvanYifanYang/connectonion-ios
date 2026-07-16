@@ -151,7 +151,7 @@ struct ChatInputBar: View {
                 allowsFiles: allowsFiles,
                 onCamera: { pendingPicker = .camera },
                 onAllPhotos: { pendingPicker = .photos },
-                onPhotoData: { data in appendImage(data: data) },
+                onPhotosData: { datas in attachImages(datas) },
                 onPhotoError: { message in showAttachmentError(message) },
                 onFiles: { pendingPicker = .files }
             )
@@ -353,6 +353,22 @@ struct ChatInputBar: View {
             tick()
         } catch {
             showAttachmentError("Could not attach \(url.lastPathComponent)")
+        }
+    }
+
+    /// Attach several picked photos at once, capped at the remaining slots. Surfaces a single
+    /// "limit reached" note if the selection didn't fit rather than one per dropped photo.
+    private func attachImages(_ datas: [Data]) {
+        let slots = remainingAttachmentSlots
+        guard slots > 0 else {
+            showAttachmentError("Attachment limit reached")
+            return
+        }
+        for data in datas.prefix(slots) {
+            appendImage(data: data)
+        }
+        if datas.count > slots {
+            showAttachmentError("Attachment limit reached")
         }
     }
 

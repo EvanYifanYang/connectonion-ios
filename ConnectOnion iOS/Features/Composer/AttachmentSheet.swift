@@ -3,24 +3,26 @@ import SwiftUI
 import UIKit
 
 /// The "Add to Chat" bottom sheet opened by the composer's + button. Mirrors Claude's layout: a row of
-/// square tiles (Camera first, then recent library photos you tap to attach) with an "All photos"
-/// shortcut to the full picker in the header, and a single "Add files" row below. (No projects / tools /
-/// research / web-search rows — ConnectOnion doesn't have those.)
+/// square tiles (Camera first, then recent library photos you can multi-select) with an "All photos"
+/// shortcut in the header and a single "Add files" row below. Selecting photos reveals an
+/// "Attach N photos" button. (No projects / tools / research / web-search rows — we don't have those.)
 struct AttachmentSheet: View {
     var allowsImages: Bool
     var allowsFiles: Bool
     var onCamera: () -> Void
     var onAllPhotos: () -> Void
-    var onPhotoData: (Data) -> Void
+    var onPhotosData: ([Data]) -> Void
     var onPhotoError: (String) -> Void
     var onFiles: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var recentPhotos = RecentPhotos()
-    @State private var isSelecting = false
+    @State private var selected: [String] = [] // asset identifiers, in tap order
+    @State private var isAttaching = false
     @State private var loadTask: Task<Void, Never>?
 
     private let tileSide: CGFloat = 96
+    private let tileColor = Color(.systemGray6)
 
     private var cameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
@@ -40,14 +42,7 @@ struct AttachmentSheet: View {
                 }
                 .padding(.vertical, 12)
             }
-            .overlay {
-                if isSelecting {
-                    ProgressView()
-                        .padding(20)
-                        .background(.regularMaterial, in: .rect(cornerRadius: 16))
-                        .allowsHitTesting(false) // keep Close tappable so a slow iCloud fetch can be cancelled
-                }
-            }
+            .scrollBounceBehavior(.basedOnSize)
             .navigationTitle("Add to Chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -63,6 +58,11 @@ struct AttachmentSheet: View {
                         }
                         .tint(.primary)
                     }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if !selected.isEmpty {
+                    attachButton
                 }
             }
             .onDisappear { loadTask?.cancel() }
@@ -84,10 +84,16 @@ struct AttachmentSheet: View {
                     enablePhotosTile
                 }
                 ForEach(recentPhotos.assets, id: \.localIdentifier) { asset in
-                    PhotoThumbnailTile(asset: asset, provider: recentPhotos, side: tileSide) {
-                        selectPhoto(asset)
+                    PhotoThumbnailTile(
+                        asset: asset,
+                        provider: recentPhotos,
+                        side: tileSide,
+                        placeholderColor: tileColor,
+                        isSelected: selected.contains(asset.localIdentifier)
+                    ) {
+                        toggle(asset)
                     }
-                    .disabled(isSelecting)
+                    .disabled(isAttaching)
                 }
             }
             .padding(.horizontal, 16)
@@ -126,7 +132,7 @@ struct AttachmentSheet: View {
         }
         .foregroundStyle(.primary)
         .frame(width: tileSide, height: tileSide)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+        .background(tileColor, in: .rect(cornerRadius: 16))
     }
 
     private var addFilesRow: some View {
@@ -145,28 +151,68 @@ struct AttachmentSheet: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+            .background(tileColor, in: .rect(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+    }
+
+    private var attachButton: some View {
+        Button(action: attachSelected) {
+            HStack(spacing: 8) {
+                if isAttaching {
+                    ProgressView()
+                        .tint(Color(.systemBackground))
+                }
+                Text(isAttaching ? "Attaching…" : "Attach \(selected.count) photo\(selected.count == 1 ? "" : "s")")
+                    .font(.headline)
+            }
+            .foregroundStyle(Color(.systemBackground))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.primary, in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .disabled(isAttaching)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
     }
 
     private var sheetHeight: CGFloat {
         var height: CGFloat = 60 // header
         if allowsImages { height += tileSide + 28 }
         if allowsFiles { height += 60 }
+        height += 76 // reserve the attach-button row so the detent doesn't jump on selection
         return height + 24
     }
 
-    private func selectPhoto(_ asset: PHAsset) {
-        guard !isSelecting else { return } // first tap wins; ignore rapid repeats
-        isSelecting = true
+    private func toggle(_ asset: PHAsset) {
+        let id = asset.localIdentifier
+        if let index = selected.firstIndex(of: id) {
+            selected.remove(at: index)
+        } else {
+            selected.append(id)
+        }
+    }
+
+    private func attachSelected() {
+        guard !isAttaching, !selected.isEmpty else { return }
+        isAttaching = true
+        let assets = selected.compactMap { id in
+            recentPhotos.assets.first { $0.localIdentifier == id }
+        }
         loadTask = Task {
-            let data = await recentPhotos.fullData(for: asset)
-            guard !Task.isCancelled else { return } // sheet was dismissed mid-load — don't attach
-            if let data {
-                onPhotoData(data)
+            var datas: [Data] = []
+            for asset in assets {
+                if Task.isCancelled { return }
+                if let data = await recentPhotos.fullData(for: asset) {
+                    datas.append(data)
+                }
+            }
+            guard !Task.isCancelled else { return }
+            if datas.isEmpty {
+                onPhotoError("Couldn’t attach those photos. Check your connection and try again.")
             } else {
-                onPhotoError("Couldn’t attach that photo. Check your connection and try again.")
+                onPhotosData(datas)
             }
             dismiss()
         }
@@ -174,12 +220,14 @@ struct AttachmentSheet: View {
 }
 
 /// One square photo tile. Loads its own thumbnail so the row keeps the newest-first order and only
-/// fetches what scrolls into view (the row is a LazyHStack). Shows a spinner while loading and a glyph
-/// placeholder if the thumbnail can't be produced, instead of a blank square.
+/// fetches what scrolls into view (the row is a LazyHStack). Shows a spinner while loading, a glyph
+/// placeholder if the thumbnail can't be produced, and a checkmark badge when selected.
 private struct PhotoThumbnailTile: View {
     let asset: PHAsset
     let provider: RecentPhotos
     let side: CGFloat
+    let placeholderColor: Color
+    let isSelected: Bool
     var onTap: () -> Void
 
     @Environment(\.displayScale) private var displayScale
@@ -195,7 +243,7 @@ private struct PhotoThumbnailTile: View {
                         .scaledToFill()
                 } else {
                     ZStack {
-                        Color(.secondarySystemBackground)
+                        placeholderColor
                         if didLoad {
                             Image(systemName: "photo")
                                 .foregroundStyle(.tertiary)
@@ -207,6 +255,21 @@ private struct PhotoThumbnailTile: View {
             }
             .frame(width: side, height: side)
             .clipShape(.rect(cornerRadius: 16))
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.primary, lineWidth: 3)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(Color(.systemBackground), Color.primary)
+                        .padding(6)
+                }
+            }
         }
         .buttonStyle(.plain)
         .task(id: asset.localIdentifier) {

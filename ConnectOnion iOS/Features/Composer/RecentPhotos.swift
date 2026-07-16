@@ -40,8 +40,8 @@ final class RecentPhotos {
     func thumbnail(for asset: PHAsset, pixelSide: CGFloat) async -> UIImage? {
         await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
-            options.deliveryMode = .fastFormat // single callback (opportunistic would resume twice)
-            options.resizeMode = .fast
+            options.deliveryMode = .highQualityFormat // single callback + crisp (fastFormat looked blurry)
+            options.resizeMode = .exact
             options.isNetworkAccessAllowed = false
             imageManager.requestImage(
                 for: asset,

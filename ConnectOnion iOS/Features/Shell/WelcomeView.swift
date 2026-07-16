@@ -9,8 +9,9 @@ struct WelcomeView: View {
         VStack(spacing: 18) {
             ConnectOnionLogoMark()
 
-            Text("ConnectOnion")
+            Text("Add your first agent")
                 .font(AppFont.hero)
+                .multilineTextAlignment(.center)
 
             Button("Add Agent", systemImage: "plus", action: addAgent)
                 .buttonStyle(.glassProminent)

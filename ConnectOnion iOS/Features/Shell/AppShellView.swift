@@ -18,8 +18,6 @@ struct AppShellView: View {
     @State private var showingSettings = false
     @State private var editingAgent: AgentConfigRecord?
     @State private var deletingAgent: AgentConfigRecord?
-    @State private var renamingConversation: ConversationRecord?
-    @State private var renameConversationTitle = ""
     @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
 
@@ -34,9 +32,9 @@ struct AppShellView: View {
                 onNewChat: newChat,
                 onNewConversation: { showingNewConversation = true },
                 onAddAgent: { showingAddAgent = true },
-                onRenameAgent: { editingAgent = $0 },
+                onRenameAgent: { renameAgentName($0, to: $1) },
                 onDeleteAgent: { deletingAgent = $0 },
-                onRenameConversation: startRenamingConversation,
+                onRenameConversation: { renameConversation($0, to: $1) },
                 onRequestDeleteConversation: { deletingConversation = $0 },
                 onDeleteConversation: deleteConversation,
                 onSettings: { showingSettings = true },
@@ -97,12 +95,6 @@ struct AppShellView: View {
             Button("Cancel", role: .cancel) {
                 deletingAgent = nil
             }
-        }
-        .alert("Rename Chat", isPresented: renameConversationBinding) {
-            TextField("Title", text: $renameConversationTitle)
-                .tint(.primary)
-            Button("Cancel", role: .cancel) { renamingConversation = nil }
-            Button("Save") { commitConversationRename() }
         }
         .confirmationDialog(
             "Delete Chat?",
@@ -294,26 +286,15 @@ struct AppShellView: View {
         }
     }
 
-    private var renameConversationBinding: Binding<Bool> {
-        Binding(
-            get: { renamingConversation != nil },
-            set: { if !$0 { renamingConversation = nil } }
-        )
+    private func renameAgentName(_ agent: AgentConfigRecord, to name: String) {
+        agent.alias = name
+        agent.updatedAt = .now
+        infoStore.refresh(addresses: [agent.address])
     }
 
-    private func startRenamingConversation(_ conversation: ConversationRecord) {
-        renameConversationTitle = conversation.title
-        renamingConversation = conversation
-    }
-
-    private func commitConversationRename() {
-        guard let conversation = renamingConversation else { return }
-        let trimmed = renameConversationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            conversation.title = trimmed
-            conversation.updatedAt = .now
-        }
-        renamingConversation = nil
+    private func renameConversation(_ conversation: ConversationRecord, to title: String) {
+        conversation.title = title
+        conversation.updatedAt = .now
     }
 
     private func newChat(for agent: AgentConfigRecord) {

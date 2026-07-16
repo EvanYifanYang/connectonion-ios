@@ -5,13 +5,15 @@ struct ConversationSidebarRow: View {
     var agentName: String
     var isSelected: Bool
     var onSelect: () -> Void
-    var onRename: () -> Void
+    var onRename: (String) -> Void
     var onRequestDelete: () -> Void
     var onDelete: () -> Void
 
     @GestureState private var dragTranslation: CGFloat = 0
     @State private var committedOffset: CGFloat = 0
     @State private var rowHeight: CGFloat = 64
+    @State private var isRenaming = false
+    @State private var draftTitle = ""
     // Set while a horizontal swipe is in progress so the touch-up that ends the swipe isn't also
     // delivered to the row's tap handler (which would immediately snap the just-opened row shut).
     @State private var didSwipe = false
@@ -23,27 +25,53 @@ struct ConversationSidebarRow: View {
     private let actionGap: CGFloat = 14
 
     var body: some View {
-        ZStack(alignment: .trailing) {
-            deleteAction
-                .opacity(currentOffset < -8 ? 1 : 0)
+        if isRenaming {
+            // Render the editor outside the swipe machinery (no drag gesture / offset / geometry
+            // observer) so the field can take and hold keyboard focus cleanly.
+            renameEditor
+        } else {
+            ZStack(alignment: .trailing) {
+                deleteAction
+                    .opacity(currentOffset < -8 ? 1 : 0)
 
-            rowButton
-                .offset(x: currentOffset)
-                .onGeometryChange(for: CGFloat.self) { geometry in
-                    max(geometry.size.height, 64)
-                } action: { height in
-                    if rowHeight != height {
-                        rowHeight = height
+                rowButton
+                    .offset(x: currentOffset)
+                    .onGeometryChange(for: CGFloat.self) { geometry in
+                        max(geometry.size.height, 64)
+                    } action: { height in
+                        if rowHeight != height {
+                            rowHeight = height
+                        }
                     }
-                }
+            }
+            .contentShape(.rect)
+            .simultaneousGesture(horizontalSwipeGesture)
+            .animation(AppMotion.quick, value: committedOffset)
+            .animation(AppMotion.quick, value: currentOffset < -8)
+            .accessibilityAction(named: "Delete") {
+                commitDelete()
+            }
         }
+    }
+
+    private var renameEditor: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "text.bubble")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+
+            InlineRenameField(
+                text: $draftTitle,
+                accessibilityID: AccessibilityID.conversationRenameField,
+                onCommit: commitRename
+            )
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .sidebarCard(isSelected: isSelected)
         .contentShape(.rect)
-        .simultaneousGesture(horizontalSwipeGesture)
-        .animation(AppMotion.quick, value: committedOffset)
-        .animation(AppMotion.quick, value: currentOffset < -8)
-        .accessibilityAction(named: "Delete") {
-            commitDelete()
-        }
     }
 
     private var rowButton: some View {
@@ -84,9 +112,23 @@ struct ConversationSidebarRow: View {
 
     @ViewBuilder
     private var menuActions: some View {
-        Button("Rename", systemImage: "pencil", action: onRename)
+        Button("Rename", systemImage: "pencil") { startRename() }
             .accessibilityIdentifier(AccessibilityID.renameConversationButton)
         Button("Delete Chat", systemImage: "trash", role: .destructive, action: onRequestDelete)
+    }
+
+    private func startRename() {
+        draftTitle = conversation.title
+        isRenaming = true
+    }
+
+    private func commitRename() {
+        guard isRenaming else { return }
+        isRenaming = false
+        let trimmed = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != conversation.title {
+            onRename(trimmed)
+        }
     }
 
     private var deleteAction: some View {
@@ -165,7 +207,7 @@ struct ConversationSidebarRow: View {
         agentName: "OpenOnion",
         isSelected: true,
         onSelect: {},
-        onRename: {},
+        onRename: { _ in },
         onRequestDelete: {},
         onDelete: {}
     )
@@ -178,7 +220,7 @@ struct ConversationSidebarRow: View {
         agentName: "A1",
         isSelected: false,
         onSelect: {},
-        onRename: {},
+        onRename: { _ in },
         onRequestDelete: {},
         onDelete: {}
     )

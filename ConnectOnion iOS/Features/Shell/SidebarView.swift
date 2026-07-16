@@ -9,9 +9,9 @@ struct SidebarView: View {
     var onNewChat: (AgentConfigRecord) -> Void
     var onNewConversation: () -> Void
     var onAddAgent: () -> Void
-    var onRenameAgent: (AgentConfigRecord) -> Void
+    var onRenameAgent: (AgentConfigRecord, String) -> Void
     var onDeleteAgent: (AgentConfigRecord) -> Void
-    var onRenameConversation: (ConversationRecord) -> Void
+    var onRenameConversation: (ConversationRecord, String) -> Void
     var onRequestDeleteConversation: (ConversationRecord) -> Void
     var onDeleteConversation: (ConversationRecord) -> Void
     var onSettings: () -> Void
@@ -51,9 +51,9 @@ struct SidebarView: View {
                                 tick()
                                 onNewChat(agent)
                             },
-                            onRename: {
+                            onRename: { newName in
                                 tick()
-                                onRenameAgent(agent)
+                                onRenameAgent(agent, newName)
                             },
                             onDelete: {
                                 tick()
@@ -74,9 +74,9 @@ struct SidebarView: View {
                             agentName: agentName(for: conversation.agentAddress),
                             isSelected: selectedConversationID == conversation.id,
                             onSelect: { select(conversation: conversation) },
-                            onRename: {
+                            onRename: { newTitle in
                                 tick()
-                                onRenameConversation(conversation)
+                                onRenameConversation(conversation, newTitle)
                             },
                             onRequestDelete: {
                                 tick()
@@ -204,9 +204,9 @@ private struct SidebarEmptyState: View {
         onNewChat: { _ in },
         onNewConversation: {},
         onAddAgent: {},
-        onRenameAgent: { _ in },
+        onRenameAgent: { _, _ in },
         onDeleteAgent: { _ in },
-        onRenameConversation: { _ in },
+        onRenameConversation: { _, _ in },
         onRequestDeleteConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
@@ -225,9 +225,9 @@ private struct SidebarEmptyState: View {
         onNewChat: { _ in },
         onNewConversation: {},
         onAddAgent: {},
-        onRenameAgent: { _ in },
+        onRenameAgent: { _, _ in },
         onDeleteAgent: { _ in },
-        onRenameConversation: { _ in },
+        onRenameConversation: { _, _ in },
         onRequestDeleteConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},

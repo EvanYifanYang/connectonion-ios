@@ -14,6 +14,17 @@ struct AgentListView: View {
     var onRefresh: () async -> Void
 
     @State private var feedbackTrigger = 0
+    @State private var searchQuery = ""
+
+    private var filteredAgents: [AgentConfigRecord] {
+        let query = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return agents }
+        return agents.filter { agent in
+            let info = infoByAddress[agent.address]
+            return agent.displayName(info: info).localizedCaseInsensitiveContains(query)
+                || (info?.model?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -26,10 +37,13 @@ struct AgentListView: View {
                     .frame(minHeight: 520)
                     .padding(.vertical, 48)
                     .transition(AppMotion.panelTransition)
+                } else if filteredAgents.isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
+                        .padding(.top, 120)
                 } else {
                     SidebarSectionTitle(title: "Agents")
 
-                    ForEach(agents) { agent in
+                    ForEach(filteredAgents) { agent in
                         AgentSidebarRow(
                             agent: agent,
                             info: infoByAddress[agent.address],
@@ -50,7 +64,8 @@ struct AgentListView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 140) // clear the floating button + search bar
             .frame(maxWidth: .infinity, alignment: .top)
             .contentShape(.rect)
             .onTapGesture { dismissKeyboard() }
@@ -59,11 +74,21 @@ struct AgentListView: View {
         .scrollIndicators(.hidden)
         .refreshable { await onRefresh() }
         .animation(AppMotion.standard, value: agents.map(\.address))
+        .animation(AppMotion.quick, value: filteredAgents.map(\.address))
         .accessibilityIdentifier(AccessibilityID.sidebar)
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .bottom) {
             if !agents.isEmpty {
-                newAgentButton
-                    .padding(20)
+                VStack(spacing: 14) {
+                    newAgentButton
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    FloatingSearchBar(
+                        text: $searchQuery,
+                        prompt: "Search",
+                        accessibilityID: AccessibilityID.agentSearchField
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
             }
         }
         .navigationTitle("")

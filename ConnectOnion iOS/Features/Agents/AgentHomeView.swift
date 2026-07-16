@@ -15,12 +15,31 @@ struct AgentHomeView: View {
     var onDeleteConversation: (ConversationRecord) -> Void
 
     @State private var showingInfo = false
+    @State private var searchQuery = ""
+
+    private var filteredConversations: [ConversationRecord] {
+        let query = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return conversations }
+        return conversations.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack(alignment: .bottom) {
             content
-            newChatButton
-                .padding(20)
+
+            VStack(spacing: 14) {
+                newChatButton
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                if !conversations.isEmpty {
+                    FloatingSearchBar(
+                        text: $searchQuery,
+                        prompt: "Search",
+                        accessibilityID: AccessibilityID.chatSearchField
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 10)
         }
         .background(Color.appCanvas.ignoresSafeArea())
         .navigationTitle("")
@@ -47,10 +66,13 @@ struct AgentHomeView: View {
 
                 if conversations.isEmpty {
                     emptyState
+                } else if filteredConversations.isEmpty {
+                    ContentUnavailableView.search(text: searchQuery)
+                        .padding(.top, 60)
                 } else {
                     SidebarSectionTitle(title: "Chats")
                     LazyVStack(spacing: 10) {
-                        ForEach(conversations) { conversation in
+                        ForEach(filteredConversations) { conversation in
                             // No container-level id here — the row applies its own id to its select
                             // button (a container id shadows onto the inner menu button).
                             ConversationSidebarRow(
@@ -69,7 +91,7 @@ struct AgentHomeView: View {
             .frame(maxWidth: 540)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 16)
-            .padding(.bottom, 100) // clear the floating New Chat button
+            .padding(.bottom, 150) // clear the floating New Chat button + search bar
             // Tapping empty space dismisses the keyboard (which also commits an in-progress inline
             // rename via focus loss) — same affordance as the agent list.
             .contentShape(.rect)

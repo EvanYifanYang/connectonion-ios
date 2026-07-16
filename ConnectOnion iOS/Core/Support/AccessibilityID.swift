@@ -15,6 +15,8 @@ enum AccessibilityID {
     static let agentRenameField = "connectonion.agent.rename.field"
     static let renameConversationButton = "connectonion.chat.rename.button"
     static let conversationActionsButton = "connectonion.chat.actions.button"
+    static let agentSearchField = "connectonion.search.agents"
+    static let chatSearchField = "connectonion.search.chats"
     static let conversationRenameField = "connectonion.chat.rename.field"
     static let newChatButton = "connectonion.chat.new.button"
     static let newChatInAgentButton = "connectonion.agent.newchat.button"

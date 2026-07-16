@@ -3,7 +3,9 @@ import SwiftUI
 /// The in-composer dictation control row: a cancel (✕), a live mic-level waveform, and a confirm (✓).
 /// Sits below the text field (which keeps showing the streaming transcript) while recording.
 struct VoiceRecordingBar: View {
-    var levels: [CGFloat]
+    // Held (not just `levels`) so only this small view re-renders at the ~20 Hz level cadence, rather
+    // than the whole composer body.
+    var voice: VoiceInputTranscriber
     var onCancel: () -> Void
     var onConfirm: () -> Void
 
@@ -20,7 +22,7 @@ struct VoiceRecordingBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Cancel dictation")
 
-            RecordingWaveform(levels: levels)
+            RecordingWaveform(levels: voice.levels)
                 .frame(maxWidth: .infinity)
 
             Button(action: onConfirm) {

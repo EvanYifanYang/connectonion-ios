@@ -23,6 +23,8 @@ struct ChatInputBar: View {
     @State private var pendingPicker: PendingPicker?
     @State private var attachmentError: String?
     @State private var voiceSeedText = ""
+    @State private var voiceOriginalText = "" // exact pre-dictation text, restored on ✕
+    @State private var voiceLastApplied = "" // last text written from a transcript, to detect manual edits
     @State private var feedbackTrigger = 0
     @State private var errorFeedbackTrigger = 0
     @FocusState private var isFocused: Bool
@@ -98,7 +100,7 @@ struct ChatInputBar: View {
             if voiceInput.isActive {
                 // Row 2 (dictation): cancel ✕, live waveform, confirm ✓.
                 VoiceRecordingBar(
-                    levels: voiceInput.levels,
+                    voice: voiceInput,
                     onCancel: cancelVoiceInput,
                     onConfirm: confirmVoiceInput
                 )
@@ -432,7 +434,9 @@ struct ChatInputBar: View {
         case .recording:
             voiceInput.stopRecording()
         case .idle:
+            voiceOriginalText = text // exact text (incl. trailing whitespace) for ✕ restore
             voiceSeedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            voiceLastApplied = text
             isFocused = true // keep the keyboard up; the transcript streams into the field live
             voiceInput.startRecording()
         case .requestingPermission, .transcribing:
@@ -442,8 +446,13 @@ struct ChatInputBar: View {
 
     private func applyVoiceTranscript(_ transcript: String) {
         guard !transcript.isEmpty else { return }
+        // Only overwrite the field if the user hasn't manually edited it since our last write; otherwise
+        // a streaming partial would clobber what they just typed.
+        guard text == voiceLastApplied else { return }
         let separator = voiceSeedText.isEmpty ? "" : " "
-        text = voiceSeedText + separator + transcript
+        let merged = voiceSeedText + separator + transcript
+        text = merged
+        voiceLastApplied = merged
     }
 
     /// ✓ — keep the dictated text: stop recording so the final transcript settles into the field.
@@ -454,11 +463,11 @@ struct ChatInputBar: View {
         }
     }
 
-    /// ✕ — discard the dictation and restore whatever was typed before recording started.
+    /// ✕ — discard the dictation and restore exactly what was in the field before recording started.
     private func cancelVoiceInput() {
         tick()
         voiceInput.cancel()
-        text = voiceSeedText
+        text = voiceOriginalText
     }
 
     /// Present whichever picker the attachment sheet requested, now that the sheet has fully dismissed

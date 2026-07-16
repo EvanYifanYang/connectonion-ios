@@ -50,8 +50,10 @@ final class VoiceInputTranscriber {
         Task {
             do {
                 try await requestPermissions()
+                guard state == .requestingPermission else { return } // cancelled while awaiting permission
                 try beginRecognition()
             } catch {
+                guard state == .requestingPermission else { return } // don't clobber state after a cancel
                 fail(with: userFacingMessage(for: error))
             }
         }
@@ -230,6 +232,11 @@ final class VoiceInputTranscriber {
         isFinal: Bool,
         errorMessage: String?
     ) {
+        // Ignore stragglers that arrive after the session already ended (cancel / fail / fallback-finish
+        // set state to .idle) — otherwise a late result re-injects discarded text or a late cancellation
+        // error pops a spurious banner.
+        guard state != .idle else { return }
+
         if let newTranscript {
             transcript = newTranscript
             if isFinal {

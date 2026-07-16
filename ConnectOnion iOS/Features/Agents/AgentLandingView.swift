@@ -7,19 +7,29 @@ struct AgentLandingView: View {
     var info: AgentInfo?
     var onSend: (AgentInput) -> Void
 
+    private static let greetings = [
+        "What shall we think through?",
+        "How can I help you?",
+        "Where should we start?",
+        "What's on your mind?",
+        "Ready when you are",
+        "Good to see you"
+    ]
+    // Picked once per landing appearance so the greeting varies between new chats but stays put while
+    // you're on the screen.
+    @State private var greeting = AgentLandingView.greetings.randomElement() ?? "How can I help you?"
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            // A warm, serif greeting instead of repeating the agent hero.
-            VStack(spacing: 10) {
+            // The onion mark over a single warm, serif greeting — no repeated agent hero.
+            VStack(spacing: 22) {
+                OnionThinkingMark(active: false, diameter: 54)
                 Text(greeting)
                     .font(.system(.largeTitle, design: .serif).weight(.medium))
-                Text("What shall we think through?")
-                    .font(.system(.title3, design: .serif))
-                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            .multilineTextAlignment(.center)
             .padding(.horizontal, 24)
 
             Spacer(minLength: 0)
@@ -37,14 +47,6 @@ struct AgentLandingView: View {
         .onTapGesture { dismissKeyboard() }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var greeting: String {
-        switch Calendar.current.component(.hour, from: Date.now) {
-        case 5..<12: "Good morning"
-        case 12..<17: "Good afternoon"
-        default: "Good evening"
-        }
     }
 
     private func dismissKeyboard() {

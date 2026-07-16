@@ -9,8 +9,6 @@ struct AgentSidebarRow: View {
     var onRename: () -> Void
     var onDelete: () -> Void
 
-    @State private var isShowingActions = false
-
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onSelect) {
@@ -43,8 +41,8 @@ struct AgentSidebarRow: View {
                 actions
             }
 
-            Button {
-                isShowingActions = true
+            Menu {
+                actions
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.body.weight(.semibold))
@@ -60,9 +58,6 @@ struct AgentSidebarRow: View {
         .frame(minHeight: 64)
         .sidebarCard(isSelected: isSelected)
         .contentShape(.rect)
-        .confirmationDialog("Agent Actions", isPresented: $isShowingActions, titleVisibility: .visible) {
-            actions
-        }
     }
 
     private var displayName: String {
@@ -75,7 +70,6 @@ struct AgentSidebarRow: View {
 
     @ViewBuilder
     private var actions: some View {
-        Button("New Chat", systemImage: "square.and.pencil", action: onNewChat)
         Button("Rename", systemImage: "pencil", action: onRename)
             .accessibilityIdentifier(AccessibilityID.renameAgentButton)
         Button("Delete Agent", systemImage: "trash", role: .destructive, action: onDelete)

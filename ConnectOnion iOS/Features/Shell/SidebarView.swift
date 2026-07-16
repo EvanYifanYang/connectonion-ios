@@ -11,6 +11,7 @@ struct SidebarView: View {
     var onAddAgent: () -> Void
     var onRenameAgent: (AgentConfigRecord) -> Void
     var onDeleteAgent: (AgentConfigRecord) -> Void
+    var onRenameConversation: (ConversationRecord) -> Void
     var onDeleteConversation: (ConversationRecord) -> Void
     var onSettings: () -> Void
     var onOpenDetail: () -> Void
@@ -72,6 +73,10 @@ struct SidebarView: View {
                             agentName: agentName(for: conversation.agentAddress),
                             isSelected: selectedConversationID == conversation.id,
                             onSelect: { select(conversation: conversation) },
+                            onRename: {
+                                tick()
+                                onRenameConversation(conversation)
+                            },
                             onDelete: {
                                 tick()
                                 onDeleteConversation(conversation)
@@ -196,6 +201,7 @@ private struct SidebarEmptyState: View {
         onAddAgent: {},
         onRenameAgent: { _ in },
         onDeleteAgent: { _ in },
+        onRenameConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
         onOpenDetail: {},
@@ -215,6 +221,7 @@ private struct SidebarEmptyState: View {
         onAddAgent: {},
         onRenameAgent: { _ in },
         onDeleteAgent: { _ in },
+        onRenameConversation: { _ in },
         onDeleteConversation: { _ in },
         onSettings: {},
         onOpenDetail: {},

@@ -5,6 +5,7 @@ struct ConversationSidebarRow: View {
     var agentName: String
     var isSelected: Bool
     var onSelect: () -> Void
+    var onRename: () -> Void
     var onDelete: () -> Void
 
     @GestureState private var dragTranslation: CGFloat = 0
@@ -65,6 +66,8 @@ struct ConversationSidebarRow: View {
                 Spacer(minLength: 0)
 
                 Menu("Conversation Actions", systemImage: "ellipsis") {
+                    Button("Rename", systemImage: "pencil", action: onRename)
+                        .accessibilityIdentifier(AccessibilityID.renameConversationButton)
                     Button("Delete", systemImage: "trash", role: .destructive, action: commitDelete)
                 }
                 .labelStyle(.iconOnly)
@@ -153,6 +156,7 @@ struct ConversationSidebarRow: View {
         agentName: "OpenOnion",
         isSelected: true,
         onSelect: {},
+        onRename: {},
         onDelete: {}
     )
     .padding()
@@ -164,6 +168,7 @@ struct ConversationSidebarRow: View {
         agentName: "A1",
         isSelected: false,
         onSelect: {},
+        onRename: {},
         onDelete: {}
     )
     .padding()

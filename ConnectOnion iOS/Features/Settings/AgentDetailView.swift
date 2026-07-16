@@ -67,10 +67,15 @@ struct AgentDetailView: View {
             }
 
             Section {
-                Button("Delete Agent", systemImage: "trash", role: .destructive) {
+                Button {
                     confirmingDelete = true
+                } label: {
+                    // Plain style + explicit red so the trash icon is red too (a Form button otherwise
+                    // tints the icon with the accent purple).
+                    Label("Delete Agent", systemImage: "trash")
+                        .foregroundStyle(.red)
                 }
-                .tint(.red) // keep the trash icon red like the label, not the accent purple
+                .buttonStyle(.plain)
                 .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
             }
         }

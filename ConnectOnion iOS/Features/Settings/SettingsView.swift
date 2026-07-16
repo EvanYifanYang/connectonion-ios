@@ -52,7 +52,7 @@ struct SettingsView: View {
                 Section {
                 } footer: {
                     Text("Powered by OpenOnion")
-                        .font(.footnote)
+                        .font(.system(.callout, design: .serif).weight(.semibold))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 8)

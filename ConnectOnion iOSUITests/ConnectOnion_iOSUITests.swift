@@ -235,6 +235,28 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testConversationRenameCommitsOnBackgroundTap() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        _ = waitForElement(seededConversationID, in: app)
+        app.buttons["Conversation Actions"].firstMatch.tap()
+        tapElement(renameConversationButtonID, in: app)
+
+        let field = app.textFields[seededConversationID]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Tapped away")
+
+        // No Return: tapping empty (non-interactive) sidebar space above the keyboard — here the
+        // "Agents" section header — should dismiss the keyboard and commit the rename.
+        app.staticTexts["Agents"].tap()
+
+        XCTAssertTrue(app.staticTexts["Tapped away"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
+    @MainActor
     func testApprovalActionsResolveAndKeepComposerInSendState() throws {
         try assertApprovalAction(buttonID: approvalApproveButtonID, expectedStatus: "Approved")
         try assertApprovalAction(buttonID: approvalAlwaysButtonID, expectedStatus: "Approved for session")

@@ -173,7 +173,7 @@ private struct SidebarEmptyState: View {
             ConnectOnionLogoMark()
 
             Text("ConnectOnion")
-                .font(.title.bold())
+                .font(AppFont.hero)
 
             Button("Add Agent", systemImage: "plus", action: onAddAgent)
                 .buttonStyle(.glassProminent)

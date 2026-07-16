@@ -12,7 +12,7 @@ struct AgentHeroView: View {
 
             HStack(spacing: 8) {
                 Text(displayName)
-                    .font(.title2.bold())
+                    .font(AppFont.title)
                     .lineLimit(1)
 
                 if let online = info?.online {

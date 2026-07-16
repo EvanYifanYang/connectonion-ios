@@ -10,7 +10,7 @@ struct WelcomeView: View {
             ConnectOnionLogoMark()
 
             Text("ConnectOnion")
-                .font(.title.bold())
+                .font(AppFont.hero)
 
             Button("Add Agent", systemImage: "plus", action: addAgent)
                 .buttonStyle(.glassProminent)

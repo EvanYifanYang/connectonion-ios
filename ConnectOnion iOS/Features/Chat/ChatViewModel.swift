@@ -368,20 +368,24 @@ final class ChatViewModel {
             // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
             // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
             if !chatItems.isEmpty, !regenerating {
-                // Adopting the server's list can re-id the reply we're mid-reveal on; keep the typewriter
-                // pointed at the latest reply (by position) so the reveal survives the swap.
-                let wasStreaming = streamingMessageID != nil
                 items = chatItems
-                if wasStreaming {
-                    streamingMessageID = items.last { $0.kind == .agent }?.id
-                }
             }
+            // Some paths deliver the reply only in `result` (not as a chat item) — make sure it exists as
+            // the last agent item so it can be revealed.
             if !result.isEmpty, items.last(where: { $0.kind == .agent })?.content != result {
                 let agentItem = ChatItem(kind: .agent, content: result)
                 append(agentItem, animated: true, shouldPersist: false)
-                streamingMessageID = agentItem.id // reveal this one with the typewriter effect
             }
             finalizeRunningItems()
+            // Type the reply out client-side. The host server never emits a live "assistant" event — the
+            // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
+            // however it landed (adopted from the canonical list or appended above). This is the single
+            // place the reveal is triggered for a normal turn.
+            if !result.isEmpty,
+               let index = items.lastIndex(where: { $0.kind == .agent }),
+               items[index].content == result {
+                streamingMessageID = items[index].id
+            }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
             // that carries it may not be present in the server's canonical list.
             if let model = lastResponseModel ?? items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model,

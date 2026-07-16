@@ -12,6 +12,10 @@ struct ConversationSidebarRow: View {
     @State private var rowHeight: CGFloat = 64
 
     private let actionWidth: CGFloat = 74
+    // Gap between the sliding card and the red delete pill, so the reveal reads as two separate
+    // rounded tiles (native swipe-action look) instead of two r20 tiles kissing with corner notches —
+    // and so the card's soft shadow lands on the gap, not on the red.
+    private let actionGap: CGFloat = 14
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -28,7 +32,6 @@ struct ConversationSidebarRow: View {
                     }
                 }
         }
-        .clipShape(.rect(cornerRadius: 16))
         .contentShape(.rect)
         .simultaneousGesture(horizontalSwipeGesture)
         .animation(AppMotion.quick, value: committedOffset)
@@ -63,8 +66,8 @@ struct ConversationSidebarRow: View {
                 }
                 .labelStyle(.iconOnly)
             }
-            .padding(10)
-            .background(isSelected ? Color.onionSoft : Color.clear, in: .rect(cornerRadius: 16))
+            .padding(14)
+            .sidebarCard(isSelected: isSelected)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -76,11 +79,11 @@ struct ConversationSidebarRow: View {
             Image(systemName: "trash.fill")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: actionWidth - actionGap, height: rowHeight)
+                .background(Color.red, in: .rect(cornerRadius: 20))
         }
         .buttonStyle(.plain)
-        .frame(width: actionWidth, height: rowHeight)
-        .background(Color.red, in: .rect(cornerRadius: 16))
+        .frame(width: actionWidth, alignment: .trailing)
         .accessibilityLabel("Delete \(conversation.title)")
         .accessibilityIdentifier(AccessibilityID.deleteConversation(conversation.id))
         .accessibilityHidden(currentOffset == 0)

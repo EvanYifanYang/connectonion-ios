@@ -56,9 +56,9 @@ struct AgentSidebarRow: View {
             .accessibilityLabel("Agent Actions")
             .accessibilityIdentifier(AccessibilityID.agentActionsButton)
         }
-        .padding(10)
-        .frame(minHeight: 62)
-        .background(isSelected ? Color.onionSoft : Color.clear, in: .rect(cornerRadius: 16))
+        .padding(14)
+        .frame(minHeight: 64)
+        .sidebarCard(isSelected: isSelected)
         .contentShape(.rect)
         .confirmationDialog("Agent Actions", isPresented: $isShowingActions, titleVisibility: .visible) {
             actions

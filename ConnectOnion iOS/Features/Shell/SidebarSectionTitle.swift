@@ -5,10 +5,10 @@ struct SidebarSectionTitle: View {
 
     var body: some View {
         Text(title)
-            .font(.subheadline)
+            .font(AppFont.sectionSerif)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
-            .padding(.top, 4)
+            .padding(.top, 6)
     }
 }
 

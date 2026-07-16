@@ -13,7 +13,6 @@ struct SettingsView: View {
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
     @State private var identity: ClientIdentity?
     @State private var errorMessage: String?
-    @State private var confirmingRegenerate = false
     @State private var showingInfo = false
     @State private var feedbackTrigger = 0
 
@@ -41,12 +40,8 @@ struct SettingsView: View {
                 }
 
                 Section("Appearance") {
-                    Picker("Theme", selection: $appearance) {
-                        ForEach(AppearanceMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    AppearancePicker(selection: $appearance)
+                        .padding(.vertical, 6)
                 }
 
                 if let errorMessage {
@@ -69,19 +64,8 @@ struct SettingsView: View {
                 }
             }
             .popover(isPresented: $showingInfo) {
-                SettingsInfoView(
-                    identity: identity,
-                    appVersion: appVersion,
-                    onRegenerate: {
-                        showingInfo = false
-                        confirmingRegenerate = true
-                    }
-                )
-                .presentationCompactAdaptation(.popover)
-            }
-            .confirmationDialog("Regenerate Identity", isPresented: $confirmingRegenerate) {
-                Button("Regenerate", role: .destructive, action: regenerate)
-                Button("Cancel", role: .cancel) {}
+                SettingsInfoView(identity: identity, appVersion: appVersion)
+                    .presentationCompactAdaptation(.popover)
             }
             .task {
                 loadIdentity()
@@ -99,14 +83,6 @@ struct SettingsView: View {
     private func loadIdentity() {
         do {
             identity = try identityStore.currentIdentity
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    private func regenerate() {
-        do {
-            identity = try identityStore.regenerateIdentity()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -148,7 +124,6 @@ private struct AgentSettingsRow: View {
 private struct SettingsInfoView: View {
     var identity: ClientIdentity?
     var appVersion: String
-    var onRegenerate: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -159,12 +134,6 @@ private struct SettingsInfoView: View {
                 Divider()
                 infoRow("Your identity", value: identity.shortAddress)
             }
-            Divider()
-            Button("Regenerate Identity", systemImage: "key", role: .destructive, action: onRegenerate)
-                .font(.callout)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
         }
         .frame(width: 280)
         .padding(.vertical, 6)

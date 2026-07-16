@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var identity: ClientIdentity?
     @State private var errorMessage: String?
     @State private var confirmingRegenerate = false
+    @State private var showingInfo = false
     @State private var feedbackTrigger = 0
 
     var body: some View {
@@ -48,22 +49,6 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("About") {
-                    if let identity {
-                        LabeledContent("Your identity") {
-                            Text(identity.shortAddress)
-                                .font(.footnote.monospaced())
-                                .textSelection(.enabled)
-                        }
-                    }
-                    LabeledContent("Relay server", value: "oo.openonion.ai")
-                    LabeledContent("Version", value: appVersion)
-
-                    Button("Regenerate Identity", systemImage: "key", role: .destructive) {
-                        confirmingRegenerate = true
-                    }
-                }
-
                 if let errorMessage {
                     Section {
                         Text(errorMessage)
@@ -74,11 +59,25 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                        .labelStyle(.iconOnly)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("About", systemImage: "info.circle") { showingInfo = true }
+                        .labelStyle(.iconOnly)
+                }
+            }
+            .popover(isPresented: $showingInfo) {
+                SettingsInfoView(
+                    identity: identity,
+                    appVersion: appVersion,
+                    onRegenerate: {
+                        showingInfo = false
+                        confirmingRegenerate = true
+                    }
+                )
+                .presentationCompactAdaptation(.popover)
             }
             .confirmationDialog("Regenerate Identity", isPresented: $confirmingRegenerate) {
                 Button("Regenerate", role: .destructive, action: regenerate)
@@ -143,6 +142,47 @@ private struct AgentSettingsRow: View {
             return endpoint.absoluteString
         }
         return AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address
+    }
+}
+
+private struct SettingsInfoView: View {
+    var identity: ClientIdentity?
+    var appVersion: String
+    var onRegenerate: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            infoRow("Version", value: appVersion)
+            Divider()
+            infoRow("Relay server", value: "oo.openonion.ai")
+            if let identity {
+                Divider()
+                infoRow("Your identity", value: identity.shortAddress)
+            }
+            Divider()
+            Button("Regenerate Identity", systemImage: "key", role: .destructive, action: onRegenerate)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+        }
+        .frame(width: 280)
+        .padding(.vertical, 6)
+    }
+
+    private func infoRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.callout)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.footnote.monospaced())
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
 

@@ -50,6 +50,7 @@ struct AppShellView: View {
             AgentEditorView { address, alias, endpoint in
                 addAgent(address: address, alias: alias, endpoint: endpoint)
             }
+            .preferredColorScheme(appearance.colorScheme)
         }
         .sheet(item: $editingAgent) { agent in
             AgentEditorView(
@@ -61,6 +62,7 @@ struct AppShellView: View {
             ) { _, alias, endpoint in
                 renameAgent(agent, alias: alias, endpoint: endpoint)
             }
+            .preferredColorScheme(appearance.colorScheme)
         }
         .sheet(isPresented: $showingNewConversation) {
             NewConversationSheet(
@@ -74,6 +76,7 @@ struct AppShellView: View {
                     startConversation(agent: agent, input: AgentInput(prompt: prompt))
                 }
             }
+            .preferredColorScheme(appearance.colorScheme)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView(
@@ -82,6 +85,7 @@ struct AppShellView: View {
                 onAddAgent: showAddAgentFromSettings,
                 onDeleteAgent: deleteAgent
             )
+            .preferredColorScheme(appearance.colorScheme)
         }
         .confirmationDialog(
             "Delete Agent?",

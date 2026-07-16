@@ -13,6 +13,8 @@ struct AgentHomeView: View {
     var onRequestDeleteConversation: (ConversationRecord) -> Void
     var onDeleteConversation: (ConversationRecord) -> Void
 
+    @State private var showingInfo = false
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             content
@@ -21,6 +23,16 @@ struct AgentHomeView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Agent Info", systemImage: "info.circle") { showingInfo = true }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier(AccessibilityID.agentInfoButton)
+            }
+        }
+        .sheet(isPresented: $showingInfo) {
+            AgentInfoSheet(agent: agent, info: info)
+        }
     }
 
     private var content: some View {

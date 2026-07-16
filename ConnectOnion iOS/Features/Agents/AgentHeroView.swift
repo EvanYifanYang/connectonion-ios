@@ -28,21 +28,12 @@ struct AgentHeroView: View {
                 .accessibilityLabel(online ? "Connected" : "Offline")
             }
 
-            if let remoteProfileName {
-                AgentProfileNameLabel(name: remoteProfileName)
-            }
-
             if !metaLine.isEmpty {
                 Text(metaLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-
-            Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
-                .font(.footnote.monospaced())
-                .foregroundStyle(.tertiary)
-                .textSelection(.enabled)
         }
     }
 
@@ -50,18 +41,11 @@ struct AgentHeroView: View {
         agent.displayName(info: info)
     }
 
-    private var remoteProfileName: String? {
-        agent.remoteProfileName(info: info)
-    }
-
+    // Slim hero: just model · trust. Profile, version and the full address live in the info sheet.
     private var metaLine: String {
-        [
-            info?.model,
-            info?.trust,
-            info?.version.map { "v\($0)" }
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
+        [info?.model, info?.trust]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 }
 

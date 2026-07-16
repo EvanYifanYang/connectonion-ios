@@ -34,8 +34,14 @@ struct AgentSidebarRow: View {
                                 .font(AppFont.rowName)
                                 .lineLimit(1)
 
-                            if let remoteProfileName {
-                                AgentProfileNameLabel(name: remoteProfileName)
+                            if let model = info?.model, !model.isEmpty {
+                                Label {
+                                    Text(model).lineLimit(1)
+                                } icon: {
+                                    Image(systemName: "cpu").imageScale(.small)
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                             }
 
                             Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
@@ -77,10 +83,6 @@ struct AgentSidebarRow: View {
 
     private var displayName: String {
         agent.displayName(info: info)
-    }
-
-    private var remoteProfileName: String? {
-        agent.remoteProfileName(info: info)
     }
 
     @ViewBuilder

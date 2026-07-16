@@ -58,7 +58,7 @@ struct AgentSidebarRow: View {
         }
         .padding(10)
         .frame(minHeight: 62)
-        .background(isSelected ? Color.primary.opacity(0.08) : Color.clear, in: .rect(cornerRadius: 16))
+        .background(isSelected ? Color.onionSoft : Color.clear, in: .rect(cornerRadius: 16))
         .contentShape(.rect)
         .confirmationDialog("Agent Actions", isPresented: $isShowingActions, titleVisibility: .visible) {
             actions

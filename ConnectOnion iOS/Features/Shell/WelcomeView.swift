@@ -29,12 +29,12 @@ struct WelcomeView: View {
 
 struct ConnectOnionLogoMark: View {
     var body: some View {
-        Image("logo")
-            .resizable()
-            .scaledToFit()
-            .frame(width: 52, height: 52)
+        OnionPeelLogoView()
+            .frame(width: 62, height: 62)
             .frame(width: 76, height: 76)
             .glassSurface(cornerRadius: 24)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("ConnectOnion logo")
     }
 }
 

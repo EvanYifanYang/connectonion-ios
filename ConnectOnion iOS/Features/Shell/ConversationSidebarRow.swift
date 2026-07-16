@@ -10,6 +10,9 @@ struct ConversationSidebarRow: View {
     @GestureState private var dragTranslation: CGFloat = 0
     @State private var committedOffset: CGFloat = 0
     @State private var rowHeight: CGFloat = 64
+    // Set while a horizontal swipe is in progress so the touch-up that ends the swipe isn't also
+    // delivered to the row's tap handler (which would immediately snap the just-opened row shut).
+    @State private var didSwipe = false
 
     private let actionWidth: CGFloat = 74
     // Gap between the sliding card and the red delete pill, so the reveal reads as two separate
@@ -99,7 +102,16 @@ struct ConversationSidebarRow: View {
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 state = value.translation.width
             }
+            .onChanged { value in
+                if abs(value.translation.width) > abs(value.translation.height),
+                   abs(value.translation.width) > 12 {
+                    didSwipe = true
+                }
+            }
             .onEnded { value in
+                // Clear the flag on the next runloop tick — after the synthesized tap (if any) has
+                // already been swallowed by handleRowTap this event cycle.
+                defer { DispatchQueue.main.async { didSwipe = false } }
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
 
                 let proposedOffset = clamped(committedOffset + value.translation.width)
@@ -122,6 +134,9 @@ struct ConversationSidebarRow: View {
     }
 
     private func handleRowTap() {
+        // Swallow the touch-up that concludes a swipe so it doesn't count as a tap.
+        if didSwipe { return }
+
         if committedOffset < 0 {
             withAnimation(AppMotion.expressive) {
                 committedOffset = 0

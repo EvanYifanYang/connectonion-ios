@@ -101,6 +101,34 @@ struct Sprint1ChatEventTests {
         #expect(items[0].timingMS == 42)
     }
 
+    @Test func outOfOrderToolResultIsNotDroppedOrRegressedToRunning() {
+        var items: [ChatItem] = []
+
+        _ = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("tool_result"),
+                "id": .string("tool-1"),
+                "status": .string("ok"),
+                "result": .string("done")
+            ]),
+            to: &items
+        )
+        _ = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("tool_call"),
+                "id": .string("tool-1"),
+                "name": .string("read_file"),
+                "args": .object(["path": .string("README.md")])
+            ]),
+            to: &items
+        )
+
+        #expect(items.count == 1)
+        #expect(items[0].name == "read_file")
+        #expect(items[0].status == .done)
+        #expect(items[0].result == "done")
+    }
+
     @Test func askUserEventMovesSessionToWaitingAndStoresAnswer() {
         var items: [ChatItem] = []
 
@@ -186,6 +214,136 @@ struct Sprint1ChatEventTests {
         #expect(items[0].kind == .planReview)
         #expect(items[0].answered)
         #expect(items[0].answer == "Revision requested")
+    }
+
+    @Test func newerServerSnapshotPreservesAnsweredCardsAndUnsyncedLocalTurn() {
+        var localApproval = ChatItem(id: "local-approval", kind: .approvalNeeded)
+        localApproval.tool = "bash"
+        localApproval.arguments = ["command": .string("pwd")]
+        localApproval.answered = true
+        localApproval.answer = "Approved"
+
+        var localItems = [
+            ChatItem(id: "local-user-1", kind: .user, content: "Inspect the project"),
+            localApproval,
+            ChatItem(id: "local-user-2", kind: .user, content: "Continue")
+        ]
+
+        var serverApproval = ChatItem(id: "server-approval", kind: .approvalNeeded)
+        serverApproval.tool = "bash"
+        serverApproval.arguments = ["command": .string("pwd")]
+        let serverItems = [
+            ChatItem(id: "server-user-1", kind: .user, content: "Inspect the project"),
+            serverApproval
+        ]
+
+        ChatEventReducer.reconcile(with: serverItems, items: &localItems)
+
+        #expect(localItems.count == 3)
+        #expect(localItems[0].id == "local-user-1")
+        #expect(localItems[1].id == "local-approval")
+        #expect(localItems[1].answered)
+        #expect(localItems[1].answer == "Approved")
+        #expect(localItems[2].content == "Continue")
+    }
+
+    @Test func unknownEventIsPreservedInsteadOfBecomingAnAgentMessage() {
+        var items: [ChatItem] = []
+
+        let state = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("future_agent_event"),
+                "id": .string("future-1"),
+                "message": .string("A future event")
+            ]),
+            to: &items
+        )
+
+        #expect(state == nil)
+        #expect(items.count == 1)
+        #expect(items[0].kind == .unknown)
+        #expect(items[0].eventType == "future_agent_event")
+        #expect(items[0].content == "A future event")
+        #expect(items[0].rawPayload[string: "type"] == "future_agent_event")
+    }
+
+    @Test func unknownStoredKindAndStatusDecodeLossily() throws {
+        let data = Data(
+            #"{"id":"future-1","type":"future_agent_event","status":"queued","message":"Still available"}"#.utf8
+        )
+
+        let item = try JSONDecoder().decode(ChatItem.self, from: data)
+
+        #expect(item.kind == .unknown)
+        #expect(item.eventType == "future_agent_event")
+        #expect(item.status == nil)
+        #expect(item.content == "Still available")
+        #expect(item.rawPayload[string: "status"] == "queued")
+    }
+
+    @Test func ultraWorkLimitEventIsVisibleAndMovesSessionToWaiting() {
+        var items: [ChatItem] = []
+
+        let state = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("ulw_turns_reached"),
+                "id": .string("ulw-1"),
+                "turns_used": .number(12),
+                "max_turns": .number(12)
+            ]),
+            to: &items
+        )
+
+        #expect(state == .waiting)
+        #expect(items.count == 1)
+        #expect(items[0].kind == .ulwTurnsReached)
+        #expect(items[0].turnsUsed == 12)
+        #expect(items[0].maxTurns == 12)
+    }
+
+    @Test func systemReminderIsRemovedWhileSurroundingAnswerIsPreserved() {
+        let content = """
+        Here is the answer.
+
+        <SYSTEM-REMINDER>
+        Internal agent instructions.
+        </SYSTEM-REMINDER>
+
+        ```python
+        print("done")
+        ```
+        """
+
+        let sanitized = AgentContentSanitizer.sanitize(content)
+
+        #expect(sanitized.contains("Here is the answer."))
+        #expect(sanitized.contains("print(\"done\")"))
+        #expect(!sanitized.localizedCaseInsensitiveContains("system-reminder"))
+        #expect(!sanitized.contains("Internal agent instructions"))
+    }
+
+    @Test func unterminatedSystemReminderIsRemovedThroughEndOfMessage() {
+        let sanitized = AgentContentSanitizer.sanitize(
+            "Visible answer\n<system-reminder>\nInternal instructions"
+        )
+
+        #expect(sanitized == "Visible answer")
+    }
+
+    @Test func reminderOnlyAssistantEventDoesNotCreateAnAgentBubble() {
+        var items: [ChatItem] = []
+
+        let state = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("assistant"),
+                "id": .string("assistant-1"),
+                "content": .string("<system-reminder>Internal instructions</system-reminder>")
+            ]),
+            to: &items
+        )
+
+        #expect(state == nil)
+        #expect(items.isEmpty)
     }
 }
 

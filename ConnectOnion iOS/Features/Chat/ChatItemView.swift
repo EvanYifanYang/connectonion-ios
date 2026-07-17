@@ -30,12 +30,7 @@ struct ChatItemView: View {
                 onStreamComplete: onStreamComplete
             )
         case .thinking:
-            // Only show the thinking row while it's actively running (the peeling-onion animation) or
-            // when it carries reasoning text. A finished, empty "model" row is redundant — the model
-            // now appears as a footer under the reply.
-            if item.status == .running || !item.content.isEmpty {
-                ThinkingRow(item: item)
-            }
+            ThinkingRow(item: item)
         case .toolCall:
             ToolCallCard(item: item, isPendingApproval: isPendingApproval, onApprovalResponse: onApprovalResponse)
         case .askUser:
@@ -58,6 +53,14 @@ struct ChatItemView: View {
             PlanReviewCard(item: item, isPending: isPendingPlanReview, onResponse: onPlanReviewResponse)
         case .filesReceived:
             FilesReceivedRow(item: item)
+        case .ulwTurnsReached:
+            StatusPill(systemImage: "hourglass.bottomhalf.filled", text: item.content, tint: .orange)
+        case .unknown:
+            StatusPill(
+                systemImage: "questionmark.bubble.fill",
+                text: item.content.nilIfEmpty ?? "Agent event: \(item.eventType ?? "unknown")",
+                tint: .secondary
+            )
         }
     }
 }

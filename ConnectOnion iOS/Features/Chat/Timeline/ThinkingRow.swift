@@ -23,13 +23,22 @@ struct ThinkingRow: View {
             return content
         }
 
-        let model = item.model ?? "thinking"
+        var details = [item.model ?? "thinking"]
         if item.status == .done {
-            let tokens = item.usage?.totalTokens.map { " · \($0) tok" } ?? ""
-            return "\(model)\(tokens)"
+            if let durationMS = item.durationMS {
+                details.append(durationMS >= 1_000
+                    ? String(format: "%.1fs", Double(durationMS) / 1_000)
+                    : "\(durationMS)ms")
+            }
+            if let totalTokens = item.usage?.totalTokens {
+                details.append("\(totalTokens) tok")
+            }
+            if let contextPercent = item.contextPercent {
+                details.append(String(format: "%.0f%% context", contextPercent))
+            }
         }
 
-        return model
+        return details.joined(separator: " · ")
     }
 }
 

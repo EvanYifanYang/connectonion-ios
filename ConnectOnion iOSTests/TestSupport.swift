@@ -63,7 +63,7 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
         sentInputs.append(input)
         return AsyncThrowingStream { continuation in
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
-            continuation.yield(.output(result: replyText, session: nil, chatItems: []))
+            continuation.yield(.output(result: replyText, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -108,7 +108,7 @@ final class OnboardFirstMessageClient: ConnectOnionClientProviding {
                 return
             }
 
-            continuation.yield(.output(result: "Ready: \(input.prompt)", session: nil, chatItems: []))
+            continuation.yield(.output(result: "Ready: \(input.prompt)", serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -141,7 +141,7 @@ final class AttachmentCapturingClient: ConnectOnionClientProviding {
         sentInputs.append(input)
         return AsyncThrowingStream { continuation in
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
-            continuation.yield(.output(result: "Received attachments", session: nil, chatItems: []))
+            continuation.yield(.output(result: "Received attachments", serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -176,7 +176,7 @@ final class AttachmentRecoveryClient: ConnectOnionClientProviding {
         reconnectCount += 1
         return AsyncThrowingStream { continuation in
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: true, session: nil, chatItems: []))
-            continuation.yield(.output(result: "Recovered image reply", session: nil, chatItems: []))
+            continuation.yield(.output(result: "Recovered image reply", serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }

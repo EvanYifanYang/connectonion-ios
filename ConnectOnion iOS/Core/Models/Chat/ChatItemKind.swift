@@ -15,4 +15,6 @@ enum ChatItemKind: String, Codable, Sendable {
     case toolBlocked = "tool_blocked"
     case planReview = "plan_review"
     case filesReceived = "files_received"
+    case ulwTurnsReached = "ulw_turns_reached"
+    case unknown
 }

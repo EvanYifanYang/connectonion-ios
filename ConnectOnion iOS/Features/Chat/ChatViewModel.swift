@@ -46,8 +46,12 @@ final class ChatViewModel {
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
         self.conversation = conversation
         self.agent = agent
-        items = conversation.messages
+        let sanitizedItems = AgentContentSanitizer.sanitize(conversation.messages)
+        items = sanitizedItems
         clientOverride = client
+        if sanitizedItems != conversation.messages {
+            conversation.messages = sanitizedItems
+        }
         finalizeRunningItems() // restored items must never resume the live "running" animation
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
@@ -270,11 +274,11 @@ final class ChatViewModel {
 
     private func handle(_ event: ConnectOnionClientEvent) {
         switch event {
-        case .connected(let sessionID, let status, _, let session, let chatItems):
+        case .connected(let sessionID, let status, let serverNewer, let session, let chatItems):
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
-            conversation.rawSession = session
-            if !chatItems.isEmpty {
-                items = chatItems
+            if serverNewer {
+                conversation.rawSession = session
+                ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(chatItems), items: &items)
                 persist()
             }
 
@@ -341,7 +345,8 @@ final class ChatViewModel {
                 resumeDeferredOnboardInput()
             }
 
-        case .output(let result, let session, let chatItems):
+        case .output(let result, let serverNewer, let session, let chatItems):
+            let sanitizedResult = AgentContentSanitizer.sanitize(result)
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
             regenerateBackup = nil // the resend produced a reply, so drop the restore snapshot
@@ -350,17 +355,18 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             let regenerating = isRegenerating
             isRegenerating = false
-            // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
-            // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
-            if !chatItems.isEmpty, !regenerating {
-                items = chatItems
+            // Only adopt a newer server snapshot, and reconcile it at a user-turn boundary so an
+            // unacknowledged local turn and locally answered cards cannot be rolled back.
+            if serverNewer, !regenerating {
+                ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(chatItems), items: &items)
             }
             // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
             // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
             // is the last item, so we still append the fresh bubble below it.
-            if !result.isEmpty, !(items.last?.kind == .agent && items.last?.content == result) {
-                let agentItem = ChatItem(kind: .agent, content: result)
+            if !sanitizedResult.isEmpty,
+               !(items.last?.kind == .agent && items.last?.content == sanitizedResult) {
+                let agentItem = ChatItem(kind: .agent, content: sanitizedResult)
                 append(agentItem, animated: true, shouldPersist: false)
             }
             finalizeRunningItems()
@@ -368,9 +374,9 @@ final class ChatViewModel {
             // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
             // however it landed (adopted from the canonical list or appended above). This is the single
             // place the reveal is triggered for a normal turn.
-            if !result.isEmpty,
+            if !sanitizedResult.isEmpty,
                let index = items.lastIndex(where: { $0.kind == .agent }),
-               items[index].content == result {
+               items[index].content == sanitizedResult {
                 streamingMessageID = items[index].id
             }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row

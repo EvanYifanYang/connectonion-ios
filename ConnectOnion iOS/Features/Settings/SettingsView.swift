@@ -10,8 +10,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
+    @AppStorage(CustomInstructionsStorage.storageKey) private var customInstructions = ""
     @State private var showingInfo = false
     @State private var feedbackTrigger = 0
+    @State private var customInstructionsDraft = ""
+    @State private var hasLoadedCustomInstructionsDraft = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +57,50 @@ struct SettingsView: View {
                 .listRowBackground(Color.appElevated)
 
                 Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Custom instructions")
+                                .font(.headline)
+                            Text("Sent with every message to every agent.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ZStack(alignment: .topLeading) {
+                            if customInstructionsDraft.isEmpty {
+                                Text("Add preferences for how agents should respond")
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 16)
+                                    .allowsHitTesting(false)
+                            }
+
+                            TextEditor(text: $customInstructionsDraft)
+                                .scrollContentBackground(.hidden)
+                                .padding(8)
+                                .accessibilityLabel("Custom instructions")
+                                .accessibilityIdentifier(AccessibilityID.customInstructionsEditor)
+                        }
+                        .frame(minHeight: 140)
+                        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
+
+                        HStack {
+                            Spacer()
+                            Button("Save", action: saveCustomInstructions)
+                                .buttonStyle(.borderedProminent)
+                                .disabled(!hasCustomInstructionsChanges)
+                                .accessibilityIdentifier(AccessibilityID.saveCustomInstructionsButton)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                } header: {
+                    Text("Personalisation")
+                        .font(AppFont.sectionSerif)
+                        .textCase(nil)
+                }
+                .listRowBackground(Color.appElevated)
+
+                Section {
                 } footer: {
                     Text("Powered by OpenOnion")
                         .font(.system(.callout, design: .serif).weight(.semibold))
@@ -85,14 +132,41 @@ struct SettingsView: View {
                 }
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
+            .onAppear {
+                guard !hasLoadedCustomInstructionsDraft else { return }
+                customInstructionsDraft = customInstructions
+                hasLoadedCustomInstructionsDraft = true
+            }
         }
         .presentationBackground(Color.appGroupedCanvas)
+    }
+
+    private var normalizedCustomInstructionsDraft: String {
+        CustomInstructionsStorage.normalized(customInstructionsDraft)
+    }
+
+    private var hasCustomInstructionsChanges: Bool {
+        normalizedCustomInstructionsDraft != customInstructions
+    }
+
+    private func saveCustomInstructions() {
+        customInstructions = normalizedCustomInstructionsDraft
+        customInstructionsDraft = customInstructions
+        feedbackTrigger += 1
     }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
+    }
+}
+
+enum CustomInstructionsStorage {
+    static let storageKey = "customInstructions"
+
+    static func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

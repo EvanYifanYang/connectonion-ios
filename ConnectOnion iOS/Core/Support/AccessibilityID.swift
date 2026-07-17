@@ -42,6 +42,8 @@ enum AccessibilityID {
     static let chatVoiceError = "connectonion.chat.voice.error"
     static let chatSkillPalette = "connectonion.chat.skill.palette"
     static let settingsButton = "connectonion.settings.button"
+    static let customInstructionsEditor = "connectonion.settings.custom-instructions.editor"
+    static let saveCustomInstructionsButton = "connectonion.settings.custom-instructions.save"
     static let reconnectButton = "connectonion.chat.reconnect.button"
     static let inviteCodeField = "connectonion.onboard.invite"
     static let inviteSubmitButton = "connectonion.onboard.submit"

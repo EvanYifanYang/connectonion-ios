@@ -17,7 +17,7 @@ final class VoiceInputTranscriber {
     var transcript = ""
     var errorMessage: String?
     var duration: TimeInterval = 0
-    /// Rolling window of recent normalized mic levels (0...1), newest last — drives the live waveform.
+    /// Rolling window of recent normalized mic levels (0...1), newest last c— drives the live waveform.
     var levels: [CGFloat] = []
 
     @ObservationIgnored private let maxLevelSamples = 44

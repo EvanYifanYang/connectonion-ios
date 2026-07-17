@@ -19,7 +19,6 @@ extension Container {
                 identityStore: Container.shared.identityStore()
             )
         }
-        .scope(.singleton)
     }
 
     var liveActivityController: Factory<AgentReplyLiveActivityController> {

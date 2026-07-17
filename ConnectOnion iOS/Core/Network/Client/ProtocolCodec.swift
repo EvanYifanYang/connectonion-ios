@@ -30,7 +30,12 @@ struct ProtocolCodec {
         return message
     }
 
-    func inputMessage(input: AgentInput, agentAddress: String, route: AgentRoute) throws -> [String: JSONValue] {
+    func inputMessage(
+        input: AgentInput,
+        agentAddress: String,
+        route: AgentRoute,
+        sessionID: String? = nil
+    ) throws -> [String: JSONValue] {
         let timestamp = Int(Date.now.timeIntervalSince1970)
         var message: [String: JSONValue] = [
             "type": .string("INPUT"),
@@ -49,6 +54,9 @@ struct ProtocolCodec {
                     "data": .string(file.dataURL)
                 ])
             })
+        }
+        if let sessionID {
+            message["session_id"] = .string(sessionID)
         }
         if !route.isDirect {
             message["to"] = .string(agentAddress)

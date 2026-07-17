@@ -28,7 +28,12 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             Task { @MainActor in
                 do {
                     let context = try await connect(agent: agent, session: session, continuation: continuation)
-                    let message = try codec.inputMessage(input: input, agentAddress: agent.address, route: context.route)
+                    let message = try codec.inputMessage(
+                        input: input,
+                        agentAddress: agent.address,
+                        route: context.route,
+                        sessionID: session.remoteSessionID ?? session.id.uuidString
+                    )
                     try await context.transport.send(text: encodedInputMessageText(message))
                     try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
                 } catch {

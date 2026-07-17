@@ -10,7 +10,12 @@ final class ChatViewModel {
     private let conversation: ConversationRecord
 
     var items: [ChatItem]
-    var sessionState: SessionActiveState = .idle
+    var sessionState: SessionActiveState = .idle {
+        didSet {
+            guard sessionState != oldValue else { return }
+            onSessionStateChange(sessionState)
+        }
+    }
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
     /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
@@ -27,6 +32,8 @@ final class ChatViewModel {
     @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
+    @ObservationIgnored private let onSessionStateChange: (SessionActiveState) -> Void
+    @ObservationIgnored private let onReplyReady: () -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
@@ -43,9 +50,17 @@ final class ChatViewModel {
     @ObservationIgnored private var isRegenerating = false
     private var deferredOnboardInput: AgentInput?
 
-    init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
+    init(
+        conversation: ConversationRecord,
+        agent: AgentConfig,
+        client: ConnectOnionClientProviding? = nil,
+        onSessionStateChange: @escaping (SessionActiveState) -> Void = { _ in },
+        onReplyReady: @escaping () -> Void = {}
+    ) {
         self.conversation = conversation
         self.agent = agent
+        self.onSessionStateChange = onSessionStateChange
+        self.onReplyReady = onReplyReady
         let sanitizedItems = AgentContentSanitizer.sanitize(conversation.messages)
         items = sanitizedItems
         clientOverride = client
@@ -191,7 +206,8 @@ final class ChatViewModel {
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
-        sessionState = .connected
+        sessionState = .active
+        startTimer()
         updateLiveActivityAfterUserAction("Continuing after your answer")
 
         Task {
@@ -208,7 +224,8 @@ final class ChatViewModel {
             ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
+        startTimer()
         updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
         Task {
             do {
@@ -224,7 +241,8 @@ final class ChatViewModel {
             ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
+        startTimer()
         updateLiveActivityAfterUserAction("Verification submitted")
         Task {
             do {
@@ -240,7 +258,8 @@ final class ChatViewModel {
             ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
+        startTimer()
         updateLiveActivityAfterUserAction("Plan feedback sent")
         Task {
             do {
@@ -260,6 +279,7 @@ final class ChatViewModel {
         finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
+        persist()
         liveActivity.end(
             conversationID: conversation.id,
             phase: .stopped,
@@ -319,6 +339,9 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             if let newState = ChatEventReducer.apply(event, to: &items) {
                 sessionState = newState
+                if newState == .waiting {
+                    onReplyReady()
+                }
             }
             // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
             // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
@@ -389,6 +412,7 @@ final class ChatViewModel {
             sessionState = .connected
             stopTimer()
             persist()
+            onReplyReady()
             liveActivity.complete(
                 conversationID: conversation.id,
                 headline: "Reply ready",

@@ -4,6 +4,7 @@ struct ConversationSidebarRow: View {
     var conversation: ConversationRecord
     var agentName: String
     var isSelected: Bool
+    var isAgentRunning: Bool = false
     var onSelect: () -> Void
     var onRename: (String) -> Void
     var onRequestDelete: () -> Void
@@ -83,10 +84,31 @@ struct ConversationSidebarRow: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 42, height: 42)
 
-                Text(conversation.title)
-                    .font(.body)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 7) {
+                        Text(conversation.title)
+                            .font(.body)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        if conversation.hasUnread {
+                            Circle()
+                                .fill(Color.onion)
+                                .frame(width: 8, height: 8)
+                                .accessibilityHidden(true)
+                        }
+                    }
+
+                    if isAgentRunning {
+                        HStack(spacing: 5) {
+                            OnionThinkingMark(active: true, diameter: 14)
+                            Text("Working")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(Color.onion)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
 
                 Spacer(minLength: 0)
 
@@ -122,7 +144,7 @@ struct ConversationSidebarRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(conversation.title)
+        .accessibilityLabel(accessibilityLabel)
         // The id lives on the SELECT button itself (like AgentSidebarRow): a container-level id
         // shadows onto child buttons, so firstMatch could resolve to the ellipsis menu and a row
         // "tap" would open the actions menu instead of the chat.
@@ -132,6 +154,17 @@ struct ConversationSidebarRow: View {
 
     private var isPinned: Bool {
         conversation.pinnedAt != nil
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [conversation.title]
+        if isAgentRunning {
+            parts.append("Agent working")
+        }
+        if conversation.hasUnread {
+            parts.append("Unread reply")
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder

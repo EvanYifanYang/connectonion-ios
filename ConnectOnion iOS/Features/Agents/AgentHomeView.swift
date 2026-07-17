@@ -8,6 +8,7 @@ struct AgentHomeView: View {
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var conversations: [ConversationRecord]
+    var runningConversationIDs: Set<UUID> = []
     var onNewChat: () -> Void
     var onOpenConversation: (ConversationRecord) -> Void
     var onRenameConversation: (ConversationRecord, String) -> Void
@@ -84,6 +85,7 @@ struct AgentHomeView: View {
                                 conversation: conversation,
                                 agentName: agent.displayName(info: info),
                                 isSelected: false,
+                                isAgentRunning: runningConversationIDs.contains(conversation.id),
                                 onSelect: { onOpenConversation(conversation) },
                                 onRename: { onRenameConversation(conversation, $0) },
                                 onRequestDelete: { onRequestDeleteConversation(conversation) },

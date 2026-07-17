@@ -27,6 +27,7 @@ struct AppShellView: View {
     @State private var deletingAgent: AgentConfigRecord?
     @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
+    @State private var chatSessionStore = ChatSessionStore()
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
 
     var body: some View {
@@ -112,6 +113,7 @@ struct AppShellView: View {
             publishWidgetSnapshot()
             consumePendingWidgetRequest()
             configureAgentInfoRefresh()
+            chatSessionStore.setAppActive(scenePhase == .active)
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             publishWidgetSnapshot()
@@ -137,6 +139,7 @@ struct AppShellView: View {
             configureAgentInfoRefresh()
         }
         .onChange(of: scenePhase) { _, phase in
+            chatSessionStore.setAppActive(phase == .active)
             if phase == .active {
                 consumePendingWidgetRequest()
                 configureAgentInfoRefresh()
@@ -197,6 +200,7 @@ struct AppShellView: View {
                     agent: agent,
                     info: infoStore.infoByAddress[address],
                     conversations: conversations(for: address),
+                    runningConversationIDs: chatSessionStore.runningConversationIDs,
                     onNewChat: { path.append(.newChat(address)) },
                     onOpenConversation: { path.append(.conversation($0.id)) },
                     onRenameConversation: { renameConversation($0, to: $1) },
@@ -221,12 +225,15 @@ struct AppShellView: View {
         case .conversation(let id):
             if let conversation = conversations.first(where: { $0.id == id }),
                let agent = agent(for: conversation.agentAddress) {
+                let viewModel = chatSessionStore.session(for: conversation, agent: agent.config)
                 ChatScreen(
                     conversation: conversation,
                     agent: agent,
                     info: infoStore.infoByAddress[agent.address],
                     initialInput: pendingInputs[id],
-                    onInitialInputConsumed: { pendingInputs[id] = nil }
+                    onInitialInputConsumed: { pendingInputs[id] = nil },
+                    viewModel: viewModel,
+                    sessionStore: chatSessionStore
                 )
                 .id(id)
             }
@@ -309,6 +316,7 @@ struct AppShellView: View {
     private func deleteAgent(_ agent: AgentConfigRecord) {
         let related = conversations.filter { $0.agentAddress == agent.address }
         let relatedIDs = Set(related.map(\.id))
+        relatedIDs.forEach(chatSessionStore.removeSession)
         related.forEach(modelContext.delete)
         modelContext.delete(agent)
 
@@ -325,6 +333,7 @@ struct AppShellView: View {
     }
 
     private func deleteConversation(_ conversation: ConversationRecord) {
+        chatSessionStore.removeSession(for: conversation.id)
         modelContext.delete(conversation)
         // Pop the chat if it's open; a delete from the list (not on the stack) is a no-op here.
         path.removeAll { $0 == .conversation(conversation.id) }

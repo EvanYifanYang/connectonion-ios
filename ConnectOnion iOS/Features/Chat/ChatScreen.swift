@@ -8,21 +8,25 @@ struct ChatScreen: View {
     let initialInput: AgentInput?
     let onInitialInputConsumed: () -> Void
 
-    @State private var viewModel: ChatViewModel
+    let viewModel: ChatViewModel
+    let sessionStore: ChatSessionStore
 
     init(
         conversation: ConversationRecord,
         agent: AgentConfigRecord,
         info: AgentInfo?,
         initialInput: AgentInput?,
-        onInitialInputConsumed: @escaping () -> Void
+        onInitialInputConsumed: @escaping () -> Void,
+        viewModel: ChatViewModel,
+        sessionStore: ChatSessionStore
     ) {
         self.conversation = conversation
         self.agent = agent
         self.info = info
         self.initialInput = initialInput
         self.onInitialInputConsumed = onInitialInputConsumed
-        _viewModel = State(initialValue: ChatViewModel(conversation: conversation, agent: agent.config))
+        self.viewModel = viewModel
+        self.sessionStore = sessionStore
     }
 
     var body: some View {
@@ -84,6 +88,12 @@ struct ChatScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
+        .onAppear {
+            sessionStore.conversationDidAppear(conversation)
+        }
+        .onDisappear {
+            sessionStore.conversationDidDisappear(conversation.id)
+        }
         .task(id: conversation.id) {
             guard let initialInput else { return }
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)
@@ -99,12 +109,15 @@ struct ChatScreen: View {
     let agent = try? context.fetch(FetchDescriptor<AgentConfigRecord>()).first
     let conversation = try? context.fetch(FetchDescriptor<ConversationRecord>()).first
     if let agent, let conversation {
+        let sessionStore = ChatSessionStore()
         ChatScreen(
             conversation: conversation,
             agent: agent,
             info: agent.cachedInfo,
             initialInput: nil,
-            onInitialInputConsumed: {}
+            onInitialInputConsumed: {},
+            viewModel: sessionStore.session(for: conversation, agent: agent.config),
+            sessionStore: sessionStore
         )
             .modelContainer(container)
     } else {

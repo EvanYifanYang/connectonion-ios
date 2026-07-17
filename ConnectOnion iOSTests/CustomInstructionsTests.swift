@@ -1,0 +1,171 @@
+import Foundation
+import Testing
+@testable import ConnectOnion_iOS
+
+@Suite("Custom instructions — prompt formatting")
+struct CustomInstructionsFormattingTests {
+    @Test func emptyInstructionsLeavePromptUnchanged() {
+        #expect(CustomInstructions.injecting("", into: "Explain this") == "Explain this")
+        #expect(CustomInstructions.injecting("  \n", into: "Explain this") == "Explain this")
+    }
+
+    @Test func multilineUnicodeInstructionsRoundTripToOriginalPrompt() {
+        let instructions = """
+        回答は日本語で。
+        Keep examples concise. 🌱
+        """
+        let prompt = "Explain actor isolation\nwith an example."
+        let transmitted = CustomInstructions.injecting(instructions, into: prompt)
+
+        #expect(transmitted.contains("回答は日本語で。"))
+        #expect(transmitted.contains("Keep examples concise. 🌱"))
+        #expect(CustomInstructions.removingWrapper(from: transmitted) == prompt)
+    }
+
+    @Test func attachmentOnlyPromptRoundTripsAsEmpty() {
+        let transmitted = CustomInstructions.injecting("Describe attached files", into: "")
+
+        #expect(!transmitted.isEmpty)
+        #expect(CustomInstructions.removingWrapper(from: transmitted) == "")
+    }
+
+    @Test func unwrappedAndMalformedPromptsAreNotChanged() {
+        let plain = "A normal user request"
+        let malformed = "<<<CONNECTONION_CUSTOM_INSTRUCTIONS_V1>>>\nMissing the remaining markers"
+
+        #expect(CustomInstructions.removingWrapper(from: plain) == plain)
+        #expect(CustomInstructions.removingWrapper(from: malformed) == malformed)
+    }
+}
+
+@Suite("Custom instructions — transport and lifecycle")
+struct CustomInstructionsTransportTests {
+    @Test @MainActor func codecUsesSameTransmittedPromptAtTopLevelAndInSignedPayload() throws {
+        let codec = ProtocolCodec(identityStore: MockIdentityStore())
+        let input = AgentInput(prompt: "Inspect the project", customInstructions: "Be concise")
+
+        let message = try codec.inputMessage(
+            input: input,
+            agentAddress: testAgentAddress,
+            route: .relay(webSocketURL: URL(string: "wss://relay.example/ws/input")!)
+        )
+
+        #expect(input.prompt == "Inspect the project")
+        #expect(input.transmittedPrompt != input.prompt)
+        #expect(message[string: "prompt"] == input.transmittedPrompt)
+        #expect(message["payload"]?.objectValue?[string: "prompt"] == input.transmittedPrompt)
+    }
+
+    @Test @MainActor func regenerateCapturesLatestSavedInstructions() async {
+        var savedInstructions = "Use the first preference"
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = StreamingConnectOnionClient(replyText: "Done")
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: agent.config,
+            client: client,
+            customInstructionsProvider: { savedInstructions }
+        )
+
+        viewModel.send("Explain this")
+        await waitUntil { client.sentInputs.count == 1 && viewModel.sessionState == .connected }
+        savedInstructions = "Use the latest preference"
+        viewModel.regenerate()
+        await waitUntil { client.sentInputs.count == 2 && viewModel.sessionState == .connected }
+
+        #expect(client.sentInputs.map(\.prompt) == ["Explain this", "Explain this"])
+        #expect(client.sentInputs.map(\.customInstructions) == [
+            "Use the first preference",
+            "Use the latest preference"
+        ])
+        #expect(viewModel.items.last { $0.kind == .user }?.content == "Explain this")
+    }
+
+    @Test @MainActor func onboardingResumePreservesCapturedInstructions() async {
+        var savedInstructions = "Keep the captured preference"
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = OnboardFirstMessageClient()
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: agent.config,
+            client: client,
+            customInstructionsProvider: { savedInstructions }
+        )
+
+        viewModel.send("What can you do?")
+        await waitUntil { viewModel.pendingOnboard != nil }
+        savedInstructions = "A newer preference"
+        viewModel.submitOnboard(inviteCode: "OpenOnion")
+        await waitUntil { client.sentInputs.count == 2 && viewModel.pendingOnboard == nil }
+
+        #expect(client.sentInputs.map(\.customInstructions) == [
+            "Keep the captured preference",
+            "Keep the captured preference"
+        ])
+        #expect(conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" })
+    }
+
+    @Test @MainActor func canonicalHistoryIsSanitizedBeforeDisplayAndPersistence() async {
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = CanonicalCustomInstructionsClient()
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: agent.config,
+            client: client,
+            customInstructionsProvider: { "Answer as a tutor" }
+        )
+
+        viewModel.send("Explain recursion")
+        await waitUntil { viewModel.sessionState == .connected && viewModel.items.last?.kind == .agent }
+
+        #expect(viewModel.items.first { $0.kind == .user }?.content == "Explain recursion")
+        #expect(conversation.messages.first { $0.kind == .user }?.content == "Explain recursion")
+        #expect(!conversation.messages.contains { $0.content.contains("CONNECTONION_CUSTOM_INSTRUCTIONS") })
+    }
+}
+
+@MainActor
+private final class CanonicalCustomInstructionsClient: ConnectOnionClientProviding {
+    func send(
+        input: AgentInput,
+        to agent: AgentConfig,
+        session: ConversationSession
+    ) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        var userItem = ChatItem(id: "canonical-user", kind: .user, content: input.transmittedPrompt)
+        userItem.images = input.images
+        userItem.files = input.files
+        let agentItem = ChatItem(id: "canonical-agent", kind: .agent, content: "Recursion calls itself")
+
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.connected(
+                sessionID: session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+            continuation.yield(.output(
+                result: "Recursion calls itself",
+                session: nil,
+                chatItems: [userItem, agentItem]
+            ))
+            continuation.finish()
+        }
+    }
+
+    func reconnect(
+        to agent: AgentConfig,
+        session: ConversationSession
+    ) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}

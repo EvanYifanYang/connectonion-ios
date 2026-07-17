@@ -27,6 +27,7 @@ final class ChatViewModel {
     @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
+    @ObservationIgnored private let customInstructionsProvider: @MainActor () -> String
     @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
@@ -48,12 +49,14 @@ final class ChatViewModel {
         conversation: ConversationRecord,
         agent: AgentConfig,
         client: ConnectOnionClientProviding? = nil,
+        customInstructionsProvider: @escaping @MainActor () -> String = { CustomInstructions.saved },
         onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in }
     ) {
         self.conversation = conversation
         self.agent = agent
         items = conversation.messages
         clientOverride = client
+        self.customInstructionsProvider = customInstructionsProvider
         self.onReplyCompleted = onReplyCompleted
         finalizeRunningItems() // restored items must never resume the live "running" animation
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
@@ -120,17 +123,26 @@ final class ChatViewModel {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
+        let input = AgentInput(
+            prompt: trimmed,
+            customInstructions: customInstructionsProvider(),
+            images: images,
+            files: files
+        )
+        sendCapturedInput(input, isRegenerate: isRegenerate)
+    }
+
+    private func sendCapturedInput(_ input: AgentInput, isRegenerate: Bool = false) {
         isRegenerating = isRegenerate
         errorMessage = nil
         streamingMessageID = nil
         lastResponseModel = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
-        let input = AgentInput(prompt: trimmed, images: images, files: files)
         inFlightInput = input
-        var userItem = ChatItem(kind: .user, content: trimmed)
-        userItem.images = images
-        userItem.files = files
+        var userItem = ChatItem(kind: .user, content: input.prompt)
+        userItem.images = input.images
+        userItem.files = input.files
         pendingUserItem = userItem
         sessionState = .connecting
         elapsedTime = 0
@@ -297,7 +309,7 @@ final class ChatViewModel {
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             conversation.rawSession = session
             if !chatItems.isEmpty {
-                items = chatItems
+                items = sanitizingUserPrompts(in: chatItems)
                 persist()
             }
 
@@ -377,7 +389,7 @@ final class ChatViewModel {
             // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
             // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
             if !chatItems.isEmpty, !regenerating {
-                items = chatItems
+                items = sanitizingUserPrompts(in: chatItems)
             }
             // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
@@ -471,7 +483,16 @@ final class ChatViewModel {
         guard let input = deferredOnboardInput else { return }
         deferredOnboardInput = nil
         Task { @MainActor [weak self] in
-            self?.send(input)
+            self?.sendCapturedInput(input)
+        }
+    }
+
+    private func sanitizingUserPrompts(in chatItems: [ChatItem]) -> [ChatItem] {
+        chatItems.map { item in
+            guard item.kind == .user else { return item }
+            var sanitized = item
+            sanitized.content = CustomInstructions.removingWrapper(from: item.content)
+            return sanitized
         }
     }
 

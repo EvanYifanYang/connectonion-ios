@@ -11,6 +11,7 @@ struct ChatInputBar: View {
     var onSend: (String, [String], [FileAttachment]) -> Void
     var onStop: () -> Void
 
+    @AppStorage(CustomInstructions.storageKey) private var customInstructions = ""
     @State private var text = ""
     @State private var imageAttachments: [ImageAttachmentDraft] = []
     @State private var fileAttachments: [FileAttachment] = []
@@ -507,7 +508,12 @@ struct ChatInputBar: View {
         tick()
         let images = imageAttachments.map(\.dataURL)
         let files = fileAttachments
-        let estimatedFrameBytes = AttachmentEncoding.estimatedInputFrameBytes(prompt: trimmed, images: images, files: files)
+        let transmittedPrompt = CustomInstructions.injecting(customInstructions, into: trimmed)
+        let estimatedFrameBytes = AttachmentEncoding.estimatedInputFrameBytes(
+            prompt: transmittedPrompt,
+            images: images,
+            files: files
+        )
         guard estimatedFrameBytes <= maxInputFramePayloadBytes else {
             showAttachmentError("Message attachments are larger than \(formatFileSize(maxInputFramePayloadBytes))")
             return
@@ -554,4 +560,3 @@ struct ChatInputBar: View {
     )
     .padding()
 }
-

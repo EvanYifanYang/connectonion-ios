@@ -10,7 +10,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
-    @AppStorage(CustomInstructionsStorage.storageKey) private var customInstructions = ""
+    @AppStorage(CustomInstructions.storageKey) private var customInstructions = ""
     @State private var showingInfo = false
     @State private var feedbackTrigger = 0
     @State private var customInstructionsDraft = ""
@@ -142,7 +142,7 @@ struct SettingsView: View {
     }
 
     private var normalizedCustomInstructionsDraft: String {
-        CustomInstructionsStorage.normalized(customInstructionsDraft)
+        CustomInstructions.normalized(customInstructionsDraft)
     }
 
     private var hasCustomInstructionsChanges: Bool {
@@ -159,14 +159,6 @@ struct SettingsView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
-    }
-}
-
-enum CustomInstructionsStorage {
-    static let storageKey = "customInstructions"
-
-    static func normalized(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

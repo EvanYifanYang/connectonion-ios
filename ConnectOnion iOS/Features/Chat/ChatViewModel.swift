@@ -107,12 +107,9 @@ final class ChatViewModel {
     }
 
     var hasOngoingSession: Bool {
-        switch sessionState {
-        case .connecting, .active, .waiting, .reconnecting:
-            true
-        default:
-            false
-        }
+        // Pending-action responses intentionally restore the composer to `.connected` while the
+        // original receive loop continues, so the task—not the presentation state—is authoritative.
+        streamTask != nil
     }
 
     func send(_ input: AgentInput) {
@@ -207,7 +204,7 @@ final class ChatViewModel {
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
-        sessionState = .active
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Continuing after your answer")
 
         Task {
@@ -224,7 +221,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         }
         persist()
-        sessionState = .active
+        sessionState = .connected
         updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
         Task {
             do {
@@ -240,7 +237,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         }
         persist()
-        sessionState = .active
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Verification submitted")
         Task {
             do {
@@ -256,7 +253,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         }
         persist()
-        sessionState = .active
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Plan feedback sent")
         Task {
             do {

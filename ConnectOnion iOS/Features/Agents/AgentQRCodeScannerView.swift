@@ -340,7 +340,11 @@ struct AgentQRCodeScannerView: View {
             cameraState = .requestingPermission
             let granted = await AVCaptureDevice.requestAccess(for: .video)
             guard !Task.isCancelled else { return }
-            cameraState = granted && DataScannerViewController.isAvailable ? .ready : .permissionDenied
+            if granted {
+                cameraState = DataScannerViewController.isAvailable ? .ready : .unavailable
+            } else {
+                cameraState = .permissionDenied
+            }
         case .denied:
             cameraState = .permissionDenied
         case .restricted:
@@ -655,17 +659,25 @@ private struct ScannerReticle: View {
             }
 
             if isAnimated {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, Color.onion, .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
+                Canvas { context, size in
+                    let lineWidth = size.width * 0.82
+                    let horizontalInset = (size.width - lineWidth) / 2
+                    let verticalPosition = size.height * (scanLineAtBottom ? 0.84 : 0.16)
+                    var path = Path()
+                    path.move(to: CGPoint(x: horizontalInset, y: verticalPosition))
+                    path.addLine(to: CGPoint(x: size.width - horizontalInset, y: verticalPosition))
+
+                    context.addFilter(.shadow(color: Color.onion, radius: 5))
+                    context.stroke(
+                        path,
+                        with: .linearGradient(
+                            Gradient(colors: [.clear, Color.onion, .clear]),
+                            startPoint: CGPoint(x: horizontalInset, y: verticalPosition),
+                            endPoint: CGPoint(x: size.width - horizontalInset, y: verticalPosition)
+                        ),
+                        lineWidth: 2
                     )
-                    .frame(width: 224, height: 2)
-                    .shadow(color: Color.onion, radius: 5)
-                    .offset(y: scanLineAtBottom ? 100 : -100)
+                }
             }
         }
         .onAppear {

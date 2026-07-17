@@ -7,23 +7,7 @@ struct ChatScreen: View {
     let info: AgentInfo?
     let initialInput: AgentInput?
     let onInitialInputConsumed: () -> Void
-
-    @State private var viewModel: ChatViewModel
-
-    init(
-        conversation: ConversationRecord,
-        agent: AgentConfigRecord,
-        info: AgentInfo?,
-        initialInput: AgentInput?,
-        onInitialInputConsumed: @escaping () -> Void
-    ) {
-        self.conversation = conversation
-        self.agent = agent
-        self.info = info
-        self.initialInput = initialInput
-        self.onInitialInputConsumed = onInitialInputConsumed
-        _viewModel = State(initialValue: ChatViewModel(conversation: conversation, agent: agent.config))
-    }
+    let viewModel: ChatViewModel
 
     var body: some View {
         VStack(spacing: 0) {
@@ -104,7 +88,8 @@ struct ChatScreen: View {
             agent: agent,
             info: agent.cachedInfo,
             initialInput: nil,
-            onInitialInputConsumed: {}
+            onInitialInputConsumed: {},
+            viewModel: ChatViewModel(conversation: conversation, agent: agent.config)
         )
             .modelContainer(container)
     } else {

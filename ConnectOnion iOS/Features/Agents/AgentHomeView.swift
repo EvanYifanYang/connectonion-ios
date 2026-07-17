@@ -5,6 +5,8 @@ import UIKit
 /// One agent's home: its identity, a "New chat" action, and the list of conversations that belong to
 /// this agent. Pushed when an agent is tapped in the agent-centric navigation (P4).
 struct AgentHomeView: View {
+    @Environment(ChatSessionStore.self) private var chatSessions
+
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var conversations: [ConversationRecord]
@@ -84,6 +86,7 @@ struct AgentHomeView: View {
                                 conversation: conversation,
                                 agentName: agent.displayName(info: info),
                                 isSelected: false,
+                                isGenerating: chatSessions.isGeneratingReply(for: conversation.id),
                                 onSelect: { onOpenConversation(conversation) },
                                 onRename: { onRenameConversation(conversation, $0) },
                                 onRequestDelete: { onRequestDeleteConversation(conversation) },
@@ -157,6 +160,7 @@ struct AgentHomeView: View {
                 onDeleteConversation: { _ in }
             )
         }
+        .environment(ChatSessionStore())
         .modelContainer(container)
     } else {
         Text("Preview unavailable")

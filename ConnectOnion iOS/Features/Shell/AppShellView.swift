@@ -14,6 +14,7 @@ enum ShellRoute: Hashable {
 struct AppShellView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(ChatSessionStore.self) private var chatSessions
     @Query(sort: \AgentConfigRecord.createdAt) private var agents: [AgentConfigRecord]
     @Query(sort: \ConversationRecord.updatedAt, order: .reverse) private var conversations: [ConversationRecord]
 
@@ -112,6 +113,7 @@ struct AppShellView: View {
             publishWidgetSnapshot()
             consumePendingWidgetRequest()
             configureAgentInfoRefresh()
+            syncVisibleConversation()
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             publishWidgetSnapshot()
@@ -135,6 +137,7 @@ struct AppShellView: View {
         }
         .onChange(of: path) { _, _ in
             configureAgentInfoRefresh()
+            syncVisibleConversation()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -143,6 +146,7 @@ struct AppShellView: View {
             } else {
                 infoStore.stopAutoRefresh()
             }
+            syncVisibleConversation()
         }
         .onOpenURL { url in
             guard let request = ConnectOnionDeepLink.parse(url) else { return }
@@ -226,7 +230,8 @@ struct AppShellView: View {
                     agent: agent,
                     info: infoStore.infoByAddress[agent.address],
                     initialInput: pendingInputs[id],
-                    onInitialInputConsumed: { pendingInputs[id] = nil }
+                    onInitialInputConsumed: { pendingInputs[id] = nil },
+                    viewModel: chatSessions.viewModel(for: conversation, agent: agent.config)
                 )
                 .id(id)
             }
@@ -250,6 +255,19 @@ struct AppShellView: View {
         case nil:
             return nil
         }
+    }
+
+    private func syncVisibleConversation() {
+        guard scenePhase == .active,
+              case .conversation(let id) = path.last else {
+            chatSessions.setVisibleConversation(id: nil, conversation: nil)
+            return
+        }
+
+        chatSessions.setVisibleConversation(
+            id: id,
+            conversation: conversations.first { $0.id == id }
+        )
     }
 
     private func refreshAgentInfo() async {
@@ -309,6 +327,7 @@ struct AppShellView: View {
     private func deleteAgent(_ agent: AgentConfigRecord) {
         let related = conversations.filter { $0.agentAddress == agent.address }
         let relatedIDs = Set(related.map(\.id))
+        relatedIDs.forEach(chatSessions.removeSession)
         related.forEach(modelContext.delete)
         modelContext.delete(agent)
 
@@ -325,6 +344,7 @@ struct AppShellView: View {
     }
 
     private func deleteConversation(_ conversation: ConversationRecord) {
+        chatSessions.removeSession(for: conversation.id)
         modelContext.delete(conversation)
         // Pop the chat if it's open; a delete from the list (not on the stack) is a no-op here.
         path.removeAll { $0 == .conversation(conversation.id) }
@@ -432,11 +452,13 @@ struct AppShellView: View {
 #Preview("Loaded Shell") {
     let _ = PreviewFixtures.installMockDependencies()
     AppShellView()
+        .environment(ChatSessionStore())
         .modelContainer(PreviewFixtures.seededContainer())
 }
 
 #Preview("Empty Shell") {
     let _ = PreviewFixtures.installMockDependencies()
     AppShellView()
+        .environment(ChatSessionStore())
         .modelContainer(PreviewFixtures.container())
 }

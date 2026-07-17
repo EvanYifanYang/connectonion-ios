@@ -56,6 +56,7 @@ struct ConnectOnion_iOSApp: App {
 private struct RootView: View {
     @Query private var agents: [AgentConfigRecord]
     @State private var splashDismissed = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+    @State private var chatSessions = ChatSessionStore()
 
     private var showSplash: Bool { !splashDismissed && !agents.isEmpty }
 
@@ -70,6 +71,7 @@ private struct RootView: View {
                 .transition(.opacity)
             }
         }
+        .environment(chatSessions)
         .onAppear {
             // The splash is a launch-only decision. If this launch starts in the first-run state,
             // keep it dismissed even after the user adds their first agent later in the session.

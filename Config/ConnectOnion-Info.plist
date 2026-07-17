@@ -45,7 +45,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ConnectOnion lets you attach photos to agent messages.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>ConnectOnion lets you take a photo to attach to agent messages.</string>
+	<string>ConnectOnion uses the camera to scan agent QR codes and take photos for messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

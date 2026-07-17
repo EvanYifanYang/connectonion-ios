@@ -2,17 +2,17 @@ import SwiftUI
 
 struct ChatItemView: View {
     var item: ChatItem
-    var isPendingAskUser: Bool
-    var isPendingApproval: Bool
-    var isPendingOnboard: Bool
-    var isPendingPlanReview: Bool
+    var isPendingAskUser: Bool = false
+    var isPendingApproval: Bool = false
+    var isPendingOnboard: Bool = false
+    var isPendingPlanReview: Bool = false
     var showAgentActions: Bool = false
     var isStreaming: Bool = false
     var modelName: String? = nil
-    var onAskUserResponse: (String) -> Void
-    var onApprovalResponse: (Bool, String, String?, String?) -> Void
-    var onOnboardSubmit: (String?, Double?) -> Void
-    var onPlanReviewResponse: (String) -> Void
+    var onAskUserResponse: (String) -> Void = { _ in }
+    var onApprovalResponse: (Bool, String, String?, String?) -> Void = { _, _, _, _ in }
+    var onOnboardSubmit: (String?, Double?) -> Void = { _, _ in }
+    var onPlanReviewResponse: (String) -> Void = { _ in }
     var onRegenerate: () -> Void = {}
     var onStreamComplete: () -> Void = {}
 

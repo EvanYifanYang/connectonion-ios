@@ -11,6 +11,8 @@ struct ChatScreen: View {
     let viewModel: ChatViewModel
     let sessionStore: ChatSessionStore
 
+    @State private var showingInfo = false
+
     init(
         conversation: ConversationRecord,
         agent: AgentConfigRecord,
@@ -41,10 +43,9 @@ struct ChatScreen: View {
                 onApprovalResponse: viewModel.respondToApproval,
                 onOnboardSubmit: viewModel.submitOnboard,
                 onPlanReviewResponse: viewModel.respondToPlanReview,
-                onRegenerate: viewModel.regenerate,
+                onRegenerate: viewModel.regenerate(replyID:),
                 streamingMessageID: viewModel.streamingMessageID,
                 onStreamComplete: viewModel.markStreamingComplete,
-                isGenerating: viewModel.shouldShowStopButton,
                 responseModel: viewModel.lastResponseModel
             )
 
@@ -87,11 +88,30 @@ struct ChatScreen: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Conversation Info", systemImage: "info.circle") {
+                    showingInfo = true
+                }
+                .labelStyle(.iconOnly)
+                .accessibilityIdentifier(AccessibilityID.agentInfoButton)
+                .popover(isPresented: $showingInfo) {
+                    AgentInfoPopover(
+                        agent: agent,
+                        info: info,
+                        contextPercent: viewModel.contextPercent
+                    )
+                    .presentationCompactAdaptation(.popover)
+                }
+            }
+        }
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
         .onAppear {
+            viewModel.prepareForPresentation()
             sessionStore.conversationDidAppear(conversation)
         }
         .onDisappear {
+            viewModel.finishPresentation()
             sessionStore.conversationDidDisappear(conversation.id)
         }
         .task(id: conversation.id) {

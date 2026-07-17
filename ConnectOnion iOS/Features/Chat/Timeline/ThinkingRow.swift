@@ -25,16 +25,8 @@ struct ThinkingRow: View {
 
         var details = [item.model ?? "thinking"]
         if item.status == .done {
-            if let durationMS = item.durationMS {
-                details.append(durationMS >= 1_000
-                    ? String(format: "%.1fs", Double(durationMS) / 1_000)
-                    : "\(durationMS)ms")
-            }
             if let totalTokens = item.usage?.totalTokens {
                 details.append("\(totalTokens) tok")
-            }
-            if let contextPercent = item.contextPercent {
-                details.append(String(format: "%.0f%% context", contextPercent))
             }
         }
 

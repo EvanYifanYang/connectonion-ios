@@ -5,6 +5,7 @@ import SwiftUI
 struct AgentInfoPopover: View {
     var agent: AgentConfigRecord
     var info: AgentInfo?
+    var contextPercent: Double? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -50,6 +51,12 @@ struct AgentInfoPopover: View {
         }
         if let version = info?.version, !version.isEmpty {
             result.append(Row(label: "Version", value: "v\(version)"))
+        }
+        if let contextPercent {
+            result.append(Row(
+                label: "Context",
+                value: String(format: "%.0f%% used", max(0, min(contextPercent, 100)))
+            ))
         }
         result.append(Row(label: "Address", value: AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address))
         return result

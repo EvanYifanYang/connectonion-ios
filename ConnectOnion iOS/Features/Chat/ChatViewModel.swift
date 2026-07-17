@@ -36,6 +36,7 @@ final class ChatViewModel {
     @ObservationIgnored private let onReplyReady: () -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
+    @ObservationIgnored private var persistTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var pendingUserItem: ChatItem?
     @ObservationIgnored private var inFlightInput: AgentInput?
@@ -45,6 +46,7 @@ final class ChatViewModel {
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
     @ObservationIgnored private var regenerateBackup: [ChatItem]?
+    @ObservationIgnored private var isPresentationActive = false
     // While regenerating we keep the locally-trimmed view (old turn removed + fresh reply) instead of
     // adopting the server's canonical list, which still contains the turn we just replaced.
     @ObservationIgnored private var isRegenerating = false
@@ -61,10 +63,11 @@ final class ChatViewModel {
         self.agent = agent
         self.onSessionStateChange = onSessionStateChange
         self.onReplyReady = onReplyReady
-        let sanitizedItems = AgentContentSanitizer.sanitize(conversation.messages)
+        let storedItems = conversation.messages
+        let sanitizedItems = AgentContentSanitizer.sanitize(storedItems)
         items = sanitizedItems
         clientOverride = client
-        if sanitizedItems != conversation.messages {
+        if sanitizedItems != storedItems {
             conversation.messages = sanitizedItems
         }
         finalizeRunningItems() // restored items must never resume the live "running" animation
@@ -84,6 +87,7 @@ final class ChatViewModel {
     deinit {
         streamTask?.cancel()
         timerTask?.cancel()
+        persistTask?.cancel()
         automaticReconnectTask?.cancel()
     }
 
@@ -113,6 +117,12 @@ final class ChatViewModel {
 
     var shouldShowStopButton: Bool {
         (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
+    }
+
+    /// Context usage is cumulative for the conversation, so expose the latest known value at the
+    /// conversation level instead of attaching it to an individual activity group in the UI.
+    var contextPercent: Double? {
+        items.reversed().compactMap(\.contextPercent).first
     }
 
     func send(_ input: AgentInput) {
@@ -163,14 +173,29 @@ final class ChatViewModel {
         }
     }
 
-    /// Re-run the most recent user turn: drop it and its reply, then send the same input again so a
-    /// fresh response streams in its place (no duplicate user bubble). `send` already cancels any
-    /// in-flight stream.
-    func regenerate() {
-        guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
-        let userItem = items[lastUserIndex]
+    /// Refresh presentation-only state when a retained session is shown again. The session store
+    /// deliberately survives navigation, so initialization-time sanitization alone is not enough.
+    func prepareForPresentation() {
+        isPresentationActive = true
+        streamingMessageID = nil
+        sanitizeAllContent()
+    }
+
+    func finishPresentation() {
+        isPresentationActive = false
+        // A typewriter task is cancelled when its view disappears. Clearing its identifier prevents
+        // the same completed reply from restarting the animation when the chat is opened again.
+        streamingMessageID = nil
+    }
+
+    /// Re-run the user turn that produced a particular reply. Regenerating an older reply creates a
+    /// new branch, so dependent turns after it are removed together with the selected exchange.
+    func regenerate(replyID: ChatItem.ID) {
+        guard let replyIndex = items.firstIndex(where: { $0.id == replyID && $0.kind == .agent }),
+              let userIndex = items[..<replyIndex].lastIndex(where: { $0.kind == .user }) else { return }
+        let userItem = items[userIndex]
         regenerateBackup = items // restore this if the resend fails, so we don't lose the old exchange
-        items.removeSubrange(lastUserIndex...)
+        items.removeSubrange(userIndex...)
         persist()
         send(userItem.content, images: userItem.images, files: userItem.files, isRegenerate: true)
     }
@@ -343,12 +368,13 @@ final class ChatViewModel {
                     onReplyReady()
                 }
             }
+            sanitizeItemsAffected(by: event)
             // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
             // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
             if event.type == "assistant",
                let lastAgent = items.last(where: { $0.kind == .agent }),
                lastAgent.id != previousAgentID {
-                streamingMessageID = lastAgent.id
+                streamingMessageID = isPresentationActive ? lastAgent.id : nil
             }
             if let model = items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model {
                 lastResponseModel = model
@@ -363,13 +389,17 @@ final class ChatViewModel {
             if event.type == "mode_changed", let rawMode = event.payload[string: "mode"], let mode = ApprovalMode(rawValue: rawMode) {
                 conversation.mode = mode
             }
-            persist()
+            schedulePersist()
             if event.type == "ONBOARD_SUCCESS" {
                 resumeDeferredOnboardInput()
             }
 
         case .output(let result, let serverNewer, let session, let chatItems):
             let sanitizedResult = AgentContentSanitizer.sanitize(result)
+            // Capture turn-scoped metrics before a newer canonical snapshot can omit intermediate
+            // events. They are persisted on the final reply below.
+            let completedTurnDurationMS = currentTurnDurationMS
+            let completedContextPercent = contextPercent
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
             regenerateBackup = nil // the resend produced a reply, so drop the restore snapshot
@@ -400,13 +430,21 @@ final class ChatViewModel {
             if !sanitizedResult.isEmpty,
                let index = items.lastIndex(where: { $0.kind == .agent }),
                items[index].content == sanitizedResult {
-                streamingMessageID = items[index].id
+                streamingMessageID = isPresentationActive ? items[index].id : nil
             }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
             // that carries it may not be present in the server's canonical list.
             if let model = lastResponseModel ?? items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model,
                let index = items.lastIndex(where: { $0.kind == .agent }) {
                 items[index].model = model
+            }
+            if let index = items.lastIndex(where: { $0.kind == .agent }) {
+                items[index].durationMS = completedTurnDurationMS
+                    ?? currentTurnDurationMS
+                    ?? items[index].durationMS
+                items[index].contextPercent = completedContextPercent
+                    ?? contextPercent
+                    ?? items[index].contextPercent
             }
             conversation.rawSession = session
             sessionState = .connected
@@ -476,13 +514,67 @@ final class ChatViewModel {
     }
 
     private func snapshot() -> ConversationSession {
-        var session = conversation.session
-        session.messages = items.filter { $0.id != "__optimistic__" }
-        return session
+        ConversationSession(
+            id: conversation.id,
+            agentAddress: conversation.agentAddress,
+            remoteSessionID: conversation.remoteSessionID,
+            title: conversation.title,
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+            mode: conversation.mode,
+            messages: items.filter { $0.id != "__optimistic__" },
+            rawSession: conversation.rawSession,
+            lastRenderedEventID: conversation.lastRenderedEventID
+        )
     }
 
     private func persist() {
+        persistTask?.cancel()
+        persistTask = nil
         conversation.messages = items.filter { $0.id != "__optimistic__" }
+    }
+
+    /// Stream bursts can contain many tool/LLM events in a few milliseconds. Persist their latest
+    /// state once after the burst instead of JSON-encoding the full transcript for every event.
+    private func schedulePersist() {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            self?.persist()
+        }
+    }
+
+    private func sanitizeAllContent() {
+        let sanitizedItems = AgentContentSanitizer.sanitize(items)
+        guard sanitizedItems != items else { return }
+        items = sanitizedItems
+        persist()
+    }
+
+    /// The reducer normally touches one event id. Sanitize only those rows so a long transcript is
+    /// not rescanned for every streamed event; nil-id events fall back to the newly appended tail.
+    private func sanitizeItemsAffected(by event: ServerEvent) {
+        var indices: [Int] = []
+        if let eventID = event.id {
+            indices = items.indices.filter { items[$0].id == eventID }
+        }
+        if indices.isEmpty, let lastIndex = items.indices.last {
+            indices = [lastIndex]
+        }
+
+        for index in indices.reversed() {
+            guard items.indices.contains(index) else { continue }
+            if let sanitizedItem = AgentContentSanitizer.sanitize(items[index]) {
+                items[index] = sanitizedItem
+            } else {
+                let removedID = items[index].id
+                items.remove(at: index)
+                if streamingMessageID == removedID {
+                    streamingMessageID = nil
+                }
+            }
+        }
     }
 
     private func fail(_ message: String) {
@@ -669,6 +761,19 @@ final class ChatViewModel {
     private var hasInFlightAttachments: Bool {
         guard let inFlightInput else { return false }
         return !inFlightInput.images.isEmpty || !inFlightInput.files.isEmpty
+    }
+
+    private var currentTurnDurationMS: Int? {
+        guard let userIndex = items.lastIndex(where: { $0.kind == .user }) else { return nil }
+        let eventDurationMS = items[userIndex...].reduce(0) { partialResult, item in
+            partialResult + (item.durationMS ?? 0) + (item.timingMS ?? 0)
+        }
+        if eventDurationMS > 0 {
+            return eventDurationMS
+        }
+
+        let wallClockDurationMS = Int((elapsedTime * 1_000).rounded())
+        return wallClockDurationMS > 0 ? wallClockDurationMS : nil
     }
 
     private func startTimer() {

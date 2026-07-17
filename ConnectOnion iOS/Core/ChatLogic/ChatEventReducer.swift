@@ -94,22 +94,48 @@ enum ChatEventReducer {
 
         let localItems = items
         var claimedLocalIndices: Set<Int> = []
-        var reconciled = serverItems.map { serverItem in
-            let matchingIndex = localItems.indices.first(where: {
-                !claimedLocalIndices.contains($0)
-                    && localItems[$0].id == serverItem.id
-                    && localItems[$0].kind == serverItem.kind
-            }) ?? localItems.indices.first(where: {
-                !claimedLocalIndices.contains($0)
-                    && localItems[$0].semanticallyMatches(serverItem)
-            })
+        var exactIndices: [ChatItemIdentity: [Int]] = [:]
+        for index in localItems.indices.reversed() {
+            exactIndices[ChatItemIdentity(localItems[index]), default: []].append(index)
+        }
+        var semanticCursor = localItems.startIndex
 
-            guard let matchingIndex else {
-                return serverItem
+        func matchingLocalIndex(for serverItem: ChatItem) -> Int? {
+            let identity = ChatItemIdentity(serverItem)
+            while let candidate = exactIndices[identity]?.popLast() {
+                if !claimedLocalIndices.contains(candidate) {
+                    return candidate
+                }
+            }
+
+            // Different server/client ids are uncommon. Preserve ordered semantic matching without
+            // restarting a full scan at index zero for every canonical item.
+            if semanticCursor < localItems.endIndex {
+                for index in semanticCursor..<localItems.endIndex
+                where !claimedLocalIndices.contains(index)
+                    && localItems[index].semanticallyMatches(serverItem) {
+                    semanticCursor = localItems.index(after: index)
+                    return index
+                }
+            }
+            for index in localItems.startIndex..<semanticCursor
+            where !claimedLocalIndices.contains(index)
+                && localItems[index].semanticallyMatches(serverItem) {
+                return index
+            }
+            return nil
+        }
+
+        var reconciled: [ChatItem] = []
+        reconciled.reserveCapacity(max(serverItems.count, localItems.count))
+        for serverItem in serverItems {
+            guard let matchingIndex = matchingLocalIndex(for: serverItem) else {
+                reconciled.append(serverItem)
+                continue
             }
             claimedLocalIndices.insert(matchingIndex)
             let localItem = localItems[matchingIndex]
-            return localItem.merging(serverItem)
+            reconciled.append(localItem.merging(serverItem))
         }
 
         let serverUserCount = serverItems.lazy.filter { $0.kind == .user }.count
@@ -180,6 +206,16 @@ enum ChatEventReducer {
         guard let index = items.lastIndex(where: { $0.kind == .planReview && !$0.answered }) else { return }
         items[index].answered = true
         items[index].answer = message.hasPrefix("Plan approved") ? "Plan approved" : "Revision requested"
+    }
+}
+
+private struct ChatItemIdentity: Hashable {
+    var id: ChatItem.ID
+    var kind: ChatItemKind
+
+    init(_ item: ChatItem) {
+        id = item.id
+        kind = item.kind
     }
 }
 

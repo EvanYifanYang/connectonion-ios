@@ -16,6 +16,7 @@ struct AgentBubble: View {
                     StreamingMessageText(text: item.content, onComplete: onStreamComplete)
                 } else {
                     MarkdownMessageView(text: item.content)
+                        .equatable()
                         .font(.body)
                 }
             }
@@ -103,7 +104,9 @@ private struct StreamingMessageText: View {
         guard total > 0 else { onComplete(); return }
         // Reveal ~1 character per tick so short replies visibly type out; speed up (more per tick) only
         // for long replies so the whole thing still finishes within ~2.5s.
-        let tickMs = 22
+        // Cap the reveal at roughly 30 updates per second. Faster updates add layout work without a
+        // visible benefit and can make long Markdown replies temporarily unresponsive.
+        let tickMs = 33
         let maxTicks = 2500.0 / Double(tickMs)
         let perTick = max(1, Int((Double(total) / maxTicks).rounded(.up)))
         while revealed < total {

@@ -15,6 +15,8 @@ final class ConversationRecord {
     var lastRenderedEventID: String?
     /// Set when the user pins this chat to the top of the agent's list (most recent pin sorts first).
     var pinnedAt: Date?
+    /// True when a reply completed while this conversation was not visible in the foreground.
+    var hasUnread: Bool = false
 
     init(
         id: UUID = UUID(),
@@ -26,7 +28,8 @@ final class ConversationRecord {
         mode: ApprovalMode = .safe,
         messages: [ChatItem] = [],
         rawSession: JSONValue? = nil,
-        lastRenderedEventID: String? = nil
+        lastRenderedEventID: String? = nil,
+        hasUnread: Bool = false
     ) {
         self.id = id
         self.agentAddress = agentAddress
@@ -38,6 +41,7 @@ final class ConversationRecord {
         messagesData = (try? JSONEncoder().encode(messages)) ?? Data()
         rawSessionData = try? JSONEncoder().encode(rawSession)
         self.lastRenderedEventID = lastRenderedEventID
+        self.hasUnread = hasUnread
     }
 }
 

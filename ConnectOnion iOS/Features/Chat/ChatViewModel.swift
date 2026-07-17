@@ -27,6 +27,7 @@ final class ChatViewModel {
     @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
+    @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
@@ -43,11 +44,17 @@ final class ChatViewModel {
     @ObservationIgnored private var isRegenerating = false
     private var deferredOnboardInput: AgentInput?
 
-    init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
+    init(
+        conversation: ConversationRecord,
+        agent: AgentConfig,
+        client: ConnectOnionClientProviding? = nil,
+        onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in }
+    ) {
         self.conversation = conversation
         self.agent = agent
         items = conversation.messages
         clientOverride = client
+        self.onReplyCompleted = onReplyCompleted
         finalizeRunningItems() // restored items must never resume the live "running" animation
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
@@ -60,12 +67,6 @@ final class ChatViewModel {
         for index in items.indices where items[index].status == .running {
             items[index].status = .done
         }
-    }
-
-    deinit {
-        streamTask?.cancel()
-        timerTask?.cancel()
-        automaticReconnectTask?.cancel()
     }
 
     var pendingAskUser: ChatItem? {
@@ -94,6 +95,24 @@ final class ChatViewModel {
 
     var shouldShowStopButton: Bool {
         (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
+    }
+
+    var isGeneratingReply: Bool {
+        switch sessionState {
+        case .connecting, .active, .reconnecting:
+            true
+        default:
+            false
+        }
+    }
+
+    var hasOngoingSession: Bool {
+        switch sessionState {
+        case .connecting, .active, .waiting, .reconnecting:
+            true
+        default:
+            false
+        }
     }
 
     func send(_ input: AgentInput) {
@@ -188,7 +207,7 @@ final class ChatViewModel {
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
-        sessionState = .connected
+        sessionState = .active
         updateLiveActivityAfterUserAction("Continuing after your answer")
 
         Task {
@@ -205,7 +224,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
         updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
         Task {
             do {
@@ -221,7 +240,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
         updateLiveActivityAfterUserAction("Verification submitted")
         Task {
             do {
@@ -237,7 +256,7 @@ final class ChatViewModel {
             ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         }
         persist()
-        sessionState = .connected
+        sessionState = .active
         updateLiveActivityAfterUserAction("Plan feedback sent")
         Task {
             do {
@@ -250,12 +269,16 @@ final class ChatViewModel {
 
     func stop() {
         streamTask?.cancel()
+        streamTask = nil
+        automaticReconnectTask?.cancel()
+        automaticReconnectTask = nil
         client.disconnect()
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
         if !restoreRegenerateBackup() {
             finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
+            persist()
         }
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
@@ -386,13 +409,18 @@ final class ChatViewModel {
             lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
             sessionState = .connected
+            streamTask = nil
             stopTimer()
             persist()
+            client.disconnect()
             liveActivity.complete(
                 conversationID: conversation.id,
                 headline: "Reply ready",
                 detail: "\(agent.displayName) finished responding"
             )
+            if !result.isEmpty {
+                onReplyCompleted(conversation)
+            }
 
         case .failure(let message):
             fail(message)
@@ -466,7 +494,9 @@ final class ChatViewModel {
             return
         }
 
+        client.disconnect()
         automaticReconnectTask?.cancel()
+        streamTask = nil
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil

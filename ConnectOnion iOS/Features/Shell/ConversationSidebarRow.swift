@@ -4,6 +4,7 @@ struct ConversationSidebarRow: View {
     var conversation: ConversationRecord
     var agentName: String
     var isSelected: Bool
+    var isGenerating: Bool = false
     var onSelect: () -> Void
     var onRename: (String) -> Void
     var onRequestDelete: () -> Void
@@ -78,13 +79,11 @@ struct ConversationSidebarRow: View {
     private var rowButton: some View {
         Button(action: handleRowTap) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "text.bubble")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 42, height: 42)
+                conversationStatusIcon
 
                 Text(conversation.title)
                     .font(.body)
+                    .fontWeight(conversation.hasUnread ? .semibold : .regular)
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -123,6 +122,7 @@ struct ConversationSidebarRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(conversation.title)
+        .accessibilityValue(accessibilityStatus)
         // The id lives on the SELECT button itself (like AgentSidebarRow): a container-level id
         // shadows onto child buttons, so firstMatch could resolve to the ellipsis menu and a row
         // "tap" would open the actions menu instead of the chat.
@@ -132,6 +132,38 @@ struct ConversationSidebarRow: View {
 
     private var isPinned: Bool {
         conversation.pinnedAt != nil
+    }
+
+    private var conversationStatusIcon: some View {
+        ZStack(alignment: .topTrailing) {
+            if isGenerating {
+                OnionThinkingMark(active: true, diameter: 28)
+            } else {
+                Image(systemName: "text.bubble")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+
+            if conversation.hasUnread {
+                Circle()
+                    .fill(Color.onion)
+                    .frame(width: 9, height: 9)
+                    .overlay {
+                        Circle().stroke(Color.appCanvas, lineWidth: 1.5)
+                    }
+                    .offset(x: 2, y: -2)
+            }
+        }
+        .frame(width: 42, height: 42)
+    }
+
+    private var accessibilityStatus: String {
+        switch (conversation.hasUnread, isGenerating) {
+        case (true, true): "Unread, generating reply"
+        case (true, false): "Unread"
+        case (false, true): "Generating reply"
+        case (false, false): ""
+        }
     }
 
     @ViewBuilder

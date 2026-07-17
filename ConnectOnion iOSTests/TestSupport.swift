@@ -79,6 +79,47 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
     func disconnect() {}
 }
 
+/// Holds a connected stream open until the test explicitly completes or disconnects it.
+@MainActor
+final class ControlledReplyClient: ConnectOnionClientProviding {
+    private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
+    private(set) var disconnectCount = 0
+
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            self.continuation = continuation
+            continuation.yield(.connected(
+                sessionID: session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func complete(with reply: String) {
+        continuation?.yield(.output(result: reply, session: nil, chatItems: []))
+        continuation?.finish()
+        continuation = nil
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+
+    func disconnect() {
+        disconnectCount += 1
+        continuation?.finish()
+        continuation = nil
+    }
+}
+
 /// Emits one current-turn event and then fails. Regeneration must keep its rollback snapshot until
 /// this terminal failure rather than discarding it as soon as the first event arrives.
 @MainActor

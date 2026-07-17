@@ -6,80 +6,123 @@ struct AgentSidebarRow: View {
     var isSelected: Bool
     var onSelect: () -> Void
     var onNewChat: () -> Void
-    var onRename: () -> Void
+    var onRename: (String) -> Void
     var onDelete: () -> Void
 
-    @State private var isShowingActions = false
+    @State private var isRenaming = false
+    @State private var draftName = ""
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onSelect) {
+            if isRenaming {
                 HStack(spacing: 12) {
                     AgentAvatar(title: displayName, online: info?.online)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(displayName)
-                            .font(.body)
-                            .lineLimit(1)
-
-                        if let remoteProfileName {
-                            AgentProfileNameLabel(name: remoteProfileName)
-                        }
-
-                        Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
-                            .font(.footnote.monospaced())
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-
+                    InlineRenameField(
+                        text: $draftName,
+                        accessibilityID: AccessibilityID.agentRenameField,
+                        onCommit: commitRename
+                    )
                     Spacer(minLength: 0)
                 }
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(displayName)
-            .accessibilityIdentifier(AccessibilityID.agent(agent.address))
-            .contextMenu {
-                actions
-            }
+            } else {
+                Button(action: onSelect) {
+                    HStack(spacing: 12) {
+                        AgentAvatar(title: displayName, online: info?.online)
 
-            Button {
-                isShowingActions = true
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(displayName)
+                                .font(AppFont.rowName)
+                                .lineLimit(1)
+
+                            if let model = info?.model, !model.isEmpty {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "cpu").imageScale(.small)
+                                    Text(model).lineLimit(1)
+                                }
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
+                                .font(.footnote.monospaced())
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color.onion.opacity(0.7))
+                        }
+                    }
                     .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(displayName)
+                .accessibilityIdentifier(AccessibilityID.agent(agent.address))
+                .contextMenu {
+                    actions
+                }
+
+                Menu {
+                    actions
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.circle)
+                }
+                // No system press platter behind the glyph — it flashed as a stray square on the card.
+                .menuStyle(.button)
+                .buttonStyle(QuietPressButtonStyle())
+                .accessibilityLabel("Agent Actions")
+                .accessibilityIdentifier(AccessibilityID.agentActionsButton)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Agent Actions")
-            .accessibilityIdentifier(AccessibilityID.agentActionsButton)
         }
-        .padding(10)
-        .frame(minHeight: 62)
-        .background(isSelected ? AppTheme.selectionFill : Color.clear, in: .rect(cornerRadius: 16))
+        .padding(14)
+        .frame(minHeight: 64)
+        .sidebarCard(isSelected: isSelected, isPinned: isPinned)
         .contentShape(.rect)
-        .confirmationDialog("Agent Actions", isPresented: $isShowingActions, titleVisibility: .visible) {
-            actions
-        }
     }
 
     private var displayName: String {
         agent.displayName(info: info)
     }
 
-    private var remoteProfileName: String? {
-        agent.remoteProfileName(info: info)
+    private var isPinned: Bool {
+        agent.pinnedAt != nil
     }
 
     @ViewBuilder
     private var actions: some View {
-        Button("New Chat", systemImage: "square.and.pencil", action: onNewChat)
-        Button("Rename", systemImage: "pencil", action: onRename)
+        Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") { togglePin() }
+        Button("Rename", systemImage: "pencil") { startRename() }
             .accessibilityIdentifier(AccessibilityID.renameAgentButton)
         Button("Delete Agent", systemImage: "trash", role: .destructive, action: onDelete)
             .accessibilityIdentifier(AccessibilityID.deleteAgentButton)
+    }
+
+    private func togglePin() {
+        withAnimation(AppMotion.standard) {
+            agent.pinnedAt = isPinned ? nil : .now
+        }
+    }
+
+    private func startRename() {
+        draftName = displayName
+        isRenaming = true
+    }
+
+    private func commitRename() {
+        guard isRenaming else { return }
+        isRenaming = false
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, trimmed != displayName {
+            onRename(trimmed)
+        }
     }
 }
 
@@ -90,7 +133,7 @@ struct AgentSidebarRow: View {
         isSelected: true,
         onSelect: {},
         onNewChat: {},
-        onRename: {},
+        onRename: { _ in },
         onDelete: {}
     )
     .padding()
@@ -99,13 +142,13 @@ struct AgentSidebarRow: View {
 #Preview("Agent Row Offline") {
     let agent = PreviewFixtures.sampleAgent
     let info = AgentInfo(address: agent.address, name: "OpenOnion", online: false)
-    AgentSidebarRow(agent: agent, info: info, isSelected: false, onSelect: {}, onNewChat: {}, onRename: {}, onDelete: {})
+    AgentSidebarRow(agent: agent, info: info, isSelected: false, onSelect: {}, onNewChat: {}, onRename: { _ in }, onDelete: {})
         .padding()
 }
 
 #Preview("Agent Row With Remote Profile") {
     let agent = AgentConfigRecord(address: PreviewFixtures.testAgentAddress, alias: "A1")
     let info = AgentInfo(address: agent.address, name: "OpenOnion", online: true)
-    AgentSidebarRow(agent: agent, info: info, isSelected: true, onSelect: {}, onNewChat: {}, onRename: {}, onDelete: {})
+    AgentSidebarRow(agent: agent, info: info, isSelected: true, onSelect: {}, onNewChat: {}, onRename: { _ in }, onDelete: {})
         .padding()
 }

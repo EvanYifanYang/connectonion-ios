@@ -40,10 +40,12 @@
 	<string>ConnectOnion connects to local agents running on your network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ConnectOnion uses the microphone to turn your speech into chat messages.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ConnectOnion lets you attach photos to agent messages.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ConnectOnion uses Apple Speech Recognition to transcribe dictated messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ConnectOnion lets you attach photos to agent messages.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ConnectOnion lets you take a photo to attach to agent messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

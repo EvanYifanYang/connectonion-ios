@@ -4,11 +4,8 @@ struct ThinkingRow: View {
     var item: ChatItem
 
     var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(item.status == .running ? .secondary : .tertiary)
-                .frame(width: item.status == .running ? 8 : 6, height: item.status == .running ? 8 : 6)
-                .symbolEffect(.pulse, options: .repeating, value: item.status == .running)
+        HStack(spacing: 10) {
+            OnionThinkingMark(active: item.status == .running)
 
             Text(text)
                 .font(.footnote.monospaced())
@@ -17,7 +14,7 @@ struct ThinkingRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.leading, 42)
+        .padding(.leading, 18)
         .padding(.vertical, 4)
     }
 

@@ -19,11 +19,19 @@ struct ChatInputBar: View {
     @State private var showingAttachmentOptions = false
     @State private var showingPhotoPicker = false
     @State private var showingFileImporter = false
+    @State private var showingCamera = false
+    @State private var pendingPicker: PendingPicker?
     @State private var attachmentError: String?
     @State private var voiceSeedText = ""
+    @State private var voiceOriginalText = "" // exact pre-dictation text, restored on ✕
+    @State private var voiceLastApplied = "" // last text written from a transcript, to detect manual edits
     @State private var feedbackTrigger = 0
     @State private var errorFeedbackTrigger = 0
     @FocusState private var isFocused: Bool
+
+    /// Which picker the attachment sheet asked for — presented from the sheet's `onDismiss` so the two
+    /// modal transitions never overlap.
+    private enum PendingPicker { case camera, photos, files }
 
     init(
         placeholder: String,
@@ -71,84 +79,103 @@ struct ChatInputBar: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
 
-            if voiceInput.isActive {
-                VoiceInputStatusPill(state: voiceInput.state, duration: voiceInput.duration, transcript: voiceInput.transcript)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             if shouldShowSkillPalette {
                 SkillCommandPalette(skills: filteredSkills, onSelect: selectSkill)
                     .transition(AppMotion.panelTransition)
             }
 
-            HStack(alignment: .bottom, spacing: 10) {
-                if allowsAttachments {
-                    Button("Add attachment", systemImage: "plus", action: showAttachmentMenu)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 40, height: 40)
-                        .buttonStyle(.glass)
-                        .disabled(remainingAttachmentSlots == 0 || voiceInput.isActive)
-                        .accessibilityIdentifier(AccessibilityID.chatAttachmentButton)
+            // Row 1: the text field spans the full width. It stays visible during dictation so the
+            // streaming transcript is readable while the keyboard remains up.
+            TextField("", text: $text, axis: .vertical)
+                .lineLimit(1...6)
+                .textFieldStyle(.plain)
+                .tint(.primary)
+                .focused($isFocused)
+                .submitLabel(.send)
+                .onSubmit(send)
+                // Custom placeholder: the system placeholder (~30% white) is nearly invisible on the
+                // dark glass bar. A concrete light gray reads clearly and resists the glass vibrancy.
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .foregroundStyle(Color(.systemGray))
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
                 }
+                .padding(.horizontal, 6)
+                .padding(.top, 8)
+                .accessibilityIdentifier(AccessibilityID.chatInput)
 
-                TextField(placeholder, text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .focused($isFocused)
-                    .submitLabel(.send)
-                    .onSubmit(send)
-                    .padding(.vertical, 12)
-                    .disabled(voiceInput.isActive)
-                    .accessibilityIdentifier(AccessibilityID.chatInput)
+            if voiceInput.isActive {
+                // Row 2 (dictation): cancel ✕, live waveform, confirm ✓.
+                VoiceRecordingBar(
+                    voice: voiceInput,
+                    onCancel: cancelVoiceInput,
+                    onConfirm: confirmVoiceInput
+                )
+                .transition(.opacity)
+            } else {
+                // Row 2: attach on the left, mic + send (or stop) on the right.
+                HStack(spacing: 10) {
+                    if allowsAttachments {
+                        Button("Add attachment", systemImage: "plus", action: showAttachmentMenu)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 38, height: 38)
+                            .buttonStyle(.glass)
+                            .disabled(remainingAttachmentSlots == 0)
+                            .accessibilityIdentifier(AccessibilityID.chatAttachmentButton)
+                    }
 
-                if isRunning {
-                    Button("Stop", systemImage: "stop.fill", action: stop)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 44, height: 44)
-                        .buttonStyle(.glass)
-                        .accessibilityIdentifier(AccessibilityID.chatStopButton)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                } else {
-                    Button(voiceButtonTitle, systemImage: voiceButtonSystemImage, action: toggleVoiceInput)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 42, height: 42)
-                        .buttonStyle(.glass)
-                        .foregroundStyle(voiceInput.state == .recording ? .red : .primary)
-                        .disabled(voiceInput.state == .requestingPermission || voiceInput.state == .transcribing)
-                        .accessibilityIdentifier(AccessibilityID.chatVoiceButton)
+                    Spacer(minLength: 0)
 
-                    Button("Send", systemImage: "arrow.up", action: send)
-                        .labelStyle(.iconOnly)
-                        .frame(width: 44, height: 44)
-                        .buttonStyle(.glassProminent)
-                        .disabled(!canSend)
-                        .accessibilityIdentifier(AccessibilityID.chatSendButton)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    if isRunning {
+                        Button("Stop", systemImage: "stop.fill", action: stop)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glass)
+                            .accessibilityIdentifier(AccessibilityID.chatStopButton)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    } else {
+                        Button(voiceButtonTitle, systemImage: voiceButtonSystemImage, action: toggleVoiceInput)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glass)
+                            .accessibilityIdentifier(AccessibilityID.chatVoiceButton)
+
+                        Button("Send", systemImage: "arrow.up", action: send)
+                            .labelStyle(.iconOnly)
+                            .frame(width: 40, height: 40)
+                            .buttonStyle(.glassProminent)
+                            .disabled(!canSend)
+                            .accessibilityIdentifier(AccessibilityID.chatSendButton)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
                 }
             }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: AppTheme.composerMaxWidth)
-        .glassSurface(cornerRadius: 28, isInteractive: true)
+        // The bar is a container, not a control — `.interactive()` glass here rests in a dim/flat state
+        // and only "wakes up" (renders the full material, placeholder legible) once it's touched. Plain
+        // regular glass renders correctly from first appearance. The inner buttons stay interactive.
+        .glassSurface(cornerRadius: 28)
         .frame(maxWidth: .infinity)
-        .confirmationDialog("Add attachment", isPresented: $showingAttachmentOptions, titleVisibility: .visible) {
-            if allowsImages {
-                Button("Photo Library", systemImage: "photo") {
-                    showingPhotoPicker = true
-                }
-                .accessibilityIdentifier(AccessibilityID.chatAttachmentPhotoButton)
-            }
-
-            if allowsFiles {
-                Button("Files", systemImage: "doc") {
-                    showingFileImporter = true
-                }
-                .accessibilityIdentifier(AccessibilityID.chatAttachmentFilesButton)
-            }
-
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Attach up to \(maxAttachmentCount) items.")
+        .sheet(isPresented: $showingAttachmentOptions, onDismiss: presentPendingPicker) {
+            AttachmentSheet(
+                allowsImages: allowsImages,
+                allowsFiles: allowsFiles,
+                maxPhotoSelection: remainingAttachmentSlots,
+                onCamera: { pendingPicker = .camera },
+                onAllPhotos: { pendingPicker = .photos },
+                onPhotosData: { datas in attachImages(datas) },
+                onPhotoError: { message in showAttachmentError(message) },
+                onFiles: { pendingPicker = .files }
+            )
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraPicker { data in appendImage(data: data) }
+                .ignoresSafeArea()
         }
         .photosPicker(
             isPresented: $showingPhotoPicker,
@@ -346,6 +373,19 @@ struct ChatInputBar: View {
         }
     }
 
+    /// Attach several picked photos at once. Checks the live slot count each iteration so an image
+    /// that `appendImage` rejects (e.g. too large) doesn't waste a slot, and stops with a single
+    /// "limit reached" note if we genuinely run out.
+    private func attachImages(_ datas: [Data]) {
+        for data in datas {
+            guard remainingAttachmentSlots > 0 else {
+                showAttachmentError("Attachment limit reached")
+                return
+            }
+            appendImage(data: data)
+        }
+    }
+
     private func appendImage(data: Data) {
         guard remainingAttachmentSlots > 0 else {
             showAttachmentError("Attachment limit reached")
@@ -407,8 +447,10 @@ struct ChatInputBar: View {
         case .recording:
             voiceInput.stopRecording()
         case .idle:
+            voiceOriginalText = text // exact text (incl. trailing whitespace) for ✕ restore
             voiceSeedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            isFocused = false
+            voiceLastApplied = text
+            isFocused = true // keep the keyboard up; the transcript streams into the field live
             voiceInput.startRecording()
         case .requestingPermission, .transcribing:
             break
@@ -417,8 +459,40 @@ struct ChatInputBar: View {
 
     private func applyVoiceTranscript(_ transcript: String) {
         guard !transcript.isEmpty else { return }
+        // Only overwrite the field if the user hasn't manually edited it since our last write; otherwise
+        // a streaming partial would clobber what they just typed.
+        guard text == voiceLastApplied else { return }
         let separator = voiceSeedText.isEmpty ? "" : " "
-        text = voiceSeedText + separator + transcript
+        let merged = voiceSeedText + separator + transcript
+        text = merged
+        voiceLastApplied = merged
+    }
+
+    /// ✓ — keep the dictated text: stop recording so the final transcript settles into the field.
+    private func confirmVoiceInput() {
+        tick()
+        if voiceInput.state == .recording {
+            voiceInput.stopRecording()
+        }
+    }
+
+    /// ✕ — discard the dictation and restore exactly what was in the field before recording started.
+    private func cancelVoiceInput() {
+        tick()
+        voiceInput.cancel()
+        text = voiceOriginalText
+    }
+
+    /// Present whichever picker the attachment sheet requested, now that the sheet has fully dismissed
+    /// (called from the sheet's `onDismiss`, so the host view is free to present the next modal).
+    private func presentPendingPicker() {
+        guard let picker = pendingPicker else { return }
+        pendingPicker = nil
+        switch picker {
+        case .camera: showingCamera = true
+        case .photos: showingPhotoPicker = true
+        case .files: showingFileImporter = true
+        }
     }
 
     private func selectSkill(_ skill: SkillInfo) {

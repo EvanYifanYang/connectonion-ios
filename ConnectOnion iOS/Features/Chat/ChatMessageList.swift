@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChatMessageList: View {
     var items: [ChatItem]
@@ -10,25 +11,85 @@ struct ChatMessageList: View {
     var onApprovalResponse: (Bool, String, String?, String?) -> Void
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
+    var onRegenerate: () -> Void = {}
+    var streamingMessageID: ChatItem.ID?
+    var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
+    var isGenerating: Bool = false
+    var responseModel: String?
+
+    private var lastAgentID: ChatItem.ID? {
+        items.last { $0.kind == .agent }?.id
+    }
+
+    /// A run of consecutive tool calls renders as one grouped, collapsible card; everything else renders
+    /// as its own item.
+    private enum RenderUnit: Identifiable {
+        case item(ChatItem)
+        case toolGroup(id: String, items: [ChatItem])
+
+        var id: String {
+            switch self {
+            case .item(let item): item.id
+            case .toolGroup(let id, _): id
+            }
+        }
+    }
+
+    private var renderUnits: [RenderUnit] {
+        var units: [RenderUnit] = []
+        var group: [ChatItem] = []
+        func flush() {
+            guard !group.isEmpty else { return }
+            units.append(.toolGroup(id: "tools-\(group[0].id)", items: group))
+            group.removeAll()
+        }
+        for item in items {
+            if item.kind == .toolCall {
+                group.append(item)
+            } else {
+                flush()
+                units.append(.item(item))
+            }
+        }
+        flush()
+        return units
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(items) { item in
-                        ChatItemView(
-                            item: item,
-                            isPendingAskUser: item.id == pendingAskUser?.id,
-                            isPendingApproval: item.id == pendingApproval?.id,
-                            isPendingOnboard: item.id == pendingOnboard?.id,
-                            isPendingPlanReview: item.id == pendingPlanReview?.id,
-                            onAskUserResponse: onAskUserResponse,
-                            onApprovalResponse: onApprovalResponse,
-                            onOnboardSubmit: onOnboardSubmit,
-                            onPlanReviewResponse: onPlanReviewResponse
-                        )
-                        .id(item.id)
-                        .transition(AppMotion.messageTransition)
+                    ForEach(renderUnits) { unit in
+                        switch unit {
+                        case .item(let item):
+                            ChatItemView(
+                                item: item,
+                                isPendingAskUser: item.id == pendingAskUser?.id,
+                                isPendingApproval: item.id == pendingApproval?.id,
+                                isPendingOnboard: item.id == pendingOnboard?.id,
+                                isPendingPlanReview: item.id == pendingPlanReview?.id,
+                                showAgentActions: item.id == lastAgentID && item.id != streamingMessageID && !isGenerating,
+                                isStreaming: item.id == streamingMessageID,
+                                modelName: item.id == lastAgentID ? responseModel : nil,
+                                onAskUserResponse: onAskUserResponse,
+                                onApprovalResponse: onApprovalResponse,
+                                onOnboardSubmit: onOnboardSubmit,
+                                onPlanReviewResponse: onPlanReviewResponse,
+                                onRegenerate: onRegenerate,
+                                onStreamComplete: { onStreamComplete(item.id) }
+                            )
+                            .id(unit.id)
+                            .transition(AppMotion.messageTransition)
+
+                        case .toolGroup(_, let toolItems):
+                            ToolCallGroupCard(
+                                items: toolItems,
+                                pendingApprovalID: pendingApproval?.id,
+                                onApprovalResponse: onApprovalResponse
+                            )
+                            .id(unit.id)
+                            .transition(AppMotion.messageTransition)
+                        }
                     }
 
                     Color.clear
@@ -40,18 +101,29 @@ struct ChatMessageList: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .animation(AppMotion.standard, value: items.map(\.id))
+                .contentShape(.rect)
+                // Tapping the transcript (anywhere not on an interactive control) dismisses the keyboard.
+                .onTapGesture { dismissKeyboard() }
             }
             .accessibilityIdentifier(AccessibilityID.chatList)
             .scrollDismissesKeyboard(.interactively)
+            // Open pinned to the newest message, and stay pinned while content grows — the typewriter
+            // reveal grows a bubble's height without mutating `items`, and the system anchor tracks
+            // that natively. This replaces the old 50ms scrollTo loop, which fought LazyVStack layout
+            // mid-reveal and bounced the viewport between the current and the previous turn (the
+            // "two positions flickering" bug).
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
             .onChange(of: items) { _, _ in
                 withAnimation(.smooth(duration: 0.22)) {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
-            .task {
-                proxy.scrollTo("bottom", anchor: .bottom)
-            }
         }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

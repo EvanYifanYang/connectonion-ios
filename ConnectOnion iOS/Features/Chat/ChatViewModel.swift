@@ -13,6 +13,12 @@ final class ChatViewModel {
     var sessionState: SessionActiveState = .idle
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
+    /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
+    /// the bubble finishes revealing. Nil for restored/older messages, so they render in full.
+    var streamingMessageID: ChatItem.ID?
+    /// The model that produced the latest reply, shown as a footer under it. Captured from events (the
+    /// server's final `chatItems` may drop the thinking row that carries it).
+    var lastResponseModel: String?
 
     @ObservationIgnored
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
@@ -31,6 +37,10 @@ final class ChatViewModel {
     @ObservationIgnored private var optimisticUserItemID: String?
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var regenerateBackup: [ChatItem]?
+    // While regenerating we keep the locally-trimmed view (old turn removed + fresh reply) instead of
+    // adopting the server's canonical list, which still contains the turn we just replaced.
+    @ObservationIgnored private var isRegenerating = false
     private var deferredOnboardInput: AgentInput?
 
     init(conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) {
@@ -38,7 +48,18 @@ final class ChatViewModel {
         self.agent = agent
         items = conversation.messages
         clientOverride = client
+        finalizeRunningItems() // restored items must never resume the live "running" animation
+        lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
+            ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
         sessionState = items.isEmpty ? .idle : .connected
+    }
+
+    /// Any item persisted / left mid-flight as `.running` would keep the peeling-onion animation
+    /// spinning forever; settle them to `.done` when a turn ends or on load.
+    private func finalizeRunningItems() {
+        for index in items.indices where items[index].status == .running {
+            items[index].status = .done
+        }
     }
 
     deinit {
@@ -75,24 +96,18 @@ final class ChatViewModel {
         (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
     }
 
-    var shouldShowFirstPromptSuggestions: Bool {
-        !hasCommittedUserMessage &&
-            pendingOnboard == nil &&
-            deferredOnboardInput == nil &&
-            errorMessage == nil &&
-            sessionState != .connecting &&
-            sessionState != .reconnecting
-    }
-
     func send(_ input: AgentInput) {
         send(input.prompt, images: input.images, files: input.files)
     }
 
-    func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = []) {
+    func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = [], isRegenerate: Bool = false) {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
 
+        isRegenerating = isRegenerate
         errorMessage = nil
+        streamingMessageID = nil
+        lastResponseModel = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
         let input = AgentInput(prompt: trimmed, images: images, files: files)
@@ -120,6 +135,26 @@ final class ChatViewModel {
                 fail(error.localizedDescription)
             }
         }
+    }
+
+    /// Called by the agent bubble once its typewriter reveal finishes, so it renders in full and the
+    /// action row appears.
+    func markStreamingComplete(_ id: ChatItem.ID) {
+        if streamingMessageID == id {
+            streamingMessageID = nil
+        }
+    }
+
+    /// Re-run the most recent user turn: drop it and its reply, then send the same input again so a
+    /// fresh response streams in its place (no duplicate user bubble). `send` already cancels any
+    /// in-flight stream.
+    func regenerate() {
+        guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
+        let userItem = items[lastUserIndex]
+        regenerateBackup = items // restore this if the resend fails, so we don't lose the old exchange
+        items.removeSubrange(lastUserIndex...)
+        persist()
+        send(userItem.content, images: userItem.images, files: userItem.files, isRegenerate: true)
     }
 
     func reconnect() {
@@ -219,6 +254,9 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
+        if !restoreRegenerateBackup() {
+            finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
+        }
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
         liveActivity.end(
@@ -231,12 +269,6 @@ final class ChatViewModel {
 
     private var client: ConnectOnionClientProviding {
         clientOverride ?? injectedClient
-    }
-
-    private var hasCommittedUserMessage: Bool {
-        items.contains { item in
-            item.kind == .user && item.id != optimisticUserItemID
-        }
     }
 
     private func handle(_ event: ConnectOnionClientEvent) {
@@ -275,6 +307,7 @@ final class ChatViewModel {
             errorMessage = nil
 
         case .server(let event):
+            let previousAgentID = items.last(where: { $0.kind == .agent })?.id
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 deferredOnboardInput = inFlightInput
                 discardInFlightUserPrompt()
@@ -284,6 +317,18 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             if let newState = ChatEventReducer.apply(event, to: &items) {
                 sessionState = newState
+            }
+            // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
+            // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
+            if event.type == "assistant",
+               let lastAgent = items.last(where: { $0.kind == .agent }),
+               lastAgent.id != previousAgentID {
+                streamingMessageID = lastAgent.id
+            }
+            if (event.type == "llm_call" || event.type == "llm_result"),
+               let model = event.payload[string: "model"],
+               !model.isEmpty {
+                lastResponseModel = model
             }
             updateLiveActivity(for: event)
             if let eventID = event.id {
@@ -303,15 +348,42 @@ final class ChatViewModel {
         case .output(let result, let session, let chatItems):
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
+            regenerateBackup = nil // the resend produced a reply, so drop the restore snapshot
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
-            if !chatItems.isEmpty {
+            let regenerating = isRegenerating
+            isRegenerating = false
+            // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
+            // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
+            if !chatItems.isEmpty, !regenerating {
                 items = chatItems
             }
-            if !result.isEmpty, items.last(where: { $0.kind == .agent })?.content != result {
-                append(ChatItem(kind: .agent, content: result), animated: true, shouldPersist: false)
+            // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
+            // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
+            // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
+            // is the last item, so we still append the fresh bubble below it.
+            if !result.isEmpty, !(items.last?.kind == .agent && items.last?.content == result) {
+                let agentItem = ChatItem(kind: .agent, content: result)
+                append(agentItem, animated: true, shouldPersist: false)
             }
+            finalizeRunningItems()
+            // Type the reply out client-side. The host server never emits a live "assistant" event — the
+            // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
+            // however it landed (adopted from the canonical list or appended above). This is the single
+            // place the reveal is triggered for a normal turn.
+            if !result.isEmpty,
+               let index = items.lastIndex(where: { $0.kind == .agent }),
+               items[index].content == result {
+                streamingMessageID = items[index].id
+            }
+            // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
+            // that carries it may not be present in the server's canonical list.
+            if let model = lastResponseModel,
+               let index = items.lastIndex(where: { $0.kind == .agent }) {
+                items[index].model = model
+            }
+            lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
             sessionState = .connected
             stopTimer()
@@ -398,8 +470,20 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
+
+        // A failed regenerate: restore the exchange we optimistically removed rather than losing it.
+        if restoreRegenerateBackup() {
+            errorMessage = userFacingError(message)
+            sessionState = items.isEmpty ? .idle : .connected
+            stopTimer()
+            return
+        }
+
+        isRegenerating = false
         commitOptimisticUserPrompt()
         clearOptimisticPlaceholder()
+        finalizeRunningItems()
+        restoreResponseModelFromHistory()
         errorMessage = userFacingError(message)
         sessionState = .disconnected
         stopTimer()
@@ -410,6 +494,27 @@ final class ChatViewModel {
             headline: "Agent disconnected",
             detail: errorMessage ?? "The reply could not be completed"
         )
+    }
+
+    /// Restores the original exchange when a regenerate is cancelled or fails after partial events.
+    /// The snapshot is cleared only by a successful OUTPUT or by this rollback.
+    @discardableResult
+    private func restoreRegenerateBackup() -> Bool {
+        guard let backup = regenerateBackup else { return false }
+        regenerateBackup = nil
+        isRegenerating = false
+        optimisticUserItemID = nil
+        streamingMessageID = nil
+        items = backup
+        finalizeRunningItems()
+        restoreResponseModelFromHistory()
+        persist()
+        return true
+    }
+
+    private func restoreResponseModelFromHistory() {
+        lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
+            ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
     }
 
     private func shouldAutomaticallyReconnect(after message: String) -> Bool {

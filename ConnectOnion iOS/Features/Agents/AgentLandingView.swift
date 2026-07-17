@@ -1,28 +1,44 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct AgentLandingView: View {
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var onSend: (AgentInput) -> Void
 
+    private static let greetings = [
+        "What shall we think through?",
+        "How can I help you?",
+        "Where should we start?",
+        "What's on your mind?",
+        "Ready when you are",
+        "Good to see you"
+    ]
+    // Picked once per landing appearance so the greeting varies between new chats but stays put while
+    // you're on the screen.
+    @State private var greeting = AgentLandingView.greetings.randomElement() ?? "How can I help you?"
+
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 22) {
-                    AgentHeroView(agent: agent, info: info)
+            Spacer(minLength: 0)
 
-                    AgentCapabilityLine(info: info)
-                }
-                .frame(maxWidth: 540)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 20)
-                .padding(.top, 58)
-                .padding(.bottom, 28)
+            // The brand logo over a single warm, serif greeting — no repeated agent hero. The onion
+            // assembles itself layer-by-layer when the landing appears.
+            VStack(spacing: 18) {
+                OnionRevealView(trigger: greeting)
+                    .frame(width: 60, height: 60)
+                Text(greeting)
+                    .font(.system(.title, design: .serif).weight(.medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.center)
             }
+            .padding(.horizontal, 24)
+
+            Spacer(minLength: 0)
 
             LandingComposer(
-                suggestions: AgentPromptSuggestions.defaults,
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],
                 onSend: { prompt, images, files in
@@ -30,8 +46,16 @@ struct AgentLandingView: View {
                 }
             )
         }
-        .navigationTitle(agent.displayName(info: info))
+        // Tapping the empty area (anywhere outside the composer's controls) dismisses the keyboard.
+        .contentShape(.rect)
+        .onTapGesture { dismissKeyboard() }
+        .background(Color.appCanvas.ignoresSafeArea())
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

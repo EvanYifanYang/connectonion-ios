@@ -17,6 +17,15 @@ The app is one end of a protocol; a [`connectonion`](https://github.com/openonio
 Python agent is the other. They speak the same wire language: an **Ed25519-signed handshake over a
 WebSocket**, then a stream of typed events.
 
+## Highlights
+
+- **Agent-centric flow** — the home lists your agents; tap one for its chats, tap a chat for the conversation (a single `NavigationStack`, with a zoom transition into each agent).
+- **Live chat** — streamed events render as typed messages: grouped tool calls, thinking, approvals, ask-user, plan review, onboarding. Agent replies type themselves out with Copy / Regenerate / Share.
+- **Brand onion, animated** — the logo is split into its real colour layers and *assembles itself*: a launch splash, the new-chat greeting, the "thinking" indicator, and the first-run welcome all share one onion.
+- **Warm & themed** — a warm-paper light mode and a warm-gray (not pure black) dark mode, serif brand type, and Liquid Glass controls.
+- **Manage** — search and pin agents and chats; voice dictation plus photo/file attachments in the composer.
+- **Beyond the app** — a home-screen widget and a Dynamic Island / Lock Screen Live Activity track the active reply.
+
 ## Architecture
 
 ```mermaid
@@ -70,12 +79,12 @@ ConnectOnion iOS/            # the app target
 │  ├─ Speech/                # voice dictation (SFSpeechRecognizer)
 │  ├─ SystemIntegrations/    # ActivityKit Live Activity controller
 │  └─ Support/               # small utilities + preview fixtures
-├─ Design/                   # shared styling (Liquid Glass, motion)
+├─ Design/                   # shared styling (Liquid Glass, motion, colors, onion layers)
 └─ Features/                 # one folder per product area
-   ├─ Shell/                 # app shell, sidebar, navigation
+   ├─ Shell/                 # app shell, agent-centric navigation, launch splash + welcome
    ├─ Chat/                  # chat screen + Cards/ + Timeline/ (one view per message kind)
    ├─ Composer/              # message composer shared by Chat + Agents
-   ├─ Agents/                # agent landing, editor, profile
+   ├─ Agents/                # agent home, landing, editor, profile
    └─ Settings/
 
 ConnectOnionShared/          # App-Group types shared with the widget

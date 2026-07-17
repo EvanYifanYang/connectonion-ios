@@ -35,7 +35,16 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         self.session = session
     }
 
-    func fetchAgentInfo(address: String) async -> AgentInfo {
+    func fetchAgentInfo(address: String, preferredEndpoint: URL?) async -> AgentInfo {
+        // A reachable direct endpoint means the agent is online regardless of whether it's on a relay,
+        // so probe the user's configured endpoint first. (This is why a local `host()` agent without a
+        // relay used to always read Offline: the status path never looked at the preferred endpoint.)
+        if let preferredEndpoint,
+           isUsableFromCurrentDevice(preferredEndpoint),
+           let direct = await directInfo(endpoint: preferredEndpoint, address: address) {
+            return direct
+        }
+
         guard let relayData = await relayRecord(address: address) else {
             return AgentInfo(address: address, online: false)
         }

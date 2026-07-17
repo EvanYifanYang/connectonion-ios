@@ -13,6 +13,8 @@ final class ConversationRecord {
     var messagesData: Data
     var rawSessionData: Data?
     var lastRenderedEventID: String?
+    /// Set when the user pins this chat to the top of the agent's list (most recent pin sorts first).
+    var pinnedAt: Date?
 
     init(
         id: UUID = UUID(),

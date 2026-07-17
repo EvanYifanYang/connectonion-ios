@@ -50,7 +50,13 @@ struct AgentEditorView: View {
                         .keyboardType(.URL)
                         .accessibilityIdentifier(AccessibilityID.addAgentEndpointField)
                 }
+                .listRowBackground(Color.appElevated)
             }
+            // Keep text-entry neutral (black caret/selection) app-wide; purple is reserved for the
+            // primary action below, so the field itself doesn't read as "flashy".
+            .tint(.primary)
+            .scrollContentBackground(.hidden)
+            .background(Color.appGroupedCanvas)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -61,6 +67,7 @@ struct AgentEditorView: View {
                     }
                 }
 
+                // Symmetric to Cancel: a bold accent "Save" on the trailing side (no bottom button).
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save", action: save)
                         .disabled(!canSave)
@@ -69,6 +76,11 @@ struct AgentEditorView: View {
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
+        // A compact bottom sheet sized to the fields (no wasted vertical space), still draggable up
+        // to full height, with the standard grabber.
+        .presentationDetents([.height(300), .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color.appGroupedCanvas)
     }
 
     private var canSave: Bool {
@@ -76,36 +88,7 @@ struct AgentEditorView: View {
     }
 
     private var normalizedEndpointURL: URL?? {
-        let trimmed = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .some(nil) }
-
-        let candidate = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
-        guard var components = URLComponents(string: candidate), let scheme = components.scheme?.lowercased() else {
-            return nil
-        }
-
-        switch scheme {
-        case "http", "https":
-            break
-        case "ws":
-            components.scheme = "http"
-        case "wss":
-            components.scheme = "https"
-        default:
-            return nil
-        }
-
-        guard components.host != nil else { return nil }
-
-        let path = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if path == "info" || path == "ws" {
-            components.path = ""
-        }
-        components.query = nil
-        components.fragment = nil
-
-        guard let url = components.url else { return nil }
-        return .some(url)
+        AgentEndpoint.normalized(from: endpoint)
     }
 
     private func save() {

@@ -8,6 +8,9 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let addAgentEndpointFieldID = "connectonion.agent.add.endpoint"
     private let agentActionsButtonID = "connectonion.agent.actions.button"
     private let renameAgentButtonID = "connectonion.agent.rename.button"
+    private let agentRenameFieldID = "connectonion.agent.rename.field"
+    private let renameConversationButtonID = "connectonion.chat.rename.button"
+    private let conversationRenameFieldID = "connectonion.chat.rename.field"
     private let deleteAgentButtonID = "connectonion.agent.delete.button"
     private let newChatButtonID = "connectonion.chat.new.button"
     private let newChatSheetID = "connectonion.chat.new.sheet"
@@ -19,7 +22,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let chatAttachmentButtonID = "connectonion.chat.attachment.button"
     private let chatAttachmentPhotoButtonID = "connectonion.chat.attachment.photo"
     private let chatAttachmentFilesButtonID = "connectonion.chat.attachment.files"
-    private let showSystemInfoSuggestionID = "connectonion.suggestion.show-system-info"
+    private let newChatInAgentButtonID = "connectonion.agent.newchat.button"
     private let seededAgentID = "connectonion.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededNewChatAgentID = "connectonion.chat.new.agent.0xf5ff043a9c5df95eac9387908dea87beb7b59c2a3b04787e3222fdf8209cdee1"
     private let seededConversationID = "connectonion.conversation.C9F4D04E-6D26-4F70-9808-74F09752D6D1"
@@ -49,9 +52,12 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     func testSeededAgentLaunchesIntoUsableShell() throws {
         let app = launchUITestApp()
 
+        // Agent-centric IA: the root lists agents only; conversations live on the agent's home.
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["OpenOnion"].exists)
-        XCTAssertTrue(app.anyElement(seededConversationID).waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["OpenOnion"].waitForExistence(timeout: 5))
+
+        tapElement(seededAgentID, in: app)
+        XCTAssertTrue(app.anyElement(seededConversationID).waitForExistence(timeout: 5), app.debugDescription)
 
         app.anyElement(seededConversationID).tap()
 
@@ -109,18 +115,16 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     @MainActor
     func testAgentLandingHidesDesktopSkillCommandPalette() throws {
         let app = launchUITestApp()
+        openLandingComposer(in: app)
 
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(seededAgentID, in: app)
-
-        XCTAssertTrue(app.buttons["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 5), app.debugDescription)
         XCTAssertFalse(app.staticTexts["/summarize"].exists)
         XCTAssertFalse(app.staticTexts["/debug"].exists)
         XCTAssertFalse(app.staticTexts["Bash"].exists)
     }
 
     @MainActor
-    func testAgentLongPressExposesRenameDeleteAndEndpointEditing() throws {
+    func testAgentLongPressExposesRenameAndDelete() throws {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -131,15 +135,11 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(deleteAgentButtonID).exists, app.debugDescription)
 
         tapElement(renameAgentButtonID, in: app)
-        let addressField = waitForElement(addAgentAddressFieldID, in: app)
-        XCTAssertFalse(addressField.isEnabled)
-        XCTAssertTrue(app.anyElement(addAgentAliasFieldID).exists, app.debugDescription)
-        XCTAssertTrue(app.anyElement(addAgentEndpointFieldID).exists, app.debugDescription)
-        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.anyElement(agentRenameFieldID).waitForExistence(timeout: 5), app.debugDescription)
     }
 
     @MainActor
-    func testAgentActionsMenuExposesRenameDeleteAndEndpointEditing() throws {
+    func testAgentActionsMenuRenamesInline() throws {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
@@ -149,28 +149,40 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(app.anyElement(deleteAgentButtonID).exists, app.debugDescription)
 
         tapElement(renameAgentButtonID, in: app)
+        let field = waitForElement(agentRenameFieldID, in: app)
+        // Tap near the right edge so the caret lands at the end, then clear generously before typing.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Renamed Agent\n")
+
+        XCTAssertTrue(app.staticTexts["Renamed Agent"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
+    @MainActor
+    func testNewAgentButtonOpensAgentEditor() throws {
+        // The bottom-right "+" is now "New Agent" (it opens the agent editor), replacing the old
+        // New-Chat picker. New chats are started from an agent's landing composer instead.
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(addAgentButtonID, in: app)
+
         let addressField = waitForElement(addAgentAddressFieldID, in: app)
-        XCTAssertFalse(addressField.isEnabled)
+        XCTAssertTrue(addressField.isEnabled, app.debugDescription)
         XCTAssertTrue(app.anyElement(addAgentAliasFieldID).exists, app.debugDescription)
-        XCTAssertTrue(app.anyElement(addAgentEndpointFieldID).exists, app.debugDescription)
         app.buttons["Cancel"].tap()
     }
 
     @MainActor
-    func testNewChatButtonOpensAgentPickerAndStartsPrompt() throws {
+    func testAgentLandingComposerStartsConversation() throws {
         let app = launchUITestApp()
+        openLandingComposer(in: app)
 
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(newChatButtonID, in: app)
-
-        XCTAssertTrue(app.anyElement(newChatSheetID).waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertTrue(app.anyElement(seededNewChatAgentID).exists, app.debugDescription)
-
-        app.anyElement(newChatPromptFieldID).tap()
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
         app.typeText("Start a fresh chat")
-        tapElement(newChatStartButtonID, in: app)
+        tapElement(chatSendButtonID, in: app)
 
-        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
         let response = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Connected. Streaming mock response for: Start a fresh chat")).firstMatch
         XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
@@ -182,6 +194,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let app = launchUITestApp()
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
         let conversation = waitForElement(seededConversationID, in: app)
         // A plain swipeLeft() doesn't reliably reveal SwiftUI swipeActions on iOS 26; a deliberate
         // right-to-left coordinate drag across the row does.
@@ -197,6 +210,50 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         deleteButton.tap()
 
         XCTAssertFalse(app.anyElement(seededConversationID).waitForExistence(timeout: 2), app.debugDescription)
+    }
+
+    @MainActor
+    func testConversationMenuRenamesInline() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
+        _ = waitForElement(seededConversationID, in: app)
+        app.buttons["Conversation Actions"].firstMatch.tap()
+
+        tapElement(renameConversationButtonID, in: app)
+
+        let field = app.textFields[conversationRenameFieldID]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+        // Tap near the right edge so the caret lands at the end, then clear generously before typing.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Renamed by test\n")
+
+        XCTAssertTrue(app.staticTexts["Renamed by test"].waitForExistence(timeout: 5), app.debugDescription)
+    }
+
+    @MainActor
+    func testConversationRenameCommitsOnBackgroundTap() throws {
+        let app = launchUITestApp()
+
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app) // agent-centric IA: conversations live on the agent home
+        _ = waitForElement(seededConversationID, in: app)
+        app.buttons["Conversation Actions"].firstMatch.tap()
+        tapElement(renameConversationButtonID, in: app)
+
+        let field = app.textFields[conversationRenameFieldID]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), app.debugDescription)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+        field.typeText("Tapped away")
+
+        // No Return: tapping empty (non-interactive) space above the keyboard — here the "Chats"
+        // section header on the agent home — should dismiss the keyboard and commit the rename.
+        app.staticTexts["Chats"].tap()
+
+        XCTAssertTrue(app.staticTexts["Tapped away"].waitForExistence(timeout: 5), app.debugDescription)
     }
 
     @MainActor
@@ -273,11 +330,12 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     func testFirstPromptResendsAfterInviteGate() throws {
         let app = launchUITestApp(scenario: "onboard-first-message")
 
-        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
-        tapElement(seededAgentID, in: app)
+        openLandingComposer(in: app)
 
-        XCTAssertTrue(app.buttons["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
-        app.buttons["What can you do?"].tap()
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
+        app.typeText("What can you do?")
+        tapElement(chatSendButtonID, in: app)
 
         XCTAssertTrue(app.anyElement(inviteCodeFieldID).waitForExistence(timeout: 5), app.debugDescription)
         // Note: that the pending user prompt is *suppressed* during the invite gate is asserted precisely
@@ -292,7 +350,6 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let status = waitForStaticText(onboardStatusID, in: app)
         XCTAssertTrue(status.label.contains("Invite submitted"), status.label)
         XCTAssertTrue(app.staticTexts["What can you do?"].waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertFalse(app.anyElement(showSystemInfoSuggestionID).exists)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
         XCTAssertFalse(app.anyElement(chatStopButtonID).exists)
     }
@@ -364,7 +421,17 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         if app.anyElement(chatInputID).waitForExistence(timeout: 1) {
             return
         }
+        tapElement(seededAgentID, in: app) // agent-centric IA: open the agent's home first
         tapElement(seededConversationID, in: app)
+        XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
+    }
+
+    /// Agent-centric IA: reach the fresh-chat composer via agent home → "New chat".
+    @MainActor
+    private func openLandingComposer(in app: XCUIApplication) {
+        XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
+        tapElement(seededAgentID, in: app)
+        tapElement(newChatInAgentButtonID, in: app)
         XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
     }
 

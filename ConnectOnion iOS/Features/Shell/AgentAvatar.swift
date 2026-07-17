@@ -8,9 +8,9 @@ struct AgentAvatar: View {
         ZStack(alignment: .bottomTrailing) {
             Text(String(title.first ?? "O").uppercased())
                 .font(.headline)
-                .foregroundStyle(AppTheme.contrastForeground)
+                .foregroundStyle(Color(.systemBackground))
                 .frame(width: 42, height: 42)
-                .background(AppTheme.contrastFill, in: .rect(cornerRadius: 13))
+                .background(.primary, in: .rect(cornerRadius: 13))
 
             if let online {
                 Circle()

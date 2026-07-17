@@ -10,6 +10,8 @@ final class AgentConfigRecord {
     var updatedAt: Date
     var lastConnectedAt: Date?
     var cachedInfoData: Data?
+    /// Set when the user pins this agent to the top of the list (most recent pin sorts first).
+    var pinnedAt: Date?
 
     init(
         address: String,

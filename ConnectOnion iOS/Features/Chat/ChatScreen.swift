@@ -27,13 +27,6 @@ struct ChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ChatHeaderView(
-                agent: agent,
-                info: info,
-                state: viewModel.sessionState,
-                elapsedTime: viewModel.elapsedTime
-            )
-
             ChatMessageList(
                 items: viewModel.items,
                 pendingAskUser: viewModel.pendingAskUser,
@@ -43,7 +36,12 @@ struct ChatScreen: View {
                 onAskUserResponse: viewModel.respondToAskUser,
                 onApprovalResponse: viewModel.respondToApproval,
                 onOnboardSubmit: viewModel.submitOnboard,
-                onPlanReviewResponse: viewModel.respondToPlanReview
+                onPlanReviewResponse: viewModel.respondToPlanReview,
+                onRegenerate: viewModel.regenerate,
+                streamingMessageID: viewModel.streamingMessageID,
+                onStreamComplete: viewModel.markStreamingComplete,
+                isGenerating: viewModel.shouldShowStopButton,
+                responseModel: viewModel.lastResponseModel
             )
 
             if let errorMessage = viewModel.errorMessage {
@@ -53,18 +51,8 @@ struct ChatScreen: View {
                     .transition(AppMotion.panelTransition)
             }
 
-            if viewModel.shouldShowFirstPromptSuggestions {
-                PromptSuggestionStrip(
-                    suggestions: AgentPromptSuggestions.defaults,
-                    onSelect: { viewModel.send($0) }
-                )
-                .accessibilityIdentifier(AccessibilityID.suggestionStrip)
-                .padding(.bottom, 8)
-                .transition(AppMotion.panelTransition)
-            }
-
             ChatInputBar(
-                placeholder: "Message \(displayName)",
+                placeholder: "Reply to ConnectOnion Agent",
                 isRunning: viewModel.shouldShowStopButton,
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],
@@ -74,19 +62,33 @@ struct ChatScreen: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
-        .navigationTitle(conversation.title)
+        .background(Color.appCanvas.ignoresSafeArea())
+        // Keep the transparent bar, but fade the transcript out under the status bar / back button so
+        // scrolled content doesn't clash with them.
+        .overlay(alignment: .top) {
+            LinearGradient(
+                stops: [
+                    .init(color: Color.appCanvas, location: 0),
+                    .init(color: Color.appCanvas, location: 0.55),
+                    .init(color: .clear, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 92)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
+        // No chat title + a transparent bar, so the transcript runs to the top (Claude-style).
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
-        .animation(AppMotion.standard, value: viewModel.shouldShowFirstPromptSuggestions)
         .task(id: conversation.id) {
             guard let initialInput else { return }
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)
             onInitialInputConsumed()
         }
-    }
-
-    private var displayName: String {
-        agent.displayName(info: info)
     }
 }
 

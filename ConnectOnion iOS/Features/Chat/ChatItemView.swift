@@ -6,19 +6,36 @@ struct ChatItemView: View {
     var isPendingApproval: Bool
     var isPendingOnboard: Bool
     var isPendingPlanReview: Bool
+    var showAgentActions: Bool = false
+    var isStreaming: Bool = false
+    var modelName: String? = nil
     var onAskUserResponse: (String) -> Void
     var onApprovalResponse: (Bool, String, String?, String?) -> Void
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
+    var onRegenerate: () -> Void = {}
+    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         switch item.kind {
         case .user:
             UserBubble(item: item)
         case .agent:
-            AgentBubble(item: item)
+            AgentBubble(
+                item: item,
+                showActions: showAgentActions,
+                isStreaming: isStreaming,
+                modelName: modelName,
+                onRegenerate: onRegenerate,
+                onStreamComplete: onStreamComplete
+            )
         case .thinking:
-            ThinkingRow(item: item)
+            // Only show the thinking row while it's actively running (the peeling-onion animation) or
+            // when it carries reasoning text. A finished, empty "model" row is redundant — the model
+            // now appears as a footer under the reply.
+            if item.status == .running || !item.content.isEmpty {
+                ThinkingRow(item: item)
+            }
         case .toolCall:
             ToolCallCard(item: item, isPendingApproval: isPendingApproval, onApprovalResponse: onApprovalResponse)
         case .askUser:

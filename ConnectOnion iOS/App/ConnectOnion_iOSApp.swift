@@ -43,8 +43,39 @@ struct ConnectOnion_iOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppShellView()
+            RootView()
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+/// Hosts the app with the launch splash overlaid on top (option B: the app sits behind and is
+/// revealed as the splash's backdrop fades during disassembly). The splash is for returning users:
+/// with no agents the app lands on the welcome empty-state (which is its own entrance), so the splash
+/// is skipped — no double welcome. Also skipped under UI testing so element queries aren't delayed.
+private struct RootView: View {
+    @Query private var agents: [AgentConfigRecord]
+    @State private var splashDismissed = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+
+    private var showSplash: Bool { !splashDismissed && !agents.isEmpty }
+
+    var body: some View {
+        ZStack {
+            AppShellView()
+
+            if showSplash {
+                LaunchSplashView {
+                    withAnimation(.easeOut(duration: 0.25)) { splashDismissed = true }
+                }
+                .transition(.opacity)
+            }
+        }
+        .onAppear {
+            // The splash is a launch-only decision. If this launch starts in the first-run state,
+            // keep it dismissed even after the user adds their first agent later in the session.
+            if agents.isEmpty {
+                splashDismissed = true
+            }
+        }
     }
 }

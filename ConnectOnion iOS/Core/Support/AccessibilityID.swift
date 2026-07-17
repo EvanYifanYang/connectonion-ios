@@ -12,7 +12,16 @@ enum AccessibilityID {
     static let deleteAgentButton = "connectonion.agent.delete.button"
     static let confirmDeleteAgentButton = "connectonion.agent.delete.confirm.button"
     static let agentActionsButton = "connectonion.agent.actions.button"
+    static let agentRenameField = "connectonion.agent.rename.field"
+    static let renameConversationButton = "connectonion.chat.rename.button"
+    static let conversationActionsButton = "connectonion.chat.actions.button"
+    static let agentSearchField = "connectonion.search.agents"
+    static let chatSearchField = "connectonion.search.chats"
+    static let conversationRenameField = "connectonion.chat.rename.field"
     static let newChatButton = "connectonion.chat.new.button"
+    static let newChatInAgentButton = "connectonion.agent.newchat.button"
+    static let agentInfoButton = "connectonion.agent.info.button"
+    static let agentHome = "connectonion.agent.home"
     static let newChatSheet = "connectonion.chat.new.sheet"
     static let newChatPromptField = "connectonion.chat.new.prompt"
     static let newChatStartButton = "connectonion.chat.new.start"
@@ -28,7 +37,6 @@ enum AccessibilityID {
     static let chatVoiceStatus = "connectonion.chat.voice.status"
     static let chatVoiceError = "connectonion.chat.voice.error"
     static let chatSkillPalette = "connectonion.chat.skill.palette"
-    static let suggestionStrip = "connectonion.suggestion.strip"
     static let settingsButton = "connectonion.settings.button"
     static let reconnectButton = "connectonion.chat.reconnect.button"
     static let inviteCodeField = "connectonion.onboard.invite"
@@ -68,9 +76,6 @@ enum AccessibilityID {
         "connectonion.chat.new.agent.\(address)"
     }
 
-    static func suggestion(_ title: String) -> String {
-        "connectonion.suggestion.\(normalizedComponent(title))"
-    }
 
     static func attachmentRemove(_ id: String) -> String {
         "connectonion.chat.attachment.remove.\(normalizedComponent(id))"

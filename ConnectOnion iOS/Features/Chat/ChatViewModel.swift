@@ -1,7 +1,6 @@
 import Factory
 import Foundation
 import Observation
-import SwiftUI
 
 @MainActor
 @Observable
@@ -18,9 +17,6 @@ final class ChatViewModel {
     }
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
-    /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
-    /// the bubble finishes revealing. Nil for restored/older messages, so they render in full.
-    var streamingMessageID: ChatItem.ID?
     /// The model that produced the latest reply, shown as a footer under it. Captured from events (the
     /// server's final `chatItems` may drop the thinking row that carries it).
     var lastResponseModel: String?
@@ -46,7 +42,6 @@ final class ChatViewModel {
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
     @ObservationIgnored private var regenerateBackup: [ChatItem]?
-    @ObservationIgnored private var isPresentationActive = false
     // While regenerating we keep the locally-trimmed view (old turn removed + fresh reply) instead of
     // adopting the server's canonical list, which still contains the turn we just replaced.
     @ObservationIgnored private var isRegenerating = false
@@ -135,7 +130,6 @@ final class ChatViewModel {
 
         isRegenerating = isRegenerate
         errorMessage = nil
-        streamingMessageID = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
         let input = AgentInput(prompt: trimmed, images: images, files: files)
@@ -165,27 +159,9 @@ final class ChatViewModel {
         }
     }
 
-    /// Called by the agent bubble once its typewriter reveal finishes, so it renders in full and the
-    /// action row appears.
-    func markStreamingComplete(_ id: ChatItem.ID) {
-        if streamingMessageID == id {
-            streamingMessageID = nil
-        }
-    }
-
-    /// Refresh presentation-only state when a retained session is shown again. The session store
-    /// deliberately survives navigation, so initialization-time sanitization alone is not enough.
+    /// The session store survives navigation, so sanitize again whenever the retained chat is shown.
     func prepareForPresentation() {
-        isPresentationActive = true
-        streamingMessageID = nil
         sanitizeAllContent()
-    }
-
-    func finishPresentation() {
-        isPresentationActive = false
-        // A typewriter task is cancelled when its view disappears. Clearing its identifier prevents
-        // the same completed reply from restarting the animation when the chat is opened again.
-        streamingMessageID = nil
     }
 
     /// Re-run the user turn that produced a particular reply. Regenerating an older reply creates a
@@ -245,9 +221,7 @@ final class ChatViewModel {
     }
 
     func respondToApproval(approved: Bool, scope: String, mode: String? = nil, feedback: String? = nil) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
-        }
+        ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         persist()
         sessionState = .active
         startTimer()
@@ -262,9 +236,7 @@ final class ChatViewModel {
     }
 
     func submitOnboard(inviteCode: String?, payment: Double? = nil) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
-        }
+        ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         persist()
         sessionState = .active
         startTimer()
@@ -279,9 +251,7 @@ final class ChatViewModel {
     }
 
     func respondToPlanReview(_ message: String) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
-        }
+        ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         persist()
         sessionState = .active
         startTimer()
@@ -332,11 +302,11 @@ final class ChatViewModel {
                 optimisticUserItemID = pendingUserItem.id
                 inFlightUserItemID = pendingUserItem.id
                 inFlightWasFirstPrompt = wasFirstPrompt
-                append(pendingUserItem, animated: true, shouldPersist: false)
+                append(pendingUserItem, shouldPersist: false)
 
                 var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
                 placeholder.status = .running
-                append(placeholder, animated: true, shouldPersist: false)
+                append(placeholder, shouldPersist: false)
 
                 self.pendingUserItem = nil
                 sessionState = .active
@@ -354,7 +324,6 @@ final class ChatViewModel {
 
         case .server(let event):
             regenerateBackup = nil // the resend is producing events, so drop the restore snapshot
-            let previousAgentID = items.last(where: { $0.kind == .agent })?.id
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 deferredOnboardInput = inFlightInput
                 discardInFlightUserPrompt()
@@ -369,13 +338,6 @@ final class ChatViewModel {
                 }
             }
             sanitizeItemsAffected(by: event)
-            // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
-            // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
-            if event.type == "assistant",
-               let lastAgent = items.last(where: { $0.kind == .agent }),
-               lastAgent.id != previousAgentID {
-                streamingMessageID = isPresentationActive ? lastAgent.id : nil
-            }
             if let model = items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model {
                 lastResponseModel = model
             }
@@ -413,25 +375,16 @@ final class ChatViewModel {
             if serverNewer, !regenerating {
                 ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(chatItems), items: &items)
             }
-            // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
+            // Ensure the fresh reply exists as the LAST item. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
             // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
             // is the last item, so we still append the fresh bubble below it.
             if !sanitizedResult.isEmpty,
-               !(items.last?.kind == .agent && items.last?.content == sanitizedResult) {
+                !(items.last?.kind == .agent && items.last?.content == sanitizedResult) {
                 let agentItem = ChatItem(kind: .agent, content: sanitizedResult)
-                append(agentItem, animated: true, shouldPersist: false)
+                append(agentItem, shouldPersist: false)
             }
             finalizeRunningItems()
-            // Type the reply out client-side. The host server never emits a live "assistant" event — the
-            // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
-            // however it landed (adopted from the canonical list or appended above). This is the single
-            // place the reveal is triggered for a normal turn.
-            if !sanitizedResult.isEmpty,
-               let index = items.lastIndex(where: { $0.kind == .agent }),
-               items[index].content == sanitizedResult {
-                streamingMessageID = isPresentationActive ? items[index].id : nil
-            }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
             // that carries it may not be present in the server's canonical list.
             if let model = lastResponseModel ?? items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model,
@@ -462,14 +415,8 @@ final class ChatViewModel {
         }
     }
 
-    private func append(_ item: ChatItem, animated: Bool, shouldPersist: Bool = true) {
-        if animated {
-            withAnimation(.smooth(duration: 0.24)) {
-                items.append(item)
-            }
-        } else {
-            items.append(item)
-        }
+    private func append(_ item: ChatItem, shouldPersist: Bool = true) {
+        items.append(item)
 
         if shouldPersist {
             persist()
@@ -479,17 +426,13 @@ final class ChatViewModel {
     private func clearOptimisticPlaceholder() {
         guard let index = items.firstIndex(where: { $0.id == "__optimistic__" }) else { return }
         let id = items[index].id
-        withAnimation(.smooth(duration: 0.2)) {
-            items.removeAll { $0.id == id }
-        }
+        items.removeAll { $0.id == id }
     }
 
     private func discardInFlightUserPrompt() {
         let userItemID = inFlightUserItemID ?? optimisticUserItemID
         if let userItemID {
-            withAnimation(.smooth(duration: 0.2)) {
-                items.removeAll { $0.id == userItemID }
-            }
+            items.removeAll { $0.id == userItemID }
         }
         clearInFlightInput()
         self.optimisticUserItemID = nil
@@ -568,11 +511,7 @@ final class ChatViewModel {
             if let sanitizedItem = AgentContentSanitizer.sanitize(items[index]) {
                 items[index] = sanitizedItem
             } else {
-                let removedID = items[index].id
                 items.remove(at: index)
-                if streamingMessageID == removedID {
-                    streamingMessageID = nil
-                }
             }
         }
     }

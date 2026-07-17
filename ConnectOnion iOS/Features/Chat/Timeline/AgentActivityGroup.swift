@@ -7,6 +7,8 @@ struct AgentActivityGroup: View {
     var items: [ChatItem]
     /// Stored on the reply at turn completion so the elapsed time survives later session snapshots.
     var durationMS: Int? = nil
+    /// True only for the last activity group while its agent turn is executing.
+    var isRunning = false
 
     @State private var isExpanded = false
 
@@ -18,11 +20,7 @@ struct AgentActivityGroup: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Text(summary)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    BreathingActivitySummary(text: summary, isRunning: isRunning)
 
                     Spacer(minLength: 8)
 
@@ -86,6 +84,28 @@ struct AgentActivityGroup: View {
         [isExpanded ? "Expanded" : "Collapsed", metricsSummary]
             .compactMap { $0 }
             .joined(separator: ", ")
+    }
+}
+
+/// Opacity-only animation keeps the running cue visible without changing row geometry or invalidating
+/// the expandable activity details. Reduce Motion and completed turns use one static phase.
+private struct BreathingActivitySummary: View {
+    var text: String
+    var isRunning: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(text)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .phaseAnimator(isRunning && !reduceMotion ? [false, true] : [false]) { content, dimmed in
+                content.opacity(dimmed ? 0.42 : 1)
+            } animation: { _ in
+                .easeInOut(duration: 1.05)
+            }
     }
 }
 

@@ -14,16 +14,12 @@ struct ChatMessageList: View {
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
     var onRegenerate: (ChatItem.ID) -> Void = { _ in }
-    var streamingMessageID: ChatItem.ID?
-    var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
     var responseModel: String?
+    var isAgentRunning = false
 
-    @State private var transcriptPosition = ScrollPosition(
-        id: transcriptBottomAnchorID,
-        anchor: .bottom
-    )
-    @State private var isNearBottom = true
+    @State private var isTailVisible = true
     @State private var followsTail = true
+    @State private var scrollRequest = 0
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
@@ -33,149 +29,99 @@ struct ChatMessageList: View {
         items.last { $0.kind == .user }?.id
     }
 
-    /// User-visible messages and action cards remain in the primary timeline. Consecutive execution
-    /// events collapse into a single Codex-style activity summary.
-    private enum RenderUnit: Identifiable {
-        case item(ChatItem)
-        case activityGroup(id: String, items: [ChatItem], durationMS: Int?)
-
-        var id: String {
-            switch self {
-            case .item(let item): item.id
-            case .activityGroup(let id, _, _): id
-            }
-        }
-    }
-
-    private var renderUnits: [RenderUnit] {
-        var units: [RenderUnit] = []
-        var activityItems: [ChatItem] = []
-        func flushActivity(completedBy reply: ChatItem? = nil) {
-            guard !activityItems.isEmpty else { return }
-            units.append(.activityGroup(
-                id: "activity-\(activityItems[0].id)",
-                items: activityItems,
-                durationMS: reply?.durationMS
-            ))
-            activityItems.removeAll()
-        }
-
-        for item in items {
-            if item.kind.isPrimaryTimelineContent {
-                flushActivity(completedBy: item.kind == .agent ? item : nil)
-                units.append(.item(item))
-            } else {
-                activityItems.append(item)
-            }
-        }
-        flushActivity()
-        return units
-    }
-
-    /// Keep scroll invalidation cheap. Comparing the complete `[ChatItem]` value also compares long
-    /// message bodies and raw event payloads on every streamed event, which can stall the main actor.
-    private var scrollUpdateToken: ScrollUpdateToken {
-        let lastItem = items.last
-        return ScrollUpdateToken(
-            itemCount: items.count,
-            lastItemID: lastItem?.id,
-            lastContentLength: lastItem?.content.count ?? 0,
-            lastResultLength: lastItem?.result?.count ?? 0,
-            lastImageCount: lastItem?.images.count ?? 0,
-            lastStatus: lastItem?.status?.rawValue,
-            lastAnswered: lastItem?.answered ?? false,
-            streamingMessageID: streamingMessageID
-        )
-    }
-
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 2) {
-                ForEach(renderUnits) { unit in
-                    switch unit {
-                    case .item(let item):
-                        ChatItemView(
-                            item: item,
-                            isPendingAskUser: item.id == pendingAskUser?.id,
-                            isPendingApproval: item.id == pendingApproval?.id,
-                            isPendingOnboard: item.id == pendingOnboard?.id,
-                            isPendingPlanReview: item.id == pendingPlanReview?.id,
-                            showAgentActions: item.kind == .agent && item.id != streamingMessageID,
-                            isStreaming: item.id == streamingMessageID,
-                            modelName: item.model ?? (item.id == lastAgentID ? responseModel : nil),
-                            onAskUserResponse: onAskUserResponse,
-                            onApprovalResponse: onApprovalResponse,
-                            onOnboardSubmit: onOnboardSubmit,
-                            onPlanReviewResponse: onPlanReviewResponse,
-                            onRegenerate: { onRegenerate(item.id) },
-                            onStreamComplete: { onStreamComplete(item.id) }
-                        )
-                        .id(unit.id)
-                        .transition(AppMotion.messageTransition)
+        let units = ChatTimelineBuilder.makeUnits(from: items)
+        let tailID = units.last?.id
+        let tailToken = TranscriptTailToken(
+            unitCount: units.count,
+            tailID: tailID,
+            lastAnswered: items.last?.answered ?? false
+        )
 
-                    case .activityGroup(_, let activityItems, let durationMS):
-                        AgentActivityGroup(items: activityItems, durationMS: durationMS)
-                        .id(unit.id)
-                        .transition(AppMotion.messageTransition)
+        return ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(units) { unit in
+                        switch unit.content {
+                        case .item(let item):
+                            ChatItemView(
+                                item: item,
+                                isPendingAskUser: item.id == pendingAskUser?.id,
+                                isPendingApproval: item.id == pendingApproval?.id,
+                                isPendingOnboard: item.id == pendingOnboard?.id,
+                                isPendingPlanReview: item.id == pendingPlanReview?.id,
+                                showAgentActions: item.kind == .agent,
+                                modelName: item.model ?? (item.id == lastAgentID ? responseModel : nil),
+                                onAskUserResponse: onAskUserResponse,
+                                onApprovalResponse: onApprovalResponse,
+                                onOnboardSubmit: onOnboardSubmit,
+                                onPlanReviewResponse: onPlanReviewResponse,
+                                onRegenerate: { onRegenerate(item.id) }
+                            )
+
+                        case .activity(let activityItems, let durationMS):
+                            AgentActivityGroup(
+                                items: activityItems,
+                                durationMS: durationMS,
+                                isRunning: isAgentRunning && unit.id == tailID
+                            )
+                        }
                     }
-                }
 
-                // Identity-based positioning keeps this target visible while activity rows are
-                // replaced and the final reply grows during its typewriter reveal.
-                Color.clear
-                    .frame(height: 1)
-                    .id(transcriptBottomAnchorID)
-            }
-            .scrollTargetLayout()
-            .frame(maxWidth: AppTheme.contentMaxWidth)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .contentShape(.rect)
-            // Tapping the transcript (anywhere not on an interactive control) dismisses the keyboard.
-            .onTapGesture { dismissKeyboard() }
-        }
-        .accessibilityIdentifier(AccessibilityID.chatList)
-        .scrollDismissesKeyboard(.interactively)
-        // Keep a real view identity positioned instead of a calculated content edge. The latter can
-        // become stale while optimistic rows are animated out and streamed rows are inserted.
-        .scrollPosition($transcriptPosition, anchor: .bottom)
-        .onScrollGeometryChange(for: Bool.self) { geometry in
-            geometry.contentSize.height - geometry.visibleRect.maxY <= 44
-        } action: { _, nearBottom in
-            isNearBottom = nearBottom
-        }
-        .onScrollPhaseChange { _, phase in
-            switch phase {
-            case .tracking, .interacting:
-                followsTail = false
-            case .idle:
-                if isNearBottom {
-                    followsTail = true
+                    Color.clear
+                        .frame(height: 12)
+                        .id(transcriptBottomAnchorID)
+                        .onScrollVisibilityChange(threshold: 0.1) { visible in
+                            isTailVisible = visible
+                            if visible {
+                                followsTail = true
+                            }
+                        }
                 }
-            case .decelerating, .animating:
-                break
+                .frame(maxWidth: AppTheme.contentMaxWidth)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+                .contentShape(.rect)
+                .onTapGesture { dismissKeyboard() }
+            }
+            // Restored conversations should open on the latest turn. Limiting this to the initial
+            // offset preserves the user's manual scroll position for every interaction afterwards.
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .accessibilityIdentifier(AccessibilityID.chatList)
+            .scrollDismissesKeyboard(.interactively)
+            .onScrollPhaseChange { _, phase in
+                switch phase {
+                case .tracking, .interacting:
+                    followsTail = false
+                case .idle:
+                    if isTailVisible {
+                        followsTail = true
+                    }
+                case .decelerating, .animating:
+                    break
+                }
+            }
+            .onChange(of: newestUserID) { oldID, newID in
+                guard let newID, newID != oldID else { return }
+                followsTail = true
+                scrollRequest &+= 1
+            }
+            .onChange(of: tailToken) { _, _ in
+                guard followsTail else { return }
+                scrollRequest &+= 1
+            }
+            .onAppear {
+                followsTail = true
+                scrollRequest &+= 1
+            }
+            .task(id: scrollRequest) {
+                await Task.yield()
+                guard !Task.isCancelled, followsTail else { return }
+                proxy.scrollTo(transcriptBottomAnchorID, anchor: .bottom)
             }
         }
-        // A newly-sent message always starts a fresh turn at the bottom, even if the user had
-        // previously inspected older messages.
-        .onChange(of: newestUserID) { oldID, newID in
-            guard let newID, newID != oldID else { return }
-            followsTail = true
-            scrollToTail()
-        }
-        .onChange(of: scrollUpdateToken) { _, _ in
-            guard followsTail else { return }
-            scrollToTail()
-        }
-        .onAppear {
-            followsTail = true
-            scrollToTail()
-        }
-    }
-
-    private func scrollToTail() {
-        transcriptPosition.scrollTo(id: transcriptBottomAnchorID, anchor: .bottom)
     }
 
     private func dismissKeyboard() {
@@ -183,27 +129,10 @@ struct ChatMessageList: View {
     }
 }
 
-private struct ScrollUpdateToken: Equatable {
-    var itemCount: Int
-    var lastItemID: ChatItem.ID?
-    var lastContentLength: Int
-    var lastResultLength: Int
-    var lastImageCount: Int
-    var lastStatus: String?
+private struct TranscriptTailToken: Equatable {
+    var unitCount: Int
+    var tailID: String?
     var lastAnswered: Bool
-    var streamingMessageID: ChatItem.ID?
-}
-
-private extension ChatItemKind {
-    var isPrimaryTimelineContent: Bool {
-        switch self {
-        case .user, .agent, .askUser, .approvalNeeded, .onboardRequired, .planReview:
-            true
-        case .thinking, .toolCall, .onboardSuccess, .intent, .evaluation, .compact,
-             .toolBlocked, .filesReceived, .ulwTurnsReached, .unknown:
-            false
-        }
-    }
 }
 
 #Preview("Chat Message List") {

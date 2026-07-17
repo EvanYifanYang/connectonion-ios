@@ -32,40 +32,31 @@ struct ChatScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ChatMessageList(
-                items: viewModel.items,
-                pendingAskUser: viewModel.pendingAskUser,
-                pendingApproval: viewModel.pendingApproval,
-                pendingOnboard: viewModel.pendingOnboard,
-                pendingPlanReview: viewModel.pendingPlanReview,
-                onAskUserResponse: viewModel.respondToAskUser,
-                onApprovalResponse: viewModel.respondToApproval,
-                onOnboardSubmit: viewModel.submitOnboard,
-                onPlanReviewResponse: viewModel.respondToPlanReview,
-                onRegenerate: viewModel.regenerate(replyID:),
-                streamingMessageID: viewModel.streamingMessageID,
-                onStreamComplete: viewModel.markStreamingComplete,
-                responseModel: viewModel.lastResponseModel
-            )
-
-            if let errorMessage = viewModel.errorMessage {
-                ChatErrorBanner(message: errorMessage, onReconnect: viewModel.reconnect)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-                    .transition(AppMotion.panelTransition)
-            }
-
-            ChatInputBar(
+        ChatMessageList(
+            items: viewModel.items,
+            pendingAskUser: viewModel.pendingAskUser,
+            pendingApproval: viewModel.pendingApproval,
+            pendingOnboard: viewModel.pendingOnboard,
+            pendingPlanReview: viewModel.pendingPlanReview,
+            onAskUserResponse: viewModel.respondToAskUser,
+            onApprovalResponse: viewModel.respondToApproval,
+            onOnboardSubmit: viewModel.submitOnboard,
+            onPlanReviewResponse: viewModel.respondToPlanReview,
+            onRegenerate: viewModel.regenerate(replyID:),
+            responseModel: viewModel.lastResponseModel,
+            isAgentRunning: viewModel.shouldShowStopButton
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            ChatComposerInset(
+                errorMessage: viewModel.errorMessage,
                 placeholder: "Reply to ConnectOnion Agent",
                 isRunning: viewModel.shouldShowStopButton,
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],
                 onSend: { viewModel.send($0, images: $1, files: $2) },
-                onStop: viewModel.stop
+                onStop: viewModel.stop,
+                onReconnect: viewModel.reconnect
             )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 14)
         }
         .background(Color.appCanvas.ignoresSafeArea())
         // Keep the transparent bar, but fade the transcript out under the status bar / back button so
@@ -105,13 +96,11 @@ struct ChatScreen: View {
                 }
             }
         }
-        .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
         .onAppear {
             viewModel.prepareForPresentation()
             sessionStore.conversationDidAppear(conversation)
         }
         .onDisappear {
-            viewModel.finishPresentation()
             sessionStore.conversationDidDisappear(conversation.id)
         }
         .task(id: conversation.id) {
@@ -119,6 +108,38 @@ struct ChatScreen: View {
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)
             onInitialInputConsumed()
         }
+    }
+}
+
+private struct ChatComposerInset: View {
+    var errorMessage: String?
+    var placeholder: String
+    var isRunning: Bool
+    var acceptedInputs: AgentAcceptedInputs?
+    var skills: [SkillInfo]
+    var onSend: (String, [String], [FileAttachment]) -> Void
+    var onStop: () -> Void
+    var onReconnect: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if let errorMessage {
+                ChatErrorBanner(message: errorMessage, onReconnect: onReconnect)
+            }
+
+            ChatInputBar(
+                placeholder: placeholder,
+                isRunning: isRunning,
+                acceptedInputs: acceptedInputs,
+                skills: skills,
+                onSend: onSend,
+                onStop: onStop
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(Color.appCanvas)
     }
 }
 

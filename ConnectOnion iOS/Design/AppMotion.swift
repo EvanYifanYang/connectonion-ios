@@ -6,17 +6,6 @@ enum AppMotion {
     static let expressive = Animation.spring(duration: 0.36, bounce: 0.18)
 
     @MainActor
-    static var messageTransition: AnyTransition {
-        AnyTransition.asymmetric(
-            insertion: .opacity
-                .combined(with: .move(edge: .bottom))
-                .combined(with: .scale(scale: 0.97, anchor: .bottom)),
-            removal: .opacity
-                .combined(with: .scale(scale: 0.98, anchor: .center))
-        )
-    }
-
-    @MainActor
     static var panelTransition: AnyTransition {
         AnyTransition.asymmetric(
             insertion: .opacity

@@ -7,14 +7,12 @@ struct ChatItemView: View {
     var isPendingOnboard: Bool = false
     var isPendingPlanReview: Bool = false
     var showAgentActions: Bool = false
-    var isStreaming: Bool = false
     var modelName: String? = nil
     var onAskUserResponse: (String) -> Void = { _ in }
     var onApprovalResponse: (Bool, String, String?, String?) -> Void = { _, _, _, _ in }
     var onOnboardSubmit: (String?, Double?) -> Void = { _, _ in }
     var onPlanReviewResponse: (String) -> Void = { _ in }
     var onRegenerate: () -> Void = {}
-    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         switch item.kind {
@@ -24,10 +22,8 @@ struct ChatItemView: View {
             AgentBubble(
                 item: item,
                 showActions: showAgentActions,
-                isStreaming: isStreaming,
                 modelName: modelName,
-                onRegenerate: onRegenerate,
-                onStreamComplete: onStreamComplete
+                onRegenerate: onRegenerate
             )
         case .thinking:
             ThinkingRow(item: item)

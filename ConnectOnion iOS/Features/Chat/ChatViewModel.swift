@@ -107,6 +107,7 @@ final class ChatViewModel {
         isRegenerating = isRegenerate
         errorMessage = nil
         streamingMessageID = nil
+        lastResponseModel = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
         let input = AgentInput(prompt: trimmed, images: images, files: files)
@@ -253,7 +254,9 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardInput = nil
-        finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
+        if !restoreRegenerateBackup() {
+            finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
+        }
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
         liveActivity.end(
@@ -304,7 +307,6 @@ final class ChatViewModel {
             errorMessage = nil
 
         case .server(let event):
-            regenerateBackup = nil // the resend is producing events, so drop the restore snapshot
             let previousAgentID = items.last(where: { $0.kind == .agent })?.id
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 deferredOnboardInput = inFlightInput
@@ -323,7 +325,9 @@ final class ChatViewModel {
                lastAgent.id != previousAgentID {
                 streamingMessageID = lastAgent.id
             }
-            if let model = items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model {
+            if (event.type == "llm_call" || event.type == "llm_result"),
+               let model = event.payload[string: "model"],
+               !model.isEmpty {
                 lastResponseModel = model
             }
             updateLiveActivity(for: event)
@@ -375,10 +379,11 @@ final class ChatViewModel {
             }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
             // that carries it may not be present in the server's canonical list.
-            if let model = lastResponseModel ?? items.last(where: { $0.kind == .thinking && $0.model?.isEmpty == false })?.model,
+            if let model = lastResponseModel,
                let index = items.lastIndex(where: { $0.kind == .agent }) {
                 items[index].model = model
             }
+            lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
             sessionState = .connected
             stopTimer()
@@ -467,20 +472,18 @@ final class ChatViewModel {
         deferredOnboardInput = nil
 
         // A failed regenerate: restore the exchange we optimistically removed rather than losing it.
-        if let backup = regenerateBackup {
-            regenerateBackup = nil
-            items = backup
-            finalizeRunningItems()
+        if restoreRegenerateBackup() {
             errorMessage = userFacingError(message)
             sessionState = items.isEmpty ? .idle : .connected
             stopTimer()
-            persist()
             return
         }
 
+        isRegenerating = false
         commitOptimisticUserPrompt()
         clearOptimisticPlaceholder()
         finalizeRunningItems()
+        restoreResponseModelFromHistory()
         errorMessage = userFacingError(message)
         sessionState = .disconnected
         stopTimer()
@@ -491,6 +494,27 @@ final class ChatViewModel {
             headline: "Agent disconnected",
             detail: errorMessage ?? "The reply could not be completed"
         )
+    }
+
+    /// Restores the original exchange when a regenerate is cancelled or fails after partial events.
+    /// The snapshot is cleared only by a successful OUTPUT or by this rollback.
+    @discardableResult
+    private func restoreRegenerateBackup() -> Bool {
+        guard let backup = regenerateBackup else { return false }
+        regenerateBackup = nil
+        isRegenerating = false
+        optimisticUserItemID = nil
+        streamingMessageID = nil
+        items = backup
+        finalizeRunningItems()
+        restoreResponseModelFromHistory()
+        persist()
+        return true
+    }
+
+    private func restoreResponseModelFromHistory() {
+        lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
+            ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
     }
 
     private func shouldAutomaticallyReconnect(after message: String) -> Bool {

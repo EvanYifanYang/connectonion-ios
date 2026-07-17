@@ -153,6 +153,52 @@ struct Sprint2AttachmentComposerTests {
     }
 }
 
+@Suite("Sprint 2 — Reply regeneration state")
+struct Sprint2ReplyRegenerationTests {
+    @Test @MainActor func failedRegenerateAfterPartialEventsRestoresOriginalExchange() async {
+        let originalUser = ChatItem(id: "original-user", kind: .user, content: "Original prompt")
+        var originalReply = ChatItem(id: "original-reply", kind: .agent, content: "Original reply")
+        originalReply.model = "co/original"
+        let originalItems = [originalUser, originalReply]
+        let conversation = ConversationRecord(agentAddress: testAgentAddress, messages: originalItems)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: agent.config,
+            client: PartialRegenerateFailureClient()
+        )
+
+        viewModel.regenerate()
+        await waitUntil { viewModel.errorMessage != nil }
+
+        #expect(viewModel.items == originalItems)
+        #expect(conversation.messages == originalItems)
+        #expect(viewModel.sessionState == .connected)
+        #expect(viewModel.lastResponseModel == "co/original")
+    }
+
+    @Test @MainActor func outputWithoutModelDoesNotReusePreviousTurnsModel() async {
+        let previousUser = ChatItem(id: "previous-user", kind: .user, content: "Previous prompt")
+        var previousReply = ChatItem(id: "previous-reply", kind: .agent, content: "Previous reply")
+        previousReply.model = "co/previous"
+        let conversation = ConversationRecord(
+            agentAddress: testAgentAddress,
+            messages: [previousUser, previousReply]
+        )
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = StreamingConnectOnionClient(replyText: "Current reply")
+        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
+
+        viewModel.send("Current prompt")
+        await waitUntil { viewModel.items.contains { $0.kind == .agent && $0.content == "Current reply" } }
+
+        let currentReply = viewModel.items.last { $0.kind == .agent }
+        #expect(currentReply?.content == "Current reply")
+        #expect(currentReply?.model == nil)
+        #expect(viewModel.lastResponseModel == nil)
+    }
+}
+
 @Suite("Sprint 2 — Onboarding-gated first prompt resend")
 struct Sprint2OnboardingTests {
     @Test @MainActor func firstPromptThatTriggersOnboardingResendsOriginalInputAfterInviteSuccess() async throws {

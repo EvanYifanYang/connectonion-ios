@@ -70,5 +70,12 @@ private struct RootView: View {
                 .transition(.opacity)
             }
         }
+        .onAppear {
+            // The splash is a launch-only decision. If this launch starts in the first-run state,
+            // keep it dismissed even after the user adds their first agent later in the session.
+            if agents.isEmpty {
+                splashDismissed = true
+            }
+        }
     }
 }

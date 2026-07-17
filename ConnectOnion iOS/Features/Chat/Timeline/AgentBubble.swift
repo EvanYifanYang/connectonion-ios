@@ -80,7 +80,9 @@ private struct StreamingMessageText: View {
         let end = attributed.index(attributed.startIndex, offsetByCharacters: min(revealed, count))
         let shown = AttributedString(attributed[attributed.startIndex..<end])
 
-        return (Text(shown) + caret(visible: revealed < count))
+        let revealedText = Text(shown)
+        let caretText = caret(visible: revealed < count)
+        return Text("\(revealedText)\(caretText)")
             .font(.body)
             .fontDesign(.serif)
             .lineSpacing(3)

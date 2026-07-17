@@ -250,6 +250,15 @@ struct Sprint2DeepLinkTests {
         #expect(request.suggestion == nil)
     }
 
+    @Test func scanAgentDeepLinkOpensScanner() throws {
+        let request = try #require(ConnectOnionDeepLink.parse(ConnectOnionDeepLink.scanAgent()))
+
+        #expect(request.opensAgentScanner)
+        #expect(request.agentAddress == nil)
+        #expect(request.suggestion == nil)
+        #expect(request.conversationID == nil)
+    }
+
     @Test func rejectsForeignSchemeURL() {
         #expect(ConnectOnionDeepLink.parse(URL(string: "https://example.com/new-chat?agent=0xabc")!) == nil)
     }

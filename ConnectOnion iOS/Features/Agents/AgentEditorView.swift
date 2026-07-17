@@ -99,7 +99,8 @@ struct AgentEditorView: View {
         .fullScreenCover(item: $presentedScanner) { _ in
             AgentQRCodeScannerView { payload in
                 address = payload.address
-                endpoint = payload.endpoint?.absoluteString ?? ""
+                // The QR URL host is discovery context, not a user-configured direct endpoint.
+                endpoint = ""
             }
         }
         // A compact bottom sheet sized to the fields (no wasted vertical space), still draggable up

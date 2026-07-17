@@ -10,7 +10,6 @@ enum AccessibilityID {
     static let scanAgentQRCodeButton = "connectonion.agent.qr.scan.button"
     static let agentQRScanner = "connectonion.agent.qr.scanner"
     static let agentQRScannerPhotoButton = "connectonion.agent.qr.photo.button"
-    static let agentQRScannerTorchButton = "connectonion.agent.qr.torch.button"
     static let saveAgentButton = "connectonion.agent.save.button"
     static let renameAgentButton = "connectonion.agent.rename.button"
     static let deleteAgentButton = "connectonion.agent.delete.button"

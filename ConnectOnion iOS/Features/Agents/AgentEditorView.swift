@@ -11,6 +11,7 @@ struct AgentEditorView: View {
     @State private var alias = ""
     @State private var endpoint = ""
     @State private var feedbackTrigger = 0
+    @State private var presentedScanner: ScannerPresentation?
 
     init(
         title: String = "Agent",
@@ -32,12 +33,31 @@ struct AgentEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Agent address", text: $address)
-                        .font(.body.monospaced())
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .disabled(!isAddressEditable)
-                        .accessibilityIdentifier(AccessibilityID.addAgentAddressField)
+                    HStack(spacing: 12) {
+                        TextField("Agent address", text: $address)
+                            .font(.body.monospaced())
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .disabled(!isAddressEditable)
+                            .accessibilityIdentifier(AccessibilityID.addAgentAddressField)
+
+                        if isAddressEditable {
+                            Button {
+                                feedbackTrigger += 1
+                                presentedScanner = .agentQRCode
+                            } label: {
+                                Image(systemName: "qrcode.viewfinder")
+                                    .font(.title3.weight(.semibold))
+                                    .frame(width: 36, height: 36)
+                                    .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.onion)
+                            .accessibilityLabel("Scan agent QR code")
+                            .accessibilityHint("Opens the camera or lets you choose a QR code photo")
+                            .accessibilityIdentifier(AccessibilityID.scanAgentQRCodeButton)
+                        }
+                    }
 
                     TextField("Name", text: $alias)
                         .textInputAutocapitalization(.words)
@@ -76,6 +96,12 @@ struct AgentEditorView: View {
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
         }
+        .fullScreenCover(item: $presentedScanner) { _ in
+            AgentQRCodeScannerView { payload in
+                address = payload.address
+                endpoint = payload.endpoint?.absoluteString ?? ""
+            }
+        }
         // A compact bottom sheet sized to the fields (no wasted vertical space), still draggable up
         // to full height, with the standard grabber.
         .presentationDetents([.height(300), .large])
@@ -97,6 +123,12 @@ struct AgentEditorView: View {
         onSave(address, alias, endpointURL)
         dismiss()
     }
+}
+
+private enum ScannerPresentation: String, Identifiable {
+    case agentQRCode
+
+    var id: String { rawValue }
 }
 
 #Preview("Add Agent") {

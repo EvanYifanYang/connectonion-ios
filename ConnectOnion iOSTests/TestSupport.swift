@@ -53,6 +53,7 @@ final class FailingConnectOnionClient: ConnectOnionClientProviding {
 @MainActor
 final class StreamingConnectOnionClient: ConnectOnionClientProviding {
     private(set) var sentInputs: [AgentInput] = []
+    private(set) var sentSessions: [ConversationSession] = []
     var replyText: String
 
     init(replyText: String = "Connected. Streaming mock response") {
@@ -61,8 +62,15 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         sentInputs.append(input)
+        sentSessions.append(session)
         return AsyncThrowingStream { continuation in
-            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
             continuation.yield(.output(result: replyText, session: nil, chatItems: []))
             continuation.finish()
         }
@@ -89,7 +97,7 @@ final class ControlledReplyClient: ConnectOnionClientProviding {
         AsyncThrowingStream { continuation in
             self.continuation = continuation
             continuation.yield(.connected(
-                sessionID: session.id.uuidString,
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
                 status: "connected",
                 serverNewer: false,
                 session: nil,
@@ -127,7 +135,7 @@ final class PartialRegenerateFailureClient: ConnectOnionClientProviding {
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         AsyncThrowingStream { continuation in
             continuation.yield(.connected(
-                sessionID: session.id.uuidString,
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
                 status: "connected",
                 serverNewer: false,
                 session: nil,
@@ -162,12 +170,20 @@ final class OnboardFirstMessageClient: ConnectOnionClientProviding {
     private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
     private var onboardAccepted = false
     private(set) var sentInputs: [AgentInput] = []
+    private(set) var sentSessions: [ConversationSession] = []
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         sentInputs.append(input)
+        sentSessions.append(session)
         return AsyncThrowingStream { continuation in
             self.continuation = continuation
-            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
 
             if !onboardAccepted {
                 continuation.yield(.server(ServerEvent(payload: [

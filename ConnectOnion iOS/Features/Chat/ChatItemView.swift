@@ -7,6 +7,8 @@ struct ChatItemView: View {
     var isPendingOnboard: Bool
     var isPendingPlanReview: Bool
     var showAgentActions: Bool = false
+    var canEditUserMessage: Bool = false
+    var isEditingUserMessage: Bool = false
     var isStreaming: Bool = false
     var modelName: String? = nil
     var onAskUserResponse: (String) -> Void
@@ -14,12 +16,22 @@ struct ChatItemView: View {
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
     var onRegenerate: () -> Void = {}
+    var onBeginUserEdit: () -> Void = {}
+    var onCancelUserEdit: () -> Void = {}
+    var onSaveUserEdit: (String) -> Bool = { _ in false }
     var onStreamComplete: () -> Void = {}
 
     var body: some View {
         switch item.kind {
         case .user:
-            UserBubble(item: item)
+            UserBubble(
+                item: item,
+                canEdit: canEditUserMessage,
+                isEditing: isEditingUserMessage,
+                onBeginEditing: onBeginUserEdit,
+                onCancelEditing: onCancelUserEdit,
+                onSaveEditing: onSaveUserEdit
+            )
         case .agent:
             AgentBubble(
                 item: item,

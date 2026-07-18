@@ -12,6 +12,11 @@ struct ChatMessageList: View {
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
     var onRegenerate: () -> Void = {}
+    var editableUserMessageID: ChatItem.ID?
+    var editingUserMessageID: ChatItem.ID?
+    var onBeginUserEdit: (ChatItem.ID) -> Void = { _ in }
+    var onCancelUserEdit: () -> Void = {}
+    var onSaveUserEdit: (ChatItem.ID, String) -> Bool = { _, _ in false }
     var streamingMessageID: ChatItem.ID?
     var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
     var isGenerating: Bool = false
@@ -68,7 +73,12 @@ struct ChatMessageList: View {
                                 isPendingApproval: item.id == pendingApproval?.id,
                                 isPendingOnboard: item.id == pendingOnboard?.id,
                                 isPendingPlanReview: item.id == pendingPlanReview?.id,
-                                showAgentActions: item.id == lastAgentID && item.id != streamingMessageID && !isGenerating,
+                                showAgentActions: item.id == lastAgentID &&
+                                    item.id != streamingMessageID &&
+                                    !isGenerating &&
+                                    editingUserMessageID == nil,
+                                canEditUserMessage: item.id == editableUserMessageID,
+                                isEditingUserMessage: item.id == editingUserMessageID,
                                 isStreaming: item.id == streamingMessageID,
                                 modelName: item.id == lastAgentID ? responseModel : nil,
                                 onAskUserResponse: onAskUserResponse,
@@ -76,6 +86,9 @@ struct ChatMessageList: View {
                                 onOnboardSubmit: onOnboardSubmit,
                                 onPlanReviewResponse: onPlanReviewResponse,
                                 onRegenerate: onRegenerate,
+                                onBeginUserEdit: { onBeginUserEdit(item.id) },
+                                onCancelUserEdit: onCancelUserEdit,
+                                onSaveUserEdit: { onSaveUserEdit(item.id, $0) },
                                 onStreamComplete: { onStreamComplete(item.id) }
                             )
                             .id(unit.id)

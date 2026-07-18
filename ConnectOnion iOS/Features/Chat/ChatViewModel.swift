@@ -6,6 +6,18 @@ import SwiftUI
 @MainActor
 @Observable
 final class ChatViewModel {
+    private struct RegenerationBackup {
+        let items: [ChatItem]
+        let remoteSessionID: String?
+        let rawSession: JSONValue?
+        let lastRenderedEventID: String?
+    }
+
+    private struct DeferredOnboardTurn {
+        let input: AgentInput
+        let replacementSessionID: String?
+    }
+
     private let agent: AgentConfig
     private let conversation: ConversationRecord
 
@@ -19,6 +31,7 @@ final class ChatViewModel {
     /// The model that produced the latest reply, shown as a footer under it. Captured from events (the
     /// server's final `chatItems` may drop the thinking row that carries it).
     var lastResponseModel: String?
+    private(set) var latestTurnCompleted = false
 
     @ObservationIgnored
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
@@ -35,16 +48,17 @@ final class ChatViewModel {
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var pendingUserItem: ChatItem?
     @ObservationIgnored private var inFlightInput: AgentInput?
+    @ObservationIgnored private var inFlightReplacementSessionID: String?
     @ObservationIgnored private var inFlightUserItemID: String?
     @ObservationIgnored private var inFlightWasFirstPrompt = false
     @ObservationIgnored private var optimisticUserItemID: String?
     @ObservationIgnored private var automaticReconnectAttempts = 0
     @ObservationIgnored private var automaticReconnectTask: Task<Void, Never>?
-    @ObservationIgnored private var regenerateBackup: [ChatItem]?
-    // While regenerating we keep the locally-trimmed view (old turn removed + fresh reply) instead of
-    // adopting the server's canonical list, which still contains the turn we just replaced.
+    @ObservationIgnored private var regenerateBackup: RegenerationBackup?
+    // While replacing a turn, keep the locally-trimmed view authoritative until the fork completes.
+    // This prevents stale canonical data from briefly resurrecting the removed exchange.
     @ObservationIgnored private var isRegenerating = false
-    private var deferredOnboardInput: AgentInput?
+    private var deferredOnboardTurn: DeferredOnboardTurn?
 
     init(
         conversation: ConversationRecord,
@@ -65,6 +79,7 @@ final class ChatViewModel {
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
         sessionState = items.isEmpty ? .idle : .connected
+        latestTurnCompleted = hasCompletedLatestExchange
     }
 
     /// Any item persisted / left mid-flight as `.running` would keep the peeling-onion animation
@@ -118,6 +133,20 @@ final class ChatViewModel {
         streamTask != nil
     }
 
+    var editableLatestUserMessageID: ChatItem.ID? {
+        guard latestTurnCompleted,
+              sessionState == .connected,
+              !hasOngoingSession,
+              !hasPendingUserAction,
+              errorMessage == nil,
+              let lastUserIndex = items.lastIndex(where: { $0.kind == .user }),
+              let lastAgentIndex = items.lastIndex(where: { $0.kind == .agent }),
+              lastAgentIndex > lastUserIndex else {
+            return nil
+        }
+        return items[lastUserIndex].id
+    }
+
     func send(_ input: AgentInput) {
         send(input.prompt, images: input.images, files: input.files)
     }
@@ -133,17 +162,22 @@ final class ChatViewModel {
             images: images,
             files: files
         )
-        sendCapturedInput(input, isRegenerate: isRegenerate)
+        sendCapturedInput(
+            input,
+            replacementSessionID: isRegenerate ? UUID().uuidString : nil
+        )
     }
 
-    private func sendCapturedInput(_ input: AgentInput, isRegenerate: Bool = false) {
-        isRegenerating = isRegenerate
+    private func sendCapturedInput(_ input: AgentInput, replacementSessionID: String? = nil) {
+        isRegenerating = replacementSessionID != nil
+        latestTurnCompleted = false
         errorMessage = nil
         streamingMessageID = nil
         lastResponseModel = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
         inFlightInput = input
+        inFlightReplacementSessionID = replacementSessionID
         var userItem = ChatItem(kind: .user, content: input.prompt)
         userItem.images = input.images
         userItem.files = input.files
@@ -154,7 +188,7 @@ final class ChatViewModel {
         liveActivity.start(conversationID: conversation.id, agentAddress: agent.address, agentName: agent.displayName)
 
         streamTask?.cancel()
-        let session = snapshot()
+        let session = replacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -183,10 +217,35 @@ final class ChatViewModel {
     func regenerate() {
         guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
         let userItem = items[lastUserIndex]
-        regenerateBackup = items // restore this if the resend fails, so we don't lose the old exchange
+        captureRegenerationBackup()
         items.removeSubrange(lastUserIndex...)
         persist()
         send(userItem.content, images: userItem.images, files: userItem.files, isRegenerate: true)
+    }
+
+    /// Replace only the latest completed user turn, preserving its attachments, then run the same
+    /// rollback-safe transaction used by reply regeneration.
+    @discardableResult
+    func editLatestUserMessage(id: ChatItem.ID, prompt: String) -> Bool {
+        guard editableLatestUserMessageID == id,
+              let lastUserIndex = items.lastIndex(where: { $0.kind == .user }),
+              items[lastUserIndex].id == id else {
+            return false
+        }
+
+        let userItem = items[lastUserIndex]
+        let editedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let originalPrompt = userItem.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard editedPrompt != originalPrompt,
+              !editedPrompt.isEmpty || !userItem.images.isEmpty || !userItem.files.isEmpty else {
+            return false
+        }
+
+        captureRegenerationBackup()
+        items.removeSubrange(lastUserIndex...)
+        persist()
+        send(editedPrompt, images: userItem.images, files: userItem.files, isRegenerate: true)
+        return true
     }
 
     func reconnect() {
@@ -202,7 +261,7 @@ final class ChatViewModel {
         )
 
         streamTask?.cancel()
-        let session = snapshot()
+        let session = inFlightReplacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -288,8 +347,10 @@ final class ChatViewModel {
         client.disconnect()
         pendingUserItem = nil
         clearInFlightInput()
-        deferredOnboardInput = nil
-        if !restoreRegenerateBackup() {
+        deferredOnboardTurn = nil
+        let restoredRegeneration = restoreRegenerateBackup()
+        latestTurnCompleted = false
+        if !restoredRegeneration {
             finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
             persist()
         }
@@ -312,7 +373,7 @@ final class ChatViewModel {
         case .connected(let sessionID, let status, _, let session, let chatItems):
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             conversation.rawSession = session
-            if !chatItems.isEmpty {
+            if !chatItems.isEmpty, !isRegenerating {
                 items = sanitizingUserPrompts(in: chatItems)
                 persist()
             }
@@ -345,7 +406,12 @@ final class ChatViewModel {
         case .server(let event):
             let previousAgentID = items.last(where: { $0.kind == .agent })?.id
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
-                deferredOnboardInput = inFlightInput
+                if let inFlightInput {
+                    deferredOnboardTurn = DeferredOnboardTurn(
+                        input: inFlightInput,
+                        replacementSessionID: inFlightReplacementSessionID
+                    )
+                }
                 discardInFlightUserPrompt()
             } else {
                 commitOptimisticUserPrompt()
@@ -390,8 +456,8 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             let regenerating = isRegenerating
             isRegenerating = false
-            // Skip the server's canonical list on a regenerate — it still contains the turn we replaced,
-            // which would resurrect it as a duplicate. Keep our locally-built (trimmed + fresh) view.
+            // Keep our locally-built replacement view so stale canonical data cannot resurrect the
+            // removed exchange or append the revision as a duplicate turn.
             if !chatItems.isEmpty, !regenerating {
                 items = sanitizingUserPrompts(in: chatItems)
             }
@@ -423,6 +489,7 @@ final class ChatViewModel {
             conversation.rawSession = session
             sessionState = .connected
             streamTask = nil
+            latestTurnCompleted = hasCompletedLatestExchange
             stopTimer()
             persist()
             client.disconnect()
@@ -479,15 +546,19 @@ final class ChatViewModel {
 
     private func clearInFlightInput() {
         inFlightInput = nil
+        inFlightReplacementSessionID = nil
         inFlightUserItemID = nil
         inFlightWasFirstPrompt = false
     }
 
     private func resumeDeferredOnboardInput() {
-        guard let input = deferredOnboardInput else { return }
-        deferredOnboardInput = nil
+        guard let turn = deferredOnboardTurn else { return }
+        deferredOnboardTurn = nil
         Task { @MainActor [weak self] in
-            self?.sendCapturedInput(input)
+            self?.sendCapturedInput(
+                turn.input,
+                replacementSessionID: turn.replacementSessionID
+            )
         }
     }
 
@@ -506,6 +577,26 @@ final class ChatViewModel {
         return session
     }
 
+    /// Regeneration is a replacement branch, not another input on the existing remote session.
+    /// Carry the retained local history into a fresh session and omit cursors/raw state that point
+    /// at the exchange being replaced.
+    private func replacementSnapshot(sessionID: String) -> ConversationSession {
+        var session = snapshot()
+        session.remoteSessionID = sessionID
+        session.rawSession = nil
+        session.lastRenderedEventID = nil
+        return session
+    }
+
+    private func captureRegenerationBackup() {
+        regenerateBackup = RegenerationBackup(
+            items: items,
+            remoteSessionID: conversation.remoteSessionID,
+            rawSession: conversation.rawSession,
+            lastRenderedEventID: conversation.lastRenderedEventID
+        )
+    }
+
     private func persist() {
         conversation.messages = items.filter { $0.id != "__optimistic__" }
     }
@@ -521,7 +612,7 @@ final class ChatViewModel {
         streamTask = nil
         pendingUserItem = nil
         clearInFlightInput()
-        deferredOnboardInput = nil
+        deferredOnboardTurn = nil
 
         // A failed regenerate: restore the exchange we optimistically removed rather than losing it.
         if restoreRegenerateBackup() {
@@ -532,6 +623,7 @@ final class ChatViewModel {
         }
 
         isRegenerating = false
+        latestTurnCompleted = false
         commitOptimisticUserPrompt()
         clearOptimisticPlaceholder()
         finalizeRunningItems()
@@ -557,8 +649,12 @@ final class ChatViewModel {
         isRegenerating = false
         optimisticUserItemID = nil
         streamingMessageID = nil
-        items = backup
+        items = backup.items
+        conversation.remoteSessionID = backup.remoteSessionID
+        conversation.rawSession = backup.rawSession
+        conversation.lastRenderedEventID = backup.lastRenderedEventID
         finalizeRunningItems()
+        latestTurnCompleted = hasCompletedLatestExchange
         restoreResponseModelFromHistory()
         persist()
         return true
@@ -567,6 +663,14 @@ final class ChatViewModel {
     private func restoreResponseModelFromHistory() {
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
+    }
+
+    private var hasCompletedLatestExchange: Bool {
+        guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }),
+              let lastAgentIndex = items.lastIndex(where: { $0.kind == .agent }) else {
+            return false
+        }
+        return lastAgentIndex > lastUserIndex
     }
 
     private func shouldAutomaticallyReconnect(after message: String) -> Bool {

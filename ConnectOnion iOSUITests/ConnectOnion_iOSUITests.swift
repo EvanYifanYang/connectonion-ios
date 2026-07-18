@@ -25,6 +25,10 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
     private let chatStopButtonID = "connectonion.chat.stop.button"
+    private let latestMessageEditButtonID = "connectonion.chat.latest-message.edit"
+    private let latestMessageEditorID = "connectonion.chat.latest-message.editor"
+    private let latestMessageEditCancelButtonID = "connectonion.chat.latest-message.edit.cancel"
+    private let latestMessageEditSaveButtonID = "connectonion.chat.latest-message.edit.save"
     private let chatAttachmentButtonID = "connectonion.chat.attachment.button"
     private let chatAttachmentPhotoButtonID = "connectonion.chat.attachment.photo"
     private let chatAttachmentFilesButtonID = "connectonion.chat.attachment.files"
@@ -88,6 +92,36 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         let response = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Connected. Streaming mock response")).firstMatch
         XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
+    }
+
+    @MainActor
+    func testLatestUserMessageCanBeEditedAndRegeneratedInline() throws {
+        let app = launchUITestApp()
+        openSeededConversation(in: app)
+
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: latestMessageEditButtonID).count, 1)
+        tapElement(latestMessageEditButtonID, in: app)
+
+        let editor = waitForElement(latestMessageEditorID, in: app)
+        XCTAssertFalse(app.anyElement(chatInputID).isEnabled)
+        XCTAssertTrue(app.anyElement(latestMessageEditCancelButtonID).isEnabled)
+        XCTAssertFalse(app.anyElement(latestMessageEditSaveButtonID).isEnabled)
+
+        editor.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 80))
+        editor.typeText("Updated question")
+        XCTAssertTrue(app.anyElement(latestMessageEditSaveButtonID).isEnabled)
+        tapElement(latestMessageEditSaveButtonID, in: app)
+
+        let response = app.staticTexts
+            .matching(NSPredicate(
+                format: "label CONTAINS %@",
+                "Connected. Streaming mock response for: Updated question"
+            ))
+            .firstMatch
+        XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["Updated question"].exists)
+        XCTAssertTrue(app.anyElement(chatInputID).isEnabled)
     }
 
     @MainActor

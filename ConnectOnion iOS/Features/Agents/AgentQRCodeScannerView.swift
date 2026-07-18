@@ -16,7 +16,6 @@ struct AgentQRCodeScannerView: View {
     @State private var cameraState: CameraState = .checking
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isReadingPhoto = false
-    @State private var torchEnabled = false
     @State private var notice: ScannerNotice?
     @State private var completedPayload: AgentQRCodePayload?
     @State private var successFeedbackTrigger = 0
@@ -75,9 +74,6 @@ struct AgentQRCodeScannerView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active, completedPayload == nil else { return }
             Task { await refreshCameraState() }
-        }
-        .onDisappear {
-            setTorch(enabled: false, reportFailure: false)
         }
         .sensoryFeedback(.success, trigger: successFeedbackTrigger)
         .sensoryFeedback(.error, trigger: errorFeedbackTrigger)
@@ -149,7 +145,7 @@ struct AgentQRCodeScannerView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                scannerControls
+                photoPicker
                     .padding(.bottom, isCompact ? 8 : 24)
             }
         }
@@ -180,27 +176,6 @@ struct AgentQRCodeScannerView: View {
             .accessibilityLabel("Close scanner")
         }
         .padding(.horizontal, 20)
-    }
-
-    private var scannerControls: some View {
-        HStack(spacing: 14) {
-            photoPicker
-
-            if torchAvailable {
-                Button {
-                    setTorch(enabled: !torchEnabled, reportFailure: true)
-                } label: {
-                    Label(
-                        torchEnabled ? "Light On" : "Light",
-                        systemImage: torchEnabled ? "bolt.fill" : "bolt.slash.fill"
-                    )
-                        .frame(minWidth: 84)
-                }
-                .buttonStyle(.glass)
-                .accessibilityLabel(torchEnabled ? "Turn flashlight off" : "Turn flashlight on")
-                .accessibilityIdentifier(AccessibilityID.agentQRScannerTorchButton)
-            }
-        }
     }
 
     private var photoPicker: some View {
@@ -321,10 +296,6 @@ struct AgentQRCodeScannerView: View {
         .accessibilityLabel("Agent found")
     }
 
-    private var torchAvailable: Bool {
-        AVCaptureDevice.default(for: .video)?.hasTorch == true
-    }
-
     private func refreshCameraState() async {
         guard completedPayload == nil else { return }
 
@@ -367,7 +338,6 @@ struct AgentQRCodeScannerView: View {
 
     private func complete(with payload: AgentQRCodePayload) {
         guard completedPayload == nil else { return }
-        setTorch(enabled: false, reportFailure: false)
         withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) {
             notice = nil
             completedPayload = payload
@@ -406,7 +376,6 @@ struct AgentQRCodeScannerView: View {
     }
 
     private func handleCameraUnavailable() {
-        setTorch(enabled: false, reportFailure: false)
         cameraState = .unavailable
         showError("The camera became unavailable. You can retry or choose a photo.")
     }
@@ -418,29 +387,6 @@ struct AgentQRCodeScannerView: View {
         errorFeedbackTrigger += 1
     }
 
-    private func setTorch(enabled: Bool, reportFailure: Bool) {
-        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else {
-            torchEnabled = false
-            return
-        }
-
-        do {
-            try device.lockForConfiguration()
-            defer { device.unlockForConfiguration() }
-
-            if enabled {
-                try device.setTorchModeOn(level: min(0.5, AVCaptureDevice.maxAvailableTorchLevel))
-            } else {
-                device.torchMode = .off
-            }
-            torchEnabled = enabled
-        } catch {
-            torchEnabled = false
-            if reportFailure {
-                showError("The flashlight isn’t available right now.")
-            }
-        }
-    }
 }
 
 private extension AgentQRCodeScannerView {
@@ -533,7 +479,7 @@ private struct AgentQRCodeCameraView: UIViewControllerRepresentable {
             recognizesMultipleItems: false,
             isHighFrameRateTrackingEnabled: false,
             isPinchToZoomEnabled: true,
-            isGuidanceEnabled: true,
+            isGuidanceEnabled: false,
             isHighlightingEnabled: true
         )
         scanner.delegate = context.coordinator

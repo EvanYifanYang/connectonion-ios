@@ -11,6 +11,9 @@ enum CustomInstructions {
     private static let v2ClosingMarker = "<<<CONNECTONION_END_PERSONALISATION_V2>>>"
     private static let v2UserRequestMarker = "<<<CONNECTONION_USER_REQUEST_V2>>>"
 
+    private static let systemReminderOpeningMarker = "<system-reminder>"
+    private static let systemReminderClosingMarker = "</system-reminder>"
+
     @MainActor
     static var saved: String {
         normalized(UserDefaults.standard.string(forKey: storageKey) ?? "")
@@ -66,6 +69,31 @@ enum CustomInstructions {
             )
         }
         return prompt
+    }
+
+    /// Removes transport-only context that an agent host may echo back in canonical user messages.
+    /// Complete leading reminder envelopes are stripped; malformed or inline tags are left untouched.
+    static func visiblePrompt(from prompt: String) -> String {
+        var visible = prompt
+        while true {
+            let previous = visible
+            visible = removingLeadingSystemReminder(from: visible)
+            visible = removingWrapper(from: visible)
+            guard visible != previous else { return visible }
+        }
+    }
+
+    private static func removingLeadingSystemReminder(from prompt: String) -> String {
+        let start = prompt.firstIndex { !$0.isWhitespace } ?? prompt.endIndex
+        let candidate = prompt[start...]
+        guard candidate.hasPrefix(systemReminderOpeningMarker),
+              let closingRange = candidate.range(of: systemReminderClosingMarker) else {
+            return prompt
+        }
+
+        let remainder = candidate[closingRange.upperBound...]
+        let visibleStart = remainder.firstIndex { !$0.isWhitespace } ?? remainder.endIndex
+        return String(remainder[visibleStart...])
     }
 
     private static func removingWrapper(

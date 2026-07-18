@@ -58,7 +58,7 @@ struct ConversationSidebarRow: View {
     private var renameEditor: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "text.bubble")
-                .font(.title3)
+                .appFont(.title3)
                 .foregroundStyle(.secondary)
                 .frame(width: 42, height: 42)
 
@@ -82,7 +82,7 @@ struct ConversationSidebarRow: View {
                 conversationStatusIcon
 
                 Text(conversation.title)
-                    .font(.body)
+                    .appFont(.body)
                     .fontWeight(conversation.hasUnread ? .semibold : .regular)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -91,12 +91,12 @@ struct ConversationSidebarRow: View {
 
                 if isPinned {
                     Image(systemName: "pin.fill")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(Color.onion.opacity(0.7))
                 }
 
                 Text(relativeTime)
-                    .font(.caption)
+                    .appFont(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
 
@@ -104,7 +104,7 @@ struct ConversationSidebarRow: View {
                     menuActions
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
+                        .appFont(.body, weight: .semibold)
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                         .contentShape(.circle)
@@ -140,7 +140,7 @@ struct ConversationSidebarRow: View {
                 OnionThinkingMark(active: true, diameter: 28)
             } else {
                 Image(systemName: "text.bubble")
-                    .font(.title3)
+                    .appFont(.title3)
                     .foregroundStyle(.secondary)
             }
 
@@ -197,7 +197,7 @@ struct ConversationSidebarRow: View {
     private var deleteAction: some View {
         Button(role: .destructive, action: commitDelete) {
             Image(systemName: "trash.fill")
-                .font(.title3.weight(.semibold))
+                .appFont(.title3, weight: .semibold)
                 .foregroundStyle(.white)
                 .frame(width: actionWidth - actionGap, height: rowHeight)
                 .background(Color.red, in: .rect(cornerRadius: 20))

@@ -8,6 +8,7 @@ struct ChatScreen: View {
     let initialInput: AgentInput?
     let onInitialInputConsumed: () -> Void
     let viewModel: ChatViewModel
+    @State private var editingUserMessageID: ChatItem.ID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -22,6 +23,17 @@ struct ChatScreen: View {
                 onOnboardSubmit: viewModel.submitOnboard,
                 onPlanReviewResponse: viewModel.respondToPlanReview,
                 onRegenerate: viewModel.regenerate,
+                editableUserMessageID: viewModel.editableLatestUserMessageID,
+                editingUserMessageID: editingUserMessageID,
+                onBeginUserEdit: { editingUserMessageID = $0 },
+                onCancelUserEdit: { editingUserMessageID = nil },
+                onSaveUserEdit: { id, prompt in
+                    let accepted = viewModel.editLatestUserMessage(id: id, prompt: prompt)
+                    if accepted {
+                        editingUserMessageID = nil
+                    }
+                    return accepted
+                },
                 streamingMessageID: viewModel.streamingMessageID,
                 onStreamComplete: viewModel.markStreamingComplete,
                 isGenerating: viewModel.shouldShowStopButton,
@@ -43,6 +55,8 @@ struct ChatScreen: View {
                 onSend: { viewModel.send($0, images: $1, files: $2) },
                 onStop: viewModel.stop
             )
+            .disabled(editingUserMessageID != nil)
+            .opacity(editingUserMessageID == nil ? 1 : 0.55)
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
         }
@@ -68,6 +82,11 @@ struct ChatScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
+        .onChange(of: viewModel.editableLatestUserMessageID) { _, editableID in
+            if let editingUserMessageID, editingUserMessageID != editableID {
+                self.editingUserMessageID = nil
+            }
+        }
         .task(id: conversation.id) {
             guard let initialInput else { return }
             viewModel.send(initialInput.prompt, images: initialInput.images, files: initialInput.files)

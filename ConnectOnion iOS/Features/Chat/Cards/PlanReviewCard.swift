@@ -18,7 +18,7 @@ struct PlanReviewCard: View {
                 }
             } label: {
                 Label("Plan review", systemImage: "list.bullet.clipboard")
-                    .font(.headline)
+                    .appFont(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
@@ -37,7 +37,7 @@ struct PlanReviewCard: View {
 
             if isExpanded {
                 Text(.init(item.planContent ?? ""))
-                    .font(.body)
+                    .appFont(.body)
                     .textSelection(.enabled)
                     .padding(12)
                     .background(.secondary.opacity(0.08), in: .rect(cornerRadius: 12))
@@ -52,7 +52,7 @@ struct PlanReviewCard: View {
                     .accessibilityIdentifier(AccessibilityID.planReviewFeedbackField)
             } else if let answer = item.answer {
                 Label(answer, systemImage: "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(.green)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

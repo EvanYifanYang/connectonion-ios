@@ -1,3 +1,4 @@
+import Highlighter
 import SwiftUI
 import UIKit
 
@@ -15,9 +16,7 @@ struct MarkdownMessageView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Agent replies read in the brand serif (New York) for an editorial feel; the code block sets
-        // its own monospaced font, so code stays mono.
-        .fontDesign(.serif)
+        .appFont(.body)
     }
 
     @ViewBuilder
@@ -25,8 +24,7 @@ struct MarkdownMessageView: View {
         switch block {
         case .heading(let level, let text):
             MarkdownInlineText(text)
-                .font(headingFont(level))
-                .fontWeight(.semibold)
+                .appFont(headingStyle(level), weight: .semibold)
 
         case .paragraph(let text):
             MarkdownInlineText(text)
@@ -74,12 +72,12 @@ struct MarkdownMessageView: View {
         }
     }
 
-    private func headingFont(_ level: Int) -> Font {
+    private func headingStyle(_ level: Int) -> Font.TextStyle {
         switch level {
-        case 1: .system(.title2, design: .serif)
-        case 2: .system(.title3, design: .serif)
-        case 3: .system(.headline, design: .serif)
-        default: .system(.body, design: .serif).weight(.semibold)
+        case 1: .title2
+        case 2: .title3
+        case 3: .headline
+        default: .body
         }
     }
 }
@@ -113,7 +111,7 @@ private struct CodeBlockView: View {
             // Header: language label + copy / expand actions (Claude-style).
             HStack(spacing: 16) {
                 Text(language?.nilIfEmpty ?? "code")
-                    .font(.caption.monospaced())
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
 
                 Spacer(minLength: 0)
@@ -142,9 +140,7 @@ private struct CodeBlockView: View {
             Divider()
 
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
-                    .font(.callout.monospaced())
-                    .textSelection(.enabled)
+                SyntaxHighlightedCode(language: language, code: code)
                     .padding(12)
             }
         }
@@ -176,16 +172,18 @@ private struct CodeBlockExpandedView: View {
     var body: some View {
         NavigationStack {
             ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                Text(code)
-                    .font(.callout.monospaced())
-                    .textSelection(.enabled)
+                SyntaxHighlightedCode(language: language, code: code)
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Color.appCanvas)
-            .navigationTitle(language?.nilIfEmpty ?? "Code")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(language?.nilIfEmpty ?? "Code")
+                        .appFont(.headline)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
@@ -197,6 +195,140 @@ private struct CodeBlockExpandedView: View {
                 }
             }
         }
+    }
+}
+
+private struct SyntaxHighlightedCode: View {
+    var language: String?
+    var code: String
+
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(CodeFontPreference.storageKey) private var codeFontPreference: CodeFontPreference = .sfMono
+    @AppStorage(FontSizePreference.codeStorageKey) private var codeFontSize = FontSizePreference.defaultCode
+    @State private var highlightedCode: AttributedString?
+
+    var body: some View {
+        Group {
+            if let highlightedCode {
+                Text(highlightedCode)
+            } else {
+                Text(code)
+                    .font(codeFontPreference.swiftUIFont(pointSize: codeFontSize))
+            }
+        }
+        .textSelection(.enabled)
+        .task(id: request) {
+            highlightedCode = SyntaxHighlightCache.shared.highlight(
+                code: code,
+                language: language,
+                font: codeFontPreference,
+                fontSize: codeFontSize,
+                colorScheme: colorScheme
+            )
+        }
+    }
+
+    private var request: SyntaxHighlightRequest {
+        SyntaxHighlightRequest(
+            code: code,
+            language: language,
+            font: codeFontPreference,
+            fontSize: codeFontSize,
+            colorScheme: colorScheme
+        )
+    }
+}
+
+struct SyntaxHighlightRequest: Hashable {
+    var code: String
+    var language: String?
+    var font: CodeFontPreference
+    var fontSize: Double
+    var colorScheme: ColorScheme
+}
+
+@MainActor
+final class SyntaxHighlightCache {
+    static let shared = SyntaxHighlightCache()
+
+    private struct Configuration: Hashable {
+        var font: CodeFontPreference
+        var fontSize: Double
+        var colorScheme: ColorScheme
+    }
+
+    private var cachedStrings: [SyntaxHighlightRequest: AttributedString] = [:]
+    private var highlighters: [Configuration: Highlighter] = [:]
+
+    func highlight(
+        code: String,
+        language: String?,
+        font: CodeFontPreference,
+        fontSize: Double = FontSizePreference.defaultCode,
+        colorScheme: ColorScheme
+    ) -> AttributedString? {
+        let request = SyntaxHighlightRequest(
+            code: code,
+            language: language,
+            font: font,
+            fontSize: FontSizePreference.normalizedCode(fontSize),
+            colorScheme: colorScheme
+        )
+        if let cached = cachedStrings[request] {
+            return cached
+        }
+
+        let configuration = Configuration(
+            font: font,
+            fontSize: FontSizePreference.normalizedCode(fontSize),
+            colorScheme: colorScheme
+        )
+        guard let highlighter = configuredHighlighter(for: configuration) else { return nil }
+        let normalizedLanguage = normalizedLanguage(language, supportedBy: highlighter)
+        if language?.nilIfEmpty != nil, normalizedLanguage == nil {
+            return nil
+        }
+        guard let rendered = highlighter.highlight(code, as: normalizedLanguage),
+              let attributed = try? AttributedString(rendered, including: \.uiKit) else {
+            return nil
+        }
+
+        if cachedStrings.count >= 128 {
+            cachedStrings.removeAll(keepingCapacity: true)
+        }
+        cachedStrings[request] = attributed
+        return attributed
+    }
+
+    private func configuredHighlighter(for configuration: Configuration) -> Highlighter? {
+        if let existing = highlighters[configuration] {
+            return existing
+        }
+        guard let highlighter = Highlighter() else { return nil }
+        let theme = configuration.colorScheme == .dark ? "github-dark" : "github"
+        guard highlighter.setTheme(theme) else { return nil }
+        highlighter.theme.setCodeFont(
+            configuration.font.uiFont(pointSize: configuration.fontSize)
+        )
+        highlighters[configuration] = highlighter
+        return highlighter
+    }
+
+    private func normalizedLanguage(_ value: String?, supportedBy highlighter: Highlighter) -> String? {
+        guard let value = value?.nilIfEmpty?.lowercased() else { return nil }
+        let aliases = [
+            "c++": "cpp",
+            "cs": "csharp",
+            "html": "xml",
+            "js": "javascript",
+            "objc": "objectivec",
+            "py": "python",
+            "sh": "bash",
+            "shell": "bash",
+            "ts": "typescript"
+        ]
+        let normalized = aliases[value] ?? value
+        return highlighter.supportedLanguages().contains(normalized) ? normalized : nil
     }
 }
 

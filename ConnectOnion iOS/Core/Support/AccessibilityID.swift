@@ -28,10 +28,17 @@ enum AccessibilityID {
     static let newChatSheet = "connectonion.chat.new.sheet"
     static let newChatPromptField = "connectonion.chat.new.prompt"
     static let newChatStartButton = "connectonion.chat.new.start"
+    static let newChatToolsDisclosure = "connectonion.chat.new.tools.disclosure"
+    static let newChatToolsSummary = "connectonion.chat.new.tools.summary"
+    static let newChatSkillsDisclosure = "connectonion.chat.new.skills.disclosure"
     static let chatList = "connectonion.chat.list"
     static let chatInput = "connectonion.chat.input"
     static let chatSendButton = "connectonion.chat.send.button"
     static let chatStopButton = "connectonion.chat.stop.button"
+    static let latestMessageEditButton = "connectonion.chat.latest-message.edit"
+    static let latestMessageEditor = "connectonion.chat.latest-message.editor"
+    static let latestMessageEditCancelButton = "connectonion.chat.latest-message.edit.cancel"
+    static let latestMessageEditSaveButton = "connectonion.chat.latest-message.edit.save"
     static let chatAttachmentButton = "connectonion.chat.attachment.button"
     static let chatAttachmentPhotoButton = "connectonion.chat.attachment.photo"
     static let chatAttachmentFilesButton = "connectonion.chat.attachment.files"
@@ -41,6 +48,13 @@ enum AccessibilityID {
     static let chatVoiceError = "connectonion.chat.voice.error"
     static let chatSkillPalette = "connectonion.chat.skill.palette"
     static let settingsButton = "connectonion.settings.button"
+    static let uiFontPicker = "connectonion.settings.ui-font.picker"
+    static let uiFontSizeField = "connectonion.settings.ui-font-size.field"
+    static let codeFontPicker = "connectonion.settings.code-font.picker"
+    static let codeFontSizeField = "connectonion.settings.code-font-size.field"
+    static let personalityPicker = "connectonion.settings.personality.picker"
+    static let customInstructionsEditor = "connectonion.settings.custom-instructions.editor"
+    static let saveCustomInstructionsButton = "connectonion.settings.custom-instructions.save"
     static let reconnectButton = "connectonion.chat.reconnect.button"
     static let inviteCodeField = "connectonion.onboard.invite"
     static let inviteSubmitButton = "connectonion.onboard.submit"
@@ -79,6 +93,13 @@ enum AccessibilityID {
         "connectonion.chat.new.agent.\(address)"
     }
 
+    static func newChatSuggestion(_ prompt: String) -> String {
+        "connectonion.chat.new.suggestion.\(slug(prompt))"
+    }
+
+    static func newChatSkill(_ name: String) -> String {
+        "connectonion.chat.new.skill.\(slug(name))"
+    }
 
     static func attachmentRemove(_ id: String) -> String {
         "connectonion.chat.attachment.remove.\(normalizedComponent(id))"
@@ -102,5 +123,13 @@ enum AccessibilityID {
             .unicodeScalars
             .map { CharacterSet.alphanumerics.contains($0) ? Character($0) : Character("-") }
             .reduce(into: "") { $0.append($1) }
+    }
+
+    private static func slug(_ value: String) -> String {
+        value
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
     }
 }

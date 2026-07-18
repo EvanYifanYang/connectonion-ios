@@ -10,8 +10,16 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
+    @AppStorage(UIFontPreference.storageKey) private var uiFontPreference: UIFontPreference = .system
+    @AppStorage(FontSizePreference.uiStorageKey) private var uiFontSize = FontSizePreference.defaultUI
+    @AppStorage(CodeFontPreference.storageKey) private var codeFontPreference: CodeFontPreference = .sfMono
+    @AppStorage(FontSizePreference.codeStorageKey) private var codeFontSize = FontSizePreference.defaultCode
+    @AppStorage(PersonalityMode.storageKey) private var personality: PersonalityMode = .pragmatic
+    @AppStorage(CustomInstructions.storageKey) private var customInstructions = ""
     @State private var showingInfo = false
     @State private var feedbackTrigger = 0
+    @State private var customInstructionsDraft = ""
+    @State private var hasLoadedCustomInstructionsDraft = false
 
     var body: some View {
         NavigationStack {
@@ -35,8 +43,8 @@ struct SettingsView: View {
                         .accessibilityIdentifier(AccessibilityID.addAgentButton)
                     }
                 } header: {
-                    Text("Agents")
-                        .font(AppFont.sectionSerif)
+                    Text("Agent configuration")
+                        .appFont(.headline)
                         .textCase(nil)
                 }
                 // Match the warm card surface used across the app (the system grouped row color is
@@ -46,9 +54,116 @@ struct SettingsView: View {
                 Section {
                     AppearancePicker(selection: $appearance)
                         .padding(.vertical, 6)
+
+                    PreferencePickerRow(
+                        title: "UI font",
+                        selection: $uiFontPreference,
+                        options: UIFontPreference.allCases,
+                        label: \.displayName
+                    )
+                    .accessibilityIdentifier(AccessibilityID.uiFontPicker)
+
+                    FontSizeRow(
+                        title: "UI font size",
+                        value: $uiFontSize,
+                        defaultValue: FontSizePreference.defaultUI
+                    )
+                        .accessibilityIdentifier(AccessibilityID.uiFontSizeField)
+
+                    PreferencePickerRow(
+                        title: "Code font",
+                        selection: $codeFontPreference,
+                        options: CodeFontPreference.allCases,
+                        label: \.displayName
+                    )
+                    .accessibilityIdentifier(AccessibilityID.codeFontPicker)
+
+                    FontSizeRow(
+                        title: "Code font size",
+                        value: $codeFontSize,
+                        defaultValue: FontSizePreference.defaultCode
+                    )
+                        .accessibilityIdentifier(AccessibilityID.codeFontSizeField)
                 } header: {
                     Text("Appearance")
-                        .font(AppFont.sectionSerif)
+                        .appFont(.headline)
+                        .textCase(nil)
+                }
+                .listRowBackground(Color.appElevated)
+
+                Section {
+                    HStack(alignment: .center, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Default response tone")
+                                .appFont(.headline, weight: .semibold)
+                            Text(personality.explanation)
+                                .appFont(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Menu {
+                            Picker("Personality", selection: $personality) {
+                                ForEach(PersonalityMode.allCases) { mode in
+                                    VStack(alignment: .leading) {
+                                        Text(mode.displayName)
+                                        Text(mode.explanation)
+                                    }
+                                    .tag(mode)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(personality.displayName)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .appFont(.caption2)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier(AccessibilityID.personalityPicker)
+                    }
+                    .padding(.vertical, 6)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Custom instructions")
+                                .appFont(.headline, weight: .semibold)
+                            Text("Sent with every message to every agent.")
+                                .appFont(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ZStack(alignment: .topLeading) {
+                            if customInstructionsDraft.isEmpty {
+                                Text("Add preferences for how agents should respond")
+                                    .foregroundStyle(.tertiary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 16)
+                                    .allowsHitTesting(false)
+                            }
+
+                            TextEditor(text: $customInstructionsDraft)
+                                .scrollContentBackground(.hidden)
+                                .padding(8)
+                                .accessibilityLabel("Custom instructions")
+                                .accessibilityIdentifier(AccessibilityID.customInstructionsEditor)
+                        }
+                        .frame(minHeight: 140)
+                        .background(Color.appElevated2, in: .rect(cornerRadius: 12))
+
+                        HStack {
+                            Spacer()
+                            Button("Save", action: saveCustomInstructions)
+                                .buttonStyle(.borderedProminent)
+                                .disabled(!hasCustomInstructionsChanges)
+                                .accessibilityIdentifier(AccessibilityID.saveCustomInstructionsButton)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                } header: {
+                    Text("Personalization")
+                        .appFont(.headline)
                         .textCase(nil)
                 }
                 .listRowBackground(Color.appElevated)
@@ -56,7 +171,7 @@ struct SettingsView: View {
                 Section {
                 } footer: {
                     Text("Powered by OpenOnion")
-                        .font(.system(.callout, design: .serif).weight(.semibold))
+                        .appFont(.callout, weight: .semibold)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.top, 8)
@@ -69,7 +184,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("Settings")
-                        .font(AppFont.wordmark)
+                        .appFont(.title3, weight: .semibold)
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close", systemImage: "xmark") { dismiss() }
@@ -85,14 +200,115 @@ struct SettingsView: View {
                 }
             }
             .sensoryFeedback(.selection, trigger: feedbackTrigger)
+            .onAppear {
+                guard !hasLoadedCustomInstructionsDraft else { return }
+                customInstructionsDraft = customInstructions
+                hasLoadedCustomInstructionsDraft = true
+            }
         }
         .presentationBackground(Color.appGroupedCanvas)
+    }
+
+    private var normalizedCustomInstructionsDraft: String {
+        CustomInstructions.normalized(customInstructionsDraft)
+    }
+
+    private var hasCustomInstructionsChanges: Bool {
+        normalizedCustomInstructionsDraft != customInstructions
+    }
+
+    private func saveCustomInstructions() {
+        customInstructions = normalizedCustomInstructionsDraft
+        customInstructionsDraft = customInstructions
+        feedbackTrigger += 1
     }
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
+    }
+}
+
+private struct PreferencePickerRow<Value: Hashable & Identifiable>: View {
+    var title: String
+    @Binding var selection: Value
+    var options: [Value]
+    var label: (Value) -> String
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(title)
+            Spacer(minLength: 8)
+            Picker(title, selection: $selection) {
+                ForEach(options) { option in
+                    Text(label(option)).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+private struct FontSizeRow: View {
+    var title: String
+    @Binding var value: Double
+    var defaultValue: Double
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+            Spacer(minLength: 8)
+            TextField(
+                title,
+                value: $value,
+                format: .number.precision(.fractionLength(0 ... 1))
+            )
+            .keyboardType(.decimalPad)
+            .submitLabel(.done)
+            .multilineTextAlignment(.trailing)
+            .frame(width: 56)
+            .accessibilityValue("\(value.formatted()) points")
+
+            Text("pt")
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 2) {
+                Button {
+                    value = min(value.rounded(.down) + 1, FontSizePreference.allowedRange.upperBound)
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .frame(width: 28, height: 20)
+                }
+                .buttonStyle(.plain)
+                .disabled(value >= FontSizePreference.allowedRange.upperBound)
+                .accessibilityLabel("Increase \(title)")
+
+                Button {
+                    value = max(value.rounded(.up) - 1, FontSizePreference.allowedRange.lowerBound)
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 28, height: 20)
+                }
+                .buttonStyle(.plain)
+                .disabled(value <= FontSizePreference.allowedRange.lowerBound)
+                .accessibilityLabel("Decrease \(title)")
+            }
+            .appFont(.caption2, weight: .semibold)
+        }
+        .padding(.vertical, 3)
+        .onChange(of: value) { _, newValue in
+            let normalized = min(
+                max(newValue.isFinite ? newValue : defaultValue,
+                    FontSizePreference.allowedRange.lowerBound),
+                FontSizePreference.allowedRange.upperBound
+            )
+            if normalized != newValue {
+                value = normalized
+            }
+        }
     }
 }
 
@@ -106,10 +322,10 @@ private struct AgentSettingsRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(agent.displayName(info: info))
-                    .font(AppFont.rowName)
+                    .appFont(.body, weight: .semibold)
                     .lineLimit(1)
                 Text(endpointText)
-                    .font(.footnote.monospaced())
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -152,10 +368,10 @@ private struct SettingsInfoView: View {
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.callout)
+                .appFont(.callout)
             Spacer(minLength: 12)
             Text(value)
-                .font(.footnote.monospaced())
+                .appFont(.footnote)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .lineLimit(1)

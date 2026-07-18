@@ -8,16 +8,16 @@ struct ApprovalNeededCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Approval needed", systemImage: "shield")
-                .font(.headline)
+                .appFont(.headline)
 
             if let tool = item.tool {
                 Text(tool)
-                    .font(.body.monospaced())
+                    .appFont(.body)
             }
 
             if let description = item.description {
                 Text(description)
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
 
@@ -25,7 +25,7 @@ struct ApprovalNeededCard: View {
                 ApprovalButtons(onResponse: onResponse)
             } else if let answer = item.answer {
                 Label(answer, systemImage: item.answer == "Skipped" ? "forward.fill" : "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(item.answer == "Skipped" ? Color.secondary : Color.green)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

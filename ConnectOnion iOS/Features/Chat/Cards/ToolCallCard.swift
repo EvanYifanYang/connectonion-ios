@@ -20,12 +20,12 @@ struct ToolCallCard: View {
                         .symbolEffect(.pulse, options: .repeating, value: item.status == .running)
 
                     Text(item.name ?? "tool")
-                        .font(.body.monospaced())
+                        .appFont(.body)
                         .lineLimit(1)
 
                     if let argsPreview {
                         Text(argsPreview)
-                            .font(.footnote)
+                            .appFont(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -34,12 +34,12 @@ struct ToolCallCard: View {
 
                     if let timing = item.timingMS {
                         Text(TimeInterval(timing) / 1000, format: .number.precision(.fractionLength(1)))
-                            .font(.footnote.monospacedDigit())
+                            .appFont(.footnote)
                             .foregroundStyle(.tertiary)
                     }
 
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .foregroundStyle(.tertiary)
                 }
                 .contentShape(.rect)
@@ -52,7 +52,7 @@ struct ToolCallCard: View {
 
             if isExpanded, let result = item.result?.nilIfEmpty {
                 Text(result)
-                    .font(.footnote.monospaced())
+                    .appFont(.footnote)
                     .textSelection(.enabled)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)

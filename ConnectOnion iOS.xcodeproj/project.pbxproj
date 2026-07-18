@@ -11,6 +11,7 @@
 		07FA10112FDBE00000000021 /* Onion.png in Resources */ = {isa = PBXBuildFile; fileRef = 07FA10122FDBE00000000022 /* Onion.png */; };
 		07FA100C2FDBE0000000001C /* ConnectOnionWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 07FA10032FDBE00000000013 /* ConnectOnionWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		07FB00012FDBE00000000001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 07FB00032FDBE00000000003 /* Lottie */; };
+		07FC00012FDBE00000000001 /* Highlighter in Frameworks */ = {isa = PBXBuildFile; productRef = 07FC00032FDBE00000000003 /* Highlighter */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 			files = (
 				07FA00012FDBE00000000001 /* Factory in Frameworks */,
 				07FB00012FDBE00000000001 /* Lottie in Frameworks */,
+				07FC00012FDBE00000000001 /* Highlighter in Frameworks */,
 			);
 		};
 		0732346E2FDBD99100BDE6B4 /* Frameworks */ = {
@@ -160,6 +162,7 @@
 			packageProductDependencies = (
 				07FA00032FDBE00000000003 /* Factory */,
 				07FB00032FDBE00000000003 /* Lottie */,
+				07FC00032FDBE00000000003 /* Highlighter */,
 			);
 			productName = "ConnectOnion iOS";
 			productReference = 073234622FDBD98F00BDE6B4 /* ConnectOnion iOS.app */;
@@ -264,6 +267,7 @@
 			packageReferences = (
 				07FA00022FDBE00000000002 /* XCRemoteSwiftPackageReference "Factory" */,
 				07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */,
+				07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 073234632FDBD98F00BDE6B4 /* Products */;
@@ -727,6 +731,14 @@
 				minimumVersion = 4.6.0;
 			};
 		};
+		07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/smittytone/HighlighterSwift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -739,6 +751,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */;
 			productName = Lottie;
+		};
+		07FC00032FDBE00000000003 /* Highlighter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */;
+			productName = Highlighter;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

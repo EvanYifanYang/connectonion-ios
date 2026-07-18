@@ -11,15 +11,15 @@ struct VoiceInputStatusPill: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .appFont(.caption, weight: .semibold)
                 if transcript.isEmpty {
                     Text(subtitle)
-                        .font(.caption2)
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
                     Text(transcript)
-                        .font(.caption2)
+                        .appFont(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }

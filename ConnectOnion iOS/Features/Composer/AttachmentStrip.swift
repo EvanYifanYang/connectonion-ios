@@ -17,7 +17,7 @@ struct AttachmentStrip: View {
 
                 ForEach(files) { file in
                     Label(file.name, systemImage: "doc")
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .lineLimit(1)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -41,7 +41,7 @@ private struct DataURLImage: View {
                     .scaledToFill()
             } else {
                 Image(systemName: "photo")
-                    .font(.title3)
+                    .appFont(.title3)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

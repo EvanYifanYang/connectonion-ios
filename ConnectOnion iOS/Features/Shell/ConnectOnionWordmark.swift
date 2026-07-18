@@ -15,7 +15,7 @@ struct ConnectOnionWordmark: View {
             Text("nion")
         }
         // A touch larger than the other nav titles so the brand reads at the top of the agent list.
-        .font(.system(.title2, design: .serif).weight(.semibold))
+        .connectOnionBrandFont(.title2, weight: .semibold)
         .lineLimit(1)
         .accessibilityLabel("ConnectOnion")
     }

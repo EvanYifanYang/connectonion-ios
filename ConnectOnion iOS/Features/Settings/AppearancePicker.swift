@@ -27,7 +27,7 @@ struct AppearancePicker: View {
                 }
 
             Text(mode.label)
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(selected ? Color.onion : .secondary)
         }
         .frame(maxWidth: .infinity)

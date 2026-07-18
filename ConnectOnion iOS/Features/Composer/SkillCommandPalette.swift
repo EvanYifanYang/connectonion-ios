@@ -12,13 +12,13 @@ struct SkillCommandPalette: View {
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("/\(skill.name)")
-                            .font(.footnote.weight(.semibold))
+                            .appFont(.footnote, weight: .semibold)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .frame(minWidth: 76, alignment: .leading)
 
                         Text(skill.description)
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)

@@ -13,7 +13,7 @@ struct AskUserCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label(item.content, systemImage: "questionmark.circle")
-                .font(.headline)
+                .appFont(.headline)
                 .labelStyle(.titleAndIcon)
 
             if isPending {
@@ -44,7 +44,7 @@ struct AskUserCard: View {
                 }
             } else if let answer = item.answer {
                 Label(answer, systemImage: "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(.green)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

@@ -12,7 +12,7 @@ struct AgentHeroView: View {
                 .padding(.bottom, 8)
 
             Text(displayName)
-                .font(AppFont.title)
+                .appFont(.title2, weight: .semibold)
                 .lineLimit(1)
 
             if let online = info?.online {
@@ -21,7 +21,7 @@ struct AgentHeroView: View {
                         .fill(online ? Color.green : Color.secondary)
                         .frame(width: 7, height: 7)
                     Text(online ? "Connected" : "Offline")
-                        .font(.footnote.weight(.medium))
+                        .appFont(.footnote, weight: .medium)
                         .foregroundStyle(online ? Color.green : Color.secondary)
                 }
                 .accessibilityElement(children: .combine)
@@ -30,7 +30,7 @@ struct AgentHeroView: View {
 
             if !metaLine.isEmpty {
                 Text(metaLine)
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }

@@ -66,7 +66,7 @@ struct LaunchSplashView: View {
                     .animation(wordDisassemblyAnimation(for: index), value: dismissing)
             }
         }
-        .font(.system(size: 30, design: .serif).weight(.semibold))
+        .connectOnionBrandFont(.largeTitle, weight: .semibold)
         .foregroundStyle(.primary)
     }
 

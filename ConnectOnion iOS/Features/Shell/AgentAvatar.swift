@@ -7,7 +7,7 @@ struct AgentAvatar: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             Text(String(title.first ?? "O").uppercased())
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(Color(.systemBackground))
                 .frame(width: 42, height: 42)
                 .background(.primary, in: .rect(cornerRadius: 13))

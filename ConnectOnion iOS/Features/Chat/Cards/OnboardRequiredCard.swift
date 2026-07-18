@@ -11,7 +11,7 @@ struct OnboardRequiredCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Verification required", systemImage: "lock")
-                .font(.headline)
+                .appFont(.headline)
 
             if isPending {
                 if item.methods.contains("invite_code") {
@@ -45,7 +45,7 @@ struct OnboardRequiredCard: View {
                 }
             } else if let answer = item.answer {
                 Label(answer, systemImage: "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(.green)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)

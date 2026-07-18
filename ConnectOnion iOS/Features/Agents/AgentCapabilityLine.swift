@@ -9,7 +9,7 @@ struct AgentCapabilityLine: View {
                 Text(acceptsLine)
             }
         }
-        .font(.footnote)
+        .appFont(.footnote)
         .foregroundStyle(.tertiary)
         .multilineTextAlignment(.center)
     }

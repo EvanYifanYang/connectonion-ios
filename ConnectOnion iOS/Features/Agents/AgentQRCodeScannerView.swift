@@ -121,7 +121,7 @@ struct AgentQRCodeScannerView: View {
                     .accessibilityHidden(true)
 
                 Text("Align the agent QR code inside the frame")
-                    .font(.callout.weight(.medium))
+                    .appFont(.callout, weight: .medium)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
@@ -133,7 +133,7 @@ struct AgentQRCodeScannerView: View {
 
                 if let notice {
                     Label(notice.message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.callout.weight(.semibold))
+                        .appFont(.callout, weight: .semibold)
                         .multilineTextAlignment(.leading)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -157,9 +157,9 @@ struct AgentQRCodeScannerView: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Scan Agent")
-                    .font(.title2.bold())
+                    .appFont(.title2, weight: .bold)
                 Text("Connect securely from a QR code")
-                    .font(.subheadline)
+                    .appFont(.subheadline)
                     .foregroundStyle(.white.opacity(0.72))
             }
 
@@ -169,7 +169,7 @@ struct AgentQRCodeScannerView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.body.bold())
+                    .appFont(.body, weight: .bold)
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.glass)
@@ -196,7 +196,7 @@ struct AgentQRCodeScannerView: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.body.bold())
+                        .appFont(.body, weight: .bold)
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.glass)
@@ -219,9 +219,9 @@ struct AgentQRCodeScannerView: View {
 
                 VStack(spacing: 8) {
                     Text(cameraState.title)
-                        .font(.title2.bold())
+                        .appFont(.title2, weight: .bold)
                     Text(cameraState.message)
-                        .font(.body)
+                        .appFont(.body)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -245,7 +245,7 @@ struct AgentQRCodeScannerView: View {
                             .fill(.white.opacity(0.18))
                             .frame(height: 1)
                         Text("OR")
-                            .font(.caption.weight(.semibold))
+                            .appFont(.caption, weight: .semibold)
                             .foregroundStyle(.white.opacity(0.5))
                         Rectangle()
                             .fill(.white.opacity(0.18))
@@ -257,7 +257,7 @@ struct AgentQRCodeScannerView: View {
 
                     if let notice {
                         Label(notice.message, systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout.weight(.semibold))
+                            .appFont(.callout, weight: .semibold)
                             .multilineTextAlignment(.leading)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
@@ -283,10 +283,10 @@ struct AgentQRCodeScannerView: View {
                 .symbolEffect(.bounce, value: successFeedbackTrigger)
 
             Text("Agent Found")
-                .font(.title2.bold())
+                .appFont(.title2, weight: .bold)
 
             Text(AgentAddress(rawValue: payload.address)?.shortDisplay ?? payload.address)
-                .font(.body.monospaced())
+                .appFont(.body)
                 .foregroundStyle(.white.opacity(0.72))
         }
         .padding(.horizontal, 32)

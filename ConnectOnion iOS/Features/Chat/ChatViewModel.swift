@@ -137,6 +137,7 @@ final class ChatViewModel {
         guard latestTurnCompleted,
               sessionState == .connected,
               !hasOngoingSession,
+              streamingMessageID == nil,
               !hasPendingUserAction,
               errorMessage == nil,
               let lastUserIndex = items.lastIndex(where: { $0.kind == .user }),
@@ -450,23 +451,45 @@ final class ChatViewModel {
         case .output(let result, let session, let chatItems):
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
-            regenerateBackup = nil // the resend produced a reply, so drop the restore snapshot
+            let regenerating = isRegenerating
+            let sanitizedChatItems = chatItems.isEmpty ? [] : sanitizingUserPrompts(in: chatItems)
+            let replacementResult = regenerating
+                ? usableReplacementResult(result: result, chatItems: sanitizedChatItems)
+                : result
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
-            let regenerating = isRegenerating
+
+            guard !regenerating || replacementResult != nil else {
+                streamTask = nil
+                _ = restoreRegenerateBackup()
+                errorMessage = "The agent returned an empty response. The original exchange was restored."
+                sessionState = items.isEmpty ? .idle : .connected
+                stopTimer()
+                client.disconnect()
+                liveActivity.end(
+                    conversationID: conversation.id,
+                    phase: .failed,
+                    headline: "Reply could not be replaced",
+                    detail: "The original exchange was restored"
+                )
+                return
+            }
+
+            regenerateBackup = nil // a usable replacement exists, so the old exchange is no longer needed
             isRegenerating = false
             // Keep our locally-built replacement view so stale canonical data cannot resurrect the
             // removed exchange or append the revision as a duplicate turn.
             if !chatItems.isEmpty, !regenerating {
-                items = sanitizingUserPrompts(in: chatItems)
+                items = sanitizedChatItems
             }
+            let finalResult = replacementResult ?? result
             // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
             // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
             // is the last item, so we still append the fresh bubble below it.
-            if !result.isEmpty, !(items.last?.kind == .agent && items.last?.content == result) {
-                let agentItem = ChatItem(kind: .agent, content: result)
+            if !finalResult.isEmpty, !(items.last?.kind == .agent && items.last?.content == finalResult) {
+                let agentItem = ChatItem(kind: .agent, content: finalResult)
                 append(agentItem, animated: true, shouldPersist: false)
             }
             finalizeRunningItems()
@@ -474,9 +497,9 @@ final class ChatViewModel {
             // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
             // however it landed (adopted from the canonical list or appended above). This is the single
             // place the reveal is triggered for a normal turn.
-            if !result.isEmpty,
+            if !finalResult.isEmpty,
                let index = items.lastIndex(where: { $0.kind == .agent }),
-               items[index].content == result {
+               items[index].content == finalResult {
                 streamingMessageID = items[index].id
             }
             // Stamp the model onto the reply itself so the footer survives a reload — the thinking row
@@ -498,7 +521,7 @@ final class ChatViewModel {
                 headline: "Reply ready",
                 detail: "\(agent.displayName) finished responding"
             )
-            if !result.isEmpty {
+            if !finalResult.isEmpty {
                 onReplyCompleted(conversation)
             }
 
@@ -569,6 +592,23 @@ final class ChatViewModel {
             sanitized.content = CustomInstructions.removingWrapper(from: item.content)
             return sanitized
         }
+    }
+
+    /// Some hosts place the final answer only in canonical chat items. Accept that form only when an
+    /// assistant message follows the revised user message; retained history alone is not a replacement.
+    private func usableReplacementResult(result: String, chatItems: [ChatItem]) -> String? {
+        if !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return result
+        }
+        guard let lastUserIndex = chatItems.lastIndex(where: { $0.kind == .user }),
+              let lastAgentIndex = chatItems.lastIndex(where: { $0.kind == .agent }),
+              lastAgentIndex > lastUserIndex else {
+            return nil
+        }
+        let canonicalResult = chatItems[lastAgentIndex].content
+        return canonicalResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : canonicalResult
     }
 
     private func snapshot() -> ConversationSession {

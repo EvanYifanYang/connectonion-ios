@@ -219,6 +219,34 @@ struct Sprint2ReplyRegenerationTests {
         #expect(conversation.lastRenderedEventID == "event-old")
     }
 
+    @Test @MainActor func emptyRegenerateOutputRestoresOriginalExchange() async {
+        let originalUser = ChatItem(id: "original-user", kind: .user, content: "Original prompt")
+        let originalReply = ChatItem(id: "original-reply", kind: .agent, content: "Original reply")
+        let originalItems = [originalUser, originalReply]
+        let conversation = ConversationRecord(
+            agentAddress: testAgentAddress,
+            remoteSessionID: "remote-original",
+            messages: originalItems,
+            rawSession: .object(["state": .string("old")]),
+            lastRenderedEventID: "event-old"
+        )
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: agent.config,
+            client: EmptyRegenerateOutputClient()
+        )
+
+        viewModel.regenerate()
+        await waitUntil { viewModel.errorMessage != nil }
+
+        #expect(viewModel.items == originalItems)
+        #expect(conversation.messages == originalItems)
+        #expect(conversation.remoteSessionID == "remote-original")
+        #expect(conversation.lastRenderedEventID == "event-old")
+        #expect(viewModel.sessionState == .connected)
+    }
+
     @Test @MainActor func outputWithoutModelDoesNotReusePreviousTurnsModel() async {
         let previousUser = ChatItem(id: "previous-user", kind: .user, content: "Previous prompt")
         var previousReply = ChatItem(id: "previous-reply", kind: .agent, content: "Previous reply")
@@ -297,6 +325,9 @@ struct Sprint2LatestMessageEditingTests {
         ])
         #expect(conversation.messages == viewModel.items)
         #expect(conversation.title == "Existing title")
+        if let streamingMessageID = viewModel.streamingMessageID {
+            viewModel.markStreamingComplete(streamingMessageID)
+        }
         #expect(viewModel.editableLatestUserMessageID == viewModel.items.last { $0.kind == .user }?.id)
     }
 
@@ -363,6 +394,10 @@ struct Sprint2LatestMessageEditingTests {
             agent: agent.config,
             client: StreamingConnectOnionClient()
         )
+        #expect(completed.editableLatestUserMessageID == user.id)
+        completed.streamingMessageID = reply.id
+        #expect(completed.editableLatestUserMessageID == nil)
+        completed.markStreamingComplete(reply.id)
         #expect(completed.editableLatestUserMessageID == user.id)
         #expect(!completed.editLatestUserMessage(id: user.id, prompt: "Prompt"))
         #expect(!completed.editLatestUserMessage(id: user.id, prompt: "   "))

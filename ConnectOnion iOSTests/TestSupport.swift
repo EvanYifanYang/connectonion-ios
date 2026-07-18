@@ -161,6 +161,35 @@ final class PartialRegenerateFailureClient: ConnectOnionClientProviding {
     func disconnect() {}
 }
 
+/// Terminates normally without a replacement answer. The view model must treat this as an
+/// unsuccessful regeneration and restore the exchange it removed optimistically.
+@MainActor
+final class EmptyRegenerateOutputClient: ConnectOnionClientProviding {
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+            continuation.yield(.output(result: "", session: nil, chatItems: []))
+            continuation.finish()
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
 // MARK: - Sprint 2 · onboarding + attachment doubles
 
 /// Gates the very first prompt behind an ONBOARD_REQUIRED, then replays the original

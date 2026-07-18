@@ -77,25 +77,26 @@ struct Sprint2AttachmentComposerTests {
     @Test @MainActor func inputMessageCarriesAttachmentsAndSignedPayload() throws {
         let codec = ProtocolCodec(identityStore: MockIdentityStore())
 
+        let input = AgentInput(
+            prompt: "Inspect the project",
+            images: ["data:image/png;base64,abc"],
+            files: [
+                FileAttachment(
+                    name: "README.md",
+                    type: "text/markdown",
+                    size: 6,
+                    dataURL: "data:text/markdown;base64,cmVhZG1l"
+                )
+            ]
+        )
         let message = try codec.inputMessage(
-            input: AgentInput(
-                prompt: "Inspect the project",
-                images: ["data:image/png;base64,abc"],
-                files: [
-                    FileAttachment(
-                        name: "README.md",
-                        type: "text/markdown",
-                        size: 6,
-                        dataURL: "data:text/markdown;base64,cmVhZG1l"
-                    )
-                ]
-            ),
+            input: input,
             agentAddress: testAgentAddress,
             route: .relay(webSocketURL: URL(string: "wss://relay.example/ws/input")!)
         )
 
         #expect(message[string: "type"] == "INPUT")
-        #expect(message[string: "prompt"] == "Inspect the project")
+        #expect(message[string: "prompt"] == input.transmittedPrompt)
         #expect(message[string: "to"] == testAgentAddress)
         #expect(message[string: "from"]?.hasPrefix("0x") == true)
         #expect(message[string: "signature"]?.count == 128)
@@ -103,7 +104,7 @@ struct Sprint2AttachmentComposerTests {
         #expect(message["files"]?.arrayValue?.count == 1)
 
         let payload = message["payload"]?.objectValue
-        #expect(payload?[string: "prompt"] == "Inspect the project")
+        #expect(payload?[string: "prompt"] == input.transmittedPrompt)
         #expect(payload?[string: "to"] == testAgentAddress)
         #expect(payload?[int: "timestamp"] == message[int: "timestamp"])
     }

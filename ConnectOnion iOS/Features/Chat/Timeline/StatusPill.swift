@@ -7,7 +7,7 @@ struct StatusPill: View {
 
     var body: some View {
         Label(text, systemImage: systemImage)
-            .font(.footnote)
+            .appFont(.footnote)
             .foregroundStyle(tint)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

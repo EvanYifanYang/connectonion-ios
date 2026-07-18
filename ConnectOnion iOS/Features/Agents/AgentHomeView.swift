@@ -115,7 +115,7 @@ struct AgentHomeView: View {
     private var newChatButton: some View {
         Button(action: onNewChat) {
             Label("New Chat", systemImage: "plus")
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 22)
                 .padding(.vertical, 14)
@@ -129,13 +129,13 @@ struct AgentHomeView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.largeTitle)
+                .appFont(.largeTitle)
                 .foregroundStyle(.tertiary)
             Text("No chats yet")
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(.secondary)
             Text("Start a new chat with \(agent.displayName(info: info)).")
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }

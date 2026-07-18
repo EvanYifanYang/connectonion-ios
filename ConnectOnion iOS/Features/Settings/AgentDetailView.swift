@@ -28,7 +28,7 @@ struct AgentDetailView: View {
                     AgentAvatar(title: agent.displayName(info: info), online: info?.online)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(agent.displayName(info: info))
-                            .font(AppFont.sectionSerif)
+                            .appFont(.headline)
                             .lineLimit(1)
                         AgentStatusLabel(online: info?.online)
                     }
@@ -42,19 +42,19 @@ struct AgentDetailView: View {
                     .tint(.primary)
                     .textInputAutocapitalization(.words)
             } header: {
-                Text("Name").font(AppFont.sectionSerif).textCase(nil)
+                Text("Name").appFont(.headline).textCase(nil)
             }
             .listRowBackground(Color.appElevated)
 
             Section {
                 TextField("http://192.168.0.10:8000", text: $endpoint)
-                    .font(.body.monospaced())
+                    .appFont(.body)
                     .tint(.primary)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
             } header: {
-                Text("Endpoint").font(AppFont.sectionSerif).textCase(nil)
+                Text("Endpoint").appFont(.headline).textCase(nil)
             } footer: {
                 Text("The agent's LAN address, so this phone can reach it on the same Wi‑Fi.")
             }
@@ -62,11 +62,11 @@ struct AgentDetailView: View {
 
             Section {
                 Text(agent.address)
-                    .font(.footnote.monospaced())
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             } header: {
-                Text("Address").font(AppFont.sectionSerif).textCase(nil)
+                Text("Address").appFont(.headline).textCase(nil)
             }
             .listRowBackground(Color.appElevated)
 
@@ -90,7 +90,7 @@ struct AgentDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                Text("Agent").font(AppFont.wordmark)
+                Text("Agent").appFont(.title3, weight: .semibold)
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save", action: save)
@@ -134,12 +134,12 @@ struct AgentStatusLabel: View {
                     .fill(online ? Color.green : Color.secondary)
                     .frame(width: 7, height: 7)
                 Text(online ? "Online" : "Offline")
-                    .font(.footnote)
+                    .appFont(.footnote)
                     .foregroundStyle(.secondary)
             }
         } else {
             Text("Checking…")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(.tertiary)
         }
     }

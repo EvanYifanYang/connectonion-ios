@@ -16,7 +16,7 @@ struct AgentBubble: View {
                     StreamingMessageText(text: item.content, onComplete: onStreamComplete)
                 } else {
                     MarkdownMessageView(text: item.content)
-                        .font(.body)
+                        .appFont(.body)
                 }
             }
 
@@ -49,7 +49,7 @@ struct AgentBubble: View {
                     HStack(spacing: 6) {
                         OnionThinkingMark(active: false, diameter: 16)
                         Text(modelName)
-                            .font(.footnote.monospaced())
+                            .appFont(.footnote)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.top, 2)
@@ -83,8 +83,7 @@ private struct StreamingMessageText: View {
         let revealedText = Text(shown)
         let caretText = caret(visible: revealed < count)
         return Text("\(revealedText)\(caretText)")
-            .font(.body)
-            .fontDesign(.serif)
+            .appFont(.body)
             .lineSpacing(3)
             .tint(.onion)
             .frame(maxWidth: .infinity, alignment: .leading)

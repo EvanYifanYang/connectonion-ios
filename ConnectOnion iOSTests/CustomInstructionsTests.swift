@@ -4,9 +4,16 @@ import Testing
 
 @Suite("Custom instructions — prompt formatting")
 struct CustomInstructionsFormattingTests {
-    @Test func emptyInstructionsLeavePromptUnchanged() {
-        #expect(CustomInstructions.injecting("", into: "Explain this") == "Explain this")
-        #expect(CustomInstructions.injecting("  \n", into: "Explain this") == "Explain this")
+    @Test func personalityIsInjectedEvenWithoutCustomInstructions() {
+        let prompt = "Explain this"
+        let transmitted = CustomInstructions.injecting(
+            personality: .pragmatic,
+            instructions: "  \n",
+            into: prompt
+        )
+
+        #expect(transmitted.contains("concise, direct, task-focused"))
+        #expect(CustomInstructions.removingWrapper(from: transmitted) == prompt)
     }
 
     @Test func multilineUnicodeInstructionsRoundTripToOriginalPrompt() {
@@ -32,9 +39,18 @@ struct CustomInstructionsFormattingTests {
     @Test func unwrappedAndMalformedPromptsAreNotChanged() {
         let plain = "A normal user request"
         let malformed = "<<<CONNECTONION_CUSTOM_INSTRUCTIONS_V1>>>\nMissing the remaining markers"
+        let legacy = """
+        <<<CONNECTONION_CUSTOM_INSTRUCTIONS_V1>>>
+        Legacy preference
+        <<<CONNECTONION_END_CUSTOM_INSTRUCTIONS_V1>>>
+
+        <<<CONNECTONION_USER_REQUEST_V1>>>
+        Original request
+        """
 
         #expect(CustomInstructions.removingWrapper(from: plain) == plain)
         #expect(CustomInstructions.removingWrapper(from: malformed) == malformed)
+        #expect(CustomInstructions.removingWrapper(from: legacy) == "Original request")
     }
 }
 
@@ -42,7 +58,11 @@ struct CustomInstructionsFormattingTests {
 struct CustomInstructionsTransportTests {
     @Test @MainActor func codecUsesSameTransmittedPromptAtTopLevelAndInSignedPayload() throws {
         let codec = ProtocolCodec(identityStore: MockIdentityStore())
-        let input = AgentInput(prompt: "Inspect the project", customInstructions: "Be concise")
+        let input = AgentInput(
+            prompt: "Inspect the project",
+            customInstructions: "Be concise",
+            personality: .friendly
+        )
 
         let message = try codec.inputMessage(
             input: input,
@@ -51,6 +71,8 @@ struct CustomInstructionsTransportTests {
         )
 
         #expect(input.prompt == "Inspect the project")
+        #expect(input.personality == .friendly)
+        #expect(input.transmittedPrompt.contains("warm, collaborative"))
         #expect(input.transmittedPrompt != input.prompt)
         #expect(message[string: "prompt"] == input.transmittedPrompt)
         #expect(message["payload"]?.objectValue?[string: "prompt"] == input.transmittedPrompt)
@@ -58,6 +80,7 @@ struct CustomInstructionsTransportTests {
 
     @Test @MainActor func regenerateCapturesLatestSavedInstructions() async {
         var savedInstructions = "Use the first preference"
+        var savedPersonality = PersonalityMode.pragmatic
         let conversation = ConversationRecord(agentAddress: testAgentAddress)
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
         let client = StreamingConnectOnionClient(replyText: "Done")
@@ -65,12 +88,14 @@ struct CustomInstructionsTransportTests {
             conversation: conversation,
             agent: agent.config,
             client: client,
-            customInstructionsProvider: { savedInstructions }
+            customInstructionsProvider: { savedInstructions },
+            personalityProvider: { savedPersonality }
         )
 
         viewModel.send("Explain this")
         await waitUntil { client.sentInputs.count == 1 && viewModel.sessionState == .connected }
         savedInstructions = "Use the latest preference"
+        savedPersonality = .friendly
         viewModel.regenerate()
         await waitUntil { client.sentInputs.count == 2 && viewModel.sessionState == .connected }
 
@@ -79,6 +104,7 @@ struct CustomInstructionsTransportTests {
             "Use the first preference",
             "Use the latest preference"
         ])
+        #expect(client.sentInputs.map(\.personality) == [.pragmatic, .friendly])
         #expect(viewModel.items.last { $0.kind == .user }?.content == "Explain this")
     }
 

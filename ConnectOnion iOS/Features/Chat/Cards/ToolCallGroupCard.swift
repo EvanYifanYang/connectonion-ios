@@ -28,25 +28,25 @@ struct ToolCallGroupCard: View {
 
                     if items.count == 1 {
                         Text(items[0].name ?? "tool")
-                            .font(.callout.monospaced())
+                            .appFont(.callout)
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                         if let preview = argsPreview(items[0]) {
                             Text(preview)
-                                .font(.caption)
+                                .appFont(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     } else {
                         Text("\(items.count) tool calls")
-                            .font(.callout)
+                            .appFont(.callout)
                             .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 0)
 
                     Image(systemName: isExpandedEffective ? "chevron.down" : "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .appFont(.caption, weight: .semibold)
                         .foregroundStyle(.tertiary)
                 }
                 .contentShape(.rect)
@@ -79,12 +79,12 @@ struct ToolCallGroupCard: View {
             if items.count > 1 {
                 HStack(spacing: 6) {
                     statusIcon(item.status, running: item.status == .running)
-                        .font(.footnote)
+                        .appFont(.footnote)
                     Text(item.name ?? "tool")
-                        .font(.footnote.monospaced())
+                        .appFont(.footnote)
                     if let preview = argsPreview(item) {
                         Text(preview)
-                            .font(.caption)
+                            .appFont(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -98,7 +98,7 @@ struct ToolCallGroupCard: View {
 
             if let result = item.result?.nilIfEmpty {
                 Text(result)
-                    .font(.caption.monospaced())
+                    .appFont(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)

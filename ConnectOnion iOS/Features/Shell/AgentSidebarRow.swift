@@ -31,7 +31,7 @@ struct AgentSidebarRow: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
-                                .font(AppFont.rowName)
+                                .appFont(.body, weight: .semibold)
                                 .lineLimit(1)
 
                             if let model = info?.model, !model.isEmpty {
@@ -39,12 +39,12 @@ struct AgentSidebarRow: View {
                                     Image(systemName: "cpu").imageScale(.small)
                                     Text(model).lineLimit(1)
                                 }
-                                .font(.footnote)
+                                .appFont(.footnote)
                                 .foregroundStyle(.secondary)
                             }
 
                             Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
-                                .font(.footnote.monospaced())
+                                .appFont(.footnote)
                                 .foregroundStyle(.tertiary)
                                 .lineLimit(1)
                         }
@@ -53,7 +53,7 @@ struct AgentSidebarRow: View {
 
                         if isPinned {
                             Image(systemName: "pin.fill")
-                                .font(.caption)
+                                .appFont(.caption)
                                 .foregroundStyle(Color.onion.opacity(0.7))
                         }
                     }
@@ -70,7 +70,7 @@ struct AgentSidebarRow: View {
                     actions
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
+                        .appFont(.body, weight: .semibold)
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                         .contentShape(.circle)

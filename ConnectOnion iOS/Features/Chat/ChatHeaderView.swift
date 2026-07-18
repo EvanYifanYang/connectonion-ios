@@ -13,11 +13,11 @@ struct ChatHeaderView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
-                        .font(.headline)
+                        .appFont(.headline)
                         .lineLimit(1)
 
                     Text(subtitleText)
-                        .font(.footnote)
+                        .appFont(.footnote)
                         .foregroundStyle(.secondary)
                         .contentTransition(.opacity)
                         .lineLimit(1)

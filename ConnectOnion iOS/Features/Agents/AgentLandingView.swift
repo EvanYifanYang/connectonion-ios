@@ -29,7 +29,7 @@ struct AgentLandingView: View {
                 OnionRevealView(trigger: greeting)
                     .frame(width: 60, height: 60)
                 Text(greeting)
-                    .font(.system(.title, design: .serif).weight(.medium))
+                    .appFont(.title, weight: .medium)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .multilineTextAlignment(.center)

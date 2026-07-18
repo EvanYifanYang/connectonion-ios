@@ -12,7 +12,7 @@ struct InlineRenameField: View {
 
     var body: some View {
         TextField("", text: $text)
-            .font(.body)
+            .appFont(.body)
             .textFieldStyle(.plain)
             .tint(.primary)
             .submitLabel(.done)

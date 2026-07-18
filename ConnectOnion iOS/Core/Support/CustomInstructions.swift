@@ -3,9 +3,13 @@ import Foundation
 enum CustomInstructions {
     static let storageKey = "customInstructions"
 
-    private static let openingMarker = "<<<CONNECTONION_CUSTOM_INSTRUCTIONS_V1>>>"
-    private static let closingMarker = "<<<CONNECTONION_END_CUSTOM_INSTRUCTIONS_V1>>>"
-    private static let userRequestMarker = "<<<CONNECTONION_USER_REQUEST_V1>>>"
+    private static let v1OpeningMarker = "<<<CONNECTONION_CUSTOM_INSTRUCTIONS_V1>>>"
+    private static let v1ClosingMarker = "<<<CONNECTONION_END_CUSTOM_INSTRUCTIONS_V1>>>"
+    private static let v1UserRequestMarker = "<<<CONNECTONION_USER_REQUEST_V1>>>"
+
+    private static let v2OpeningMarker = "<<<CONNECTONION_PERSONALISATION_V2>>>"
+    private static let v2ClosingMarker = "<<<CONNECTONION_END_PERSONALISATION_V2>>>"
+    private static let v2UserRequestMarker = "<<<CONNECTONION_USER_REQUEST_V2>>>"
 
     @MainActor
     static var saved: String {
@@ -17,24 +21,58 @@ enum CustomInstructions {
     }
 
     static func injecting(_ instructions: String, into prompt: String) -> String {
+        injecting(personality: .pragmatic, instructions: instructions, into: prompt)
+    }
+
+    static func injecting(
+        personality: PersonalityMode,
+        instructions: String,
+        into prompt: String
+    ) -> String {
         let instructions = normalized(instructions)
-        guard !instructions.isEmpty else { return prompt }
+        let customInstructionsSection = instructions.isEmpty
+            ? "No saved custom instructions."
+            : instructions
 
         return """
-        \(openingMarker)
-        These are the user's saved preferences. Follow them unless they conflict with higher-priority instructions.
+        \(v2OpeningMarker)
+        Apply the following saved personalisation unless it conflicts with higher-priority instructions.
 
-        \(instructions)
-        \(closingMarker)
+        Selected personality:
+        \(personality.promptInstruction)
 
-        \(userRequestMarker)
+        Custom instructions (these take precedence over the selected personality if they conflict):
+        \(customInstructionsSection)
+        \(v2ClosingMarker)
+
+        \(v2UserRequestMarker)
         \(prompt)
         """
     }
 
     static func removingWrapper(from prompt: String) -> String {
-        guard prompt.hasPrefix(openingMarker) else { return prompt }
+        if prompt.hasPrefix(v2OpeningMarker) {
+            return removingWrapper(
+                from: prompt,
+                closingMarker: v2ClosingMarker,
+                userRequestMarker: v2UserRequestMarker
+            )
+        }
+        if prompt.hasPrefix(v1OpeningMarker) {
+            return removingWrapper(
+                from: prompt,
+                closingMarker: v1ClosingMarker,
+                userRequestMarker: v1UserRequestMarker
+            )
+        }
+        return prompt
+    }
 
+    private static func removingWrapper(
+        from prompt: String,
+        closingMarker: String,
+        userRequestMarker: String
+    ) -> String {
         let separator = "\n\(closingMarker)\n\n\(userRequestMarker)\n"
         guard let range = prompt.range(of: separator) else { return prompt }
         return String(prompt[range.upperBound...])

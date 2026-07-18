@@ -19,9 +19,9 @@ struct EmptyStateHero: View {
 
             VStack(spacing: 6) {
                 Text("ConnectOnion")
-                    .font(AppFont.hero)
+                    .connectOnionBrandFont(.largeTitle, weight: .semibold)
                 Text("Add your first agent")
-                    .font(AppFont.heroSubtitle)
+                    .appFont(.title3)
                     .foregroundStyle(.secondary)
             }
             .multilineTextAlignment(.center)

@@ -77,12 +77,12 @@ struct AttachmentSheet: View {
     private var header: some View {
         ZStack {
             Text("Add to Chat")
-                .font(.headline)
+                .appFont(.headline)
 
             HStack {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
+                        .appFont(.body, weight: .semibold)
                         .foregroundStyle(.primary)
                         .frame(width: 36, height: 36)
                         .background(Color(.systemBackground), in: .circle)
@@ -99,7 +99,7 @@ struct AttachmentSheet: View {
                         onAllPhotos()
                     } label: {
                         Text("All photos")
-                            .font(.body.weight(.semibold))
+                            .appFont(.body, weight: .semibold)
                             .foregroundStyle(.primary)
                     }
                     .buttonStyle(.plain)
@@ -168,7 +168,7 @@ struct AttachmentSheet: View {
             Image(systemName: icon)
                 .font(.title2)
             Text(title)
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .multilineTextAlignment(.center)
         }
         .foregroundStyle(.primary)
@@ -183,10 +183,10 @@ struct AttachmentSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "doc")
-                    .font(.body)
+                    .appFont(.body)
                     .frame(width: 24)
                 Text("Add files")
-                    .font(.body)
+                    .appFont(.body)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.primary)
@@ -206,7 +206,7 @@ struct AttachmentSheet: View {
                         .tint(Color(.systemBackground))
                 }
                 Text(isAttaching ? "Attaching…" : "Attach \(selected.count) photo\(selected.count == 1 ? "" : "s")")
-                    .font(.headline)
+                    .appFont(.headline)
             }
             .foregroundStyle(Color(.systemBackground))
             .frame(maxWidth: .infinity)
@@ -331,7 +331,7 @@ private struct PhotoThumbnailTile: View {
         ZStack {
             Circle().fill(.white)
             Image(systemName: "checkmark")
-                .font(.caption.weight(.bold))
+                .appFont(.caption, weight: .bold)
                 .foregroundStyle(Color.black.opacity(0.8))
         }
         .frame(width: 24, height: 24)

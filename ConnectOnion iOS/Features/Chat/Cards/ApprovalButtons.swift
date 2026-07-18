@@ -42,7 +42,7 @@ struct ApprovalButtons: View {
 
             if let response {
                 Label(response, systemImage: response == "Skipped" ? "forward.fill" : "checkmark.circle.fill")
-                    .font(.footnote.weight(.medium))
+                    .appFont(.footnote, weight: .medium)
                     .foregroundStyle(response == "Skipped" ? Color.secondary : Color.green)
                     .accessibilityIdentifier(AccessibilityID.approvalStatus)
                     .transition(AppMotion.panelTransition)
@@ -56,7 +56,7 @@ struct ApprovalButtons: View {
     private func approvalButton(title: String, systemImage: String, id: String, isProminent: Bool, action: @escaping () -> Void) -> some View {
         let button = Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.body.weight(.semibold))
+                .appFont(.body, weight: .semibold)
                 .labelStyle(.titleAndIcon)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

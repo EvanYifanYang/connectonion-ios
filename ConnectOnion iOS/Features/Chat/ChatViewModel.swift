@@ -28,6 +28,7 @@ final class ChatViewModel {
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
     @ObservationIgnored private let customInstructionsProvider: @MainActor () -> String
+    @ObservationIgnored private let personalityProvider: @MainActor () -> PersonalityMode
     @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
@@ -50,6 +51,7 @@ final class ChatViewModel {
         agent: AgentConfig,
         client: ConnectOnionClientProviding? = nil,
         customInstructionsProvider: @escaping @MainActor () -> String = { CustomInstructions.saved },
+        personalityProvider: @escaping @MainActor () -> PersonalityMode = { PersonalityMode.saved },
         onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in }
     ) {
         self.conversation = conversation
@@ -57,6 +59,7 @@ final class ChatViewModel {
         items = conversation.messages
         clientOverride = client
         self.customInstructionsProvider = customInstructionsProvider
+        self.personalityProvider = personalityProvider
         self.onReplyCompleted = onReplyCompleted
         finalizeRunningItems() // restored items must never resume the live "running" animation
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
@@ -126,6 +129,7 @@ final class ChatViewModel {
         let input = AgentInput(
             prompt: trimmed,
             customInstructions: customInstructionsProvider(),
+            personality: personalityProvider(),
             images: images,
             files: files
         )

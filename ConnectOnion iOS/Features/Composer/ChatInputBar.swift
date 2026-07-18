@@ -12,6 +12,7 @@ struct ChatInputBar: View {
     var onStop: () -> Void
 
     @AppStorage(CustomInstructions.storageKey) private var customInstructions = ""
+    @AppStorage(PersonalityMode.storageKey) private var personality: PersonalityMode = .pragmatic
     @State private var text = ""
     @State private var imageAttachments: [ImageAttachmentDraft] = []
     @State private var fileAttachments: [FileAttachment] = []
@@ -64,7 +65,7 @@ struct ChatInputBar: View {
 
             if let attachmentError {
                 Label(attachmentError, systemImage: "exclamationmark.circle.fill")
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.red)
                     .padding(.horizontal, 8)
                     .accessibilityIdentifier(AccessibilityID.chatAttachmentError)
@@ -73,7 +74,7 @@ struct ChatInputBar: View {
 
             if let voiceError = voiceInput.errorMessage {
                 Label(voiceError, systemImage: "mic.slash.fill")
-                    .font(.caption)
+                    .appFont(.caption)
                     .foregroundStyle(.red)
                     .padding(.horizontal, 8)
                     .accessibilityIdentifier(AccessibilityID.chatVoiceError)
@@ -508,7 +509,11 @@ struct ChatInputBar: View {
         tick()
         let images = imageAttachments.map(\.dataURL)
         let files = fileAttachments
-        let transmittedPrompt = CustomInstructions.injecting(customInstructions, into: trimmed)
+        let transmittedPrompt = CustomInstructions.injecting(
+            personality: personality,
+            instructions: customInstructions,
+            into: trimmed
+        )
         let estimatedFrameBytes = AttachmentEncoding.estimatedInputFrameBytes(
             prompt: transmittedPrompt,
             images: images,

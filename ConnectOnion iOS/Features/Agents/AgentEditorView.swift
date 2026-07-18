@@ -35,7 +35,7 @@ struct AgentEditorView: View {
                 Section {
                     HStack(spacing: 12) {
                         TextField("Agent address", text: $address)
-                            .font(.body.monospaced())
+                            .appFont(.body)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .disabled(!isAddressEditable)
@@ -47,7 +47,7 @@ struct AgentEditorView: View {
                                 presentedScanner = .agentQRCode
                             } label: {
                                 Image(systemName: "qrcode.viewfinder")
-                                    .font(.title3.weight(.semibold))
+                                    .appFont(.title3, weight: .semibold)
                                     .frame(width: 36, height: 36)
                                     .contentShape(.rect)
                             }
@@ -64,7 +64,7 @@ struct AgentEditorView: View {
                         .accessibilityIdentifier(AccessibilityID.addAgentAliasField)
 
                     TextField("Endpoint", text: $endpoint)
-                        .font(.body.monospaced())
+                        .appFont(.body)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -77,9 +77,13 @@ struct AgentEditorView: View {
             .tint(.primary)
             .scrollContentBackground(.hidden)
             .background(Color.appGroupedCanvas)
-            .navigationTitle(title)
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(title)
+                        .appFont(.headline)
+                }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         feedbackTrigger += 1

@@ -70,7 +70,8 @@ final class ChatViewModel {
     ) {
         self.conversation = conversation
         self.agent = agent
-        items = conversation.messages
+        let restoredItems = conversation.messages
+        items = Self.sanitizingUserPrompts(in: restoredItems)
         clientOverride = client
         self.customInstructionsProvider = customInstructionsProvider
         self.personalityProvider = personalityProvider
@@ -80,6 +81,9 @@ final class ChatViewModel {
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
         sessionState = items.isEmpty ? .idle : .connected
         latestTurnCompleted = hasCompletedLatestExchange
+        if items != restoredItems {
+            conversation.messages = items
+        }
     }
 
     /// Any item persisted / left mid-flight as `.running` would keep the peeling-onion animation
@@ -375,7 +379,7 @@ final class ChatViewModel {
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             conversation.rawSession = session
             if !chatItems.isEmpty, !isRegenerating {
-                items = sanitizingUserPrompts(in: chatItems)
+                items = Self.sanitizingUserPrompts(in: chatItems)
                 persist()
             }
 
@@ -452,7 +456,7 @@ final class ChatViewModel {
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
             let regenerating = isRegenerating
-            let sanitizedChatItems = chatItems.isEmpty ? [] : sanitizingUserPrompts(in: chatItems)
+            let sanitizedChatItems = chatItems.isEmpty ? [] : Self.sanitizingUserPrompts(in: chatItems)
             let replacementResult = regenerating
                 ? usableReplacementResult(result: result, chatItems: sanitizedChatItems)
                 : result
@@ -585,11 +589,17 @@ final class ChatViewModel {
         }
     }
 
-    private func sanitizingUserPrompts(in chatItems: [ChatItem]) -> [ChatItem] {
-        chatItems.map { item in
+    private static func sanitizingUserPrompts(in chatItems: [ChatItem]) -> [ChatItem] {
+        chatItems.compactMap { item in
             guard item.kind == .user else { return item }
             var sanitized = item
-            sanitized.content = CustomInstructions.removingWrapper(from: item.content)
+            sanitized.content = CustomInstructions.visiblePrompt(from: item.content)
+            if sanitized.content != item.content,
+               sanitized.content.isEmpty,
+               sanitized.images.isEmpty,
+               sanitized.files.isEmpty {
+                return nil
+            }
             return sanitized
         }
     }

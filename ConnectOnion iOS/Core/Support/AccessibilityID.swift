@@ -28,6 +28,9 @@ enum AccessibilityID {
     static let newChatSheet = "connectonion.chat.new.sheet"
     static let newChatPromptField = "connectonion.chat.new.prompt"
     static let newChatStartButton = "connectonion.chat.new.start"
+    static let newChatToolsDisclosure = "connectonion.chat.new.tools.disclosure"
+    static let newChatToolsSummary = "connectonion.chat.new.tools.summary"
+    static let newChatSkillsDisclosure = "connectonion.chat.new.skills.disclosure"
     static let chatList = "connectonion.chat.list"
     static let chatInput = "connectonion.chat.input"
     static let chatSendButton = "connectonion.chat.send.button"
@@ -86,6 +89,13 @@ enum AccessibilityID {
         "connectonion.chat.new.agent.\(address)"
     }
 
+    static func newChatSuggestion(_ prompt: String) -> String {
+        "connectonion.chat.new.suggestion.\(slug(prompt))"
+    }
+
+    static func newChatSkill(_ name: String) -> String {
+        "connectonion.chat.new.skill.\(slug(name))"
+    }
 
     static func attachmentRemove(_ id: String) -> String {
         "connectonion.chat.attachment.remove.\(normalizedComponent(id))"
@@ -109,5 +119,13 @@ enum AccessibilityID {
             .unicodeScalars
             .map { CharacterSet.alphanumerics.contains($0) ? Character($0) : Character("-") }
             .reduce(into: "") { $0.append($1) }
+    }
+
+    private static func slug(_ value: String) -> String {
+        value
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
     }
 }

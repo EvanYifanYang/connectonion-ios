@@ -16,6 +16,12 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let newChatSheetID = "connectonion.chat.new.sheet"
     private let newChatPromptFieldID = "connectonion.chat.new.prompt"
     private let newChatStartButtonID = "connectonion.chat.new.start"
+    private let whatCanYouDoSuggestionID = "connectonion.chat.new.suggestion.what-can-you-do"
+    private let planDaySuggestionID = "connectonion.chat.new.suggestion.help-me-plan-my-day"
+    private let newChatToolsDisclosureID = "connectonion.chat.new.tools.disclosure"
+    private let newChatToolsSummaryID = "connectonion.chat.new.tools.summary"
+    private let newChatSkillsDisclosureID = "connectonion.chat.new.skills.disclosure"
+    private let summarizeSkillID = "connectonion.chat.new.skill.summarize"
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
     private let chatStopButtonID = "connectonion.chat.stop.button"
@@ -121,6 +127,79 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["/summarize"].exists)
         XCTAssertFalse(app.staticTexts["/debug"].exists)
         XCTAssertFalse(app.staticTexts["Bash"].exists)
+    }
+
+    @MainActor
+    func testAgentLandingShowsSuggestionsAndCapabilitySummaries() throws {
+        let app = launchUITestApp()
+        openLandingComposer(in: app)
+
+        XCTAssertTrue(app.anyElement(whatCanYouDoSuggestionID).waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(planDaySuggestionID).exists, app.debugDescription)
+
+        let toolsDisclosure = waitForElement(newChatToolsDisclosureID, in: app)
+        XCTAssertTrue(toolsDisclosure.label.contains("7 tools"), toolsDisclosure.label)
+        XCTAssertTrue(toolsDisclosure.label.contains("collapsed"), toolsDisclosure.label)
+        XCTAssertFalse(app.anyElement(newChatToolsSummaryID).exists, app.debugDescription)
+        tapElement(newChatToolsDisclosureID, in: app)
+
+        let toolsSummary = waitForElement(newChatToolsSummaryID, in: app)
+        XCTAssertTrue(toolsSummary.label.contains("bash"), toolsSummary.label)
+        XCTAssertTrue(toolsSummary.label.contains("read_file"), toolsSummary.label)
+        XCTAssertTrue(toolsSummary.label.contains("+1 more"), toolsSummary.label)
+
+        let skillsDisclosure = waitForElement(newChatSkillsDisclosureID, in: app)
+        XCTAssertTrue(skillsDisclosure.label.contains("6 skills"), skillsDisclosure.label)
+        XCTAssertTrue(skillsDisclosure.label.contains("collapsed"), skillsDisclosure.label)
+        XCTAssertFalse(app.anyElement(summarizeSkillID).exists, app.debugDescription)
+        tapElement(newChatSkillsDisclosureID, in: app)
+
+        let skill = waitForElement(summarizeSkillID, in: app)
+        XCTAssertTrue(skill.label.contains("summarize"), skill.label)
+        XCTAssertTrue(skill.label.contains("Summarize a document"), skill.label)
+    }
+
+    @MainActor
+    func testAgentLandingCapabilitySectionsCollapseAndExpand() throws {
+        let app = launchUITestApp()
+        openLandingComposer(in: app)
+
+        XCTAssertFalse(app.anyElement(newChatToolsSummaryID).exists, app.debugDescription)
+        tapElement(newChatToolsDisclosureID, in: app)
+        XCTAssertTrue(app.anyElement(newChatToolsSummaryID).waitForExistence(timeout: 5), app.debugDescription)
+        tapElement(newChatToolsDisclosureID, in: app)
+        XCTAssertFalse(app.anyElement(newChatToolsSummaryID).exists, app.debugDescription)
+
+        XCTAssertFalse(app.anyElement(summarizeSkillID).exists, app.debugDescription)
+        tapElement(newChatSkillsDisclosureID, in: app)
+        XCTAssertTrue(app.anyElement(summarizeSkillID).waitForExistence(timeout: 5), app.debugDescription)
+        tapElement(newChatSkillsDisclosureID, in: app)
+        XCTAssertFalse(app.anyElement(summarizeSkillID).exists, app.debugDescription)
+    }
+
+    @MainActor
+    func testAgentLandingHidesEmptyCapabilitySections() throws {
+        let app = launchUITestApp(scenario: "metadata-empty")
+        openLandingComposer(in: app)
+
+        XCTAssertTrue(app.anyElement(whatCanYouDoSuggestionID).waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(chatInputID).exists, app.debugDescription)
+        XCTAssertFalse(app.anyElement(newChatToolsDisclosureID).exists, app.debugDescription)
+        XCTAssertFalse(app.anyElement(newChatSkillsDisclosureID).exists, app.debugDescription)
+    }
+
+    @MainActor
+    func testAgentLandingSuggestionStartsConversationImmediately() throws {
+        let app = launchUITestApp()
+        openLandingComposer(in: app)
+
+        tapElement(whatCanYouDoSuggestionID, in: app)
+
+        let response = app.staticTexts
+            .matching(NSPredicate(format: "label CONTAINS %@", "Connected. Streaming mock response for: What can you do?"))
+            .firstMatch
+        XCTAssertTrue(response.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["What can you do?"].exists, app.debugDescription)
     }
 
     @MainActor

@@ -31,7 +31,7 @@ struct AgentSidebarRow: View {
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
-                                .appFont(.body, weight: .semibold)
+                                .brandSerifFont(.body, weight: .semibold)
                                 .lineLimit(1)
 
                             if let model = info?.model, !model.isEmpty {

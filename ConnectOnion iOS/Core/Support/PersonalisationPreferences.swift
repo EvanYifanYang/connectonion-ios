@@ -107,6 +107,13 @@ extension View {
     func connectOnionBrandFont(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> some View {
         font(UIFontPreference.timesNewRoman.font(style, weight: weight))
     }
+
+    /// Always-New-York (serif) brand typography for section headers, nav titles, and agent names.
+    /// These surfaces are intentionally exempt from the user's UI-font preference — restoring the
+    /// original AppFont brand serif that the typography refactor flattened to the default SF.
+    func brandSerifFont(_ style: Font.TextStyle, weight: Font.Weight? = nil) -> some View {
+        font(UIFontPreference.newYork.font(style, weight: weight))
+    }
 }
 
 enum CodeFontPreference: String, CaseIterable, Identifiable, Sendable {

@@ -122,7 +122,7 @@ struct CustomInstructionsTransportTests {
         await waitUntil { client.sentInputs.count == 1 && viewModel.sessionState == .connected }
         savedInstructions = "Use the latest preference"
         savedPersonality = .friendly
-        viewModel.regenerate()
+        viewModel.regenerate(replyID: viewModel.items.last { $0.kind == .agent }!.id)
         await waitUntil { client.sentInputs.count == 2 && viewModel.sessionState == .connected }
 
         #expect(client.sentInputs.map(\.prompt) == ["Explain this", "Explain this"])
@@ -150,7 +150,13 @@ struct CustomInstructionsTransportTests {
         await waitUntil { viewModel.pendingOnboard != nil }
         savedInstructions = "A newer preference"
         viewModel.submitOnboard(inviteCode: "OpenOnion")
-        await waitUntil { client.sentInputs.count == 2 && viewModel.pendingOnboard == nil }
+        // Wait for the resend to fully settle — the resent user turn is persisted at its terminal
+        // .output (persistence is debounced), so gate on the message actually landing, not just on
+        // pendingOnboard clearing, to avoid reading conversation.messages mid-flight.
+        await waitUntil {
+            client.sentInputs.count == 2 && viewModel.pendingOnboard == nil
+                && conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" }
+        }
 
         #expect(client.sentInputs.map(\.customInstructions) == [
             "Keep the captured preference",
@@ -242,6 +248,7 @@ private final class CanonicalCustomInstructionsClient: ConnectOnionClientProvidi
             ))
             continuation.yield(.output(
                 result: "Recursion calls itself",
+                serverNewer: false,
                 session: nil,
                 chatItems: [userItem, agentItem]
             ))
@@ -297,6 +304,7 @@ private final class CanonicalSystemReminderClient: ConnectOnionClientProviding {
             ))
             continuation.yield(.output(
                 result: "Recursion calls itself",
+                serverNewer: false,
                 session: nil,
                 chatItems: [userItem, leakedReminder, agentItem]
             ))

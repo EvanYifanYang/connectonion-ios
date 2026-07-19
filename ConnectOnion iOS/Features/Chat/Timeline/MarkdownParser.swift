@@ -1,7 +1,7 @@
 import Foundation
 
 /// One block-level element of a Markdown document.
-enum MarkdownBlock: Equatable {
+enum MarkdownBlock: Equatable, Sendable {
     case heading(level: Int, text: String)
     case paragraph(String)
     case bulletList([String])
@@ -16,7 +16,24 @@ enum MarkdownBlock: Equatable {
 /// lists, fenced code, blockquotes, GFM tables, rules). Inline syntax inside each block is left for
 /// `AttributedString` to interpret at render time.
 enum MarkdownParser {
+    private static let cache = MarkdownBlockCache()
+
     static func parse(_ markdown: String) -> [MarkdownBlock] {
+        let key = markdown as NSString
+        if let cached = cache.storage.object(forKey: key) {
+            return cached.blocks
+        }
+
+        let blocks = parseUncached(markdown)
+        cache.storage.setObject(
+            MarkdownBlockBox(blocks),
+            forKey: key,
+            cost: markdown.utf8.count
+        )
+        return blocks
+    }
+
+    private static func parseUncached(_ markdown: String) -> [MarkdownBlock] {
         var blocks: [MarkdownBlock] = []
         let lines = markdown.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
         var i = 0
@@ -173,5 +190,24 @@ enum MarkdownParser {
         }
 
         return nil
+    }
+}
+
+private final class MarkdownBlockBox {
+    let blocks: [MarkdownBlock]
+
+    init(_ blocks: [MarkdownBlock]) {
+        self.blocks = blocks
+    }
+}
+
+/// NSCache is internally synchronized. The wrapper makes that synchronization contract explicit to
+/// Swift 6 while bounding retained documents for long-running chat sessions.
+private final class MarkdownBlockCache: @unchecked Sendable {
+    let storage = NSCache<NSString, MarkdownBlockBox>()
+
+    init() {
+        storage.countLimit = 80
+        storage.totalCostLimit = 4 * 1_024 * 1_024
     }
 }

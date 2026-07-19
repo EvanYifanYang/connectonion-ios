@@ -6,7 +6,7 @@ import UIKit
 /// blocks, blockquotes, tables, and horizontal rules — with inline formatting (bold, italic, code,
 /// links) inside each block. `Text(LocalizedStringKey:)` only handles inline syntax, so anything with
 /// a list, table, or code block used to render as one flat run; this walks the blocks instead.
-struct MarkdownMessageView: View {
+struct MarkdownMessageView: View, Equatable {
     var text: String
 
     var body: some View {

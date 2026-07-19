@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 
+private let transcriptBottomAnchorID = "__connectonion_transcript_bottom__"
+
 struct ChatMessageList: View {
     var items: [ChatItem]
     var pendingAskUser: ChatItem?
@@ -11,61 +13,36 @@ struct ChatMessageList: View {
     var onApprovalResponse: (Bool, String, String?, String?) -> Void
     var onOnboardSubmit: (String?, Double?) -> Void
     var onPlanReviewResponse: (String) -> Void
-    var onRegenerate: () -> Void = {}
-    var editableUserMessageID: ChatItem.ID?
-    var editingUserMessageID: ChatItem.ID?
-    var onBeginUserEdit: (ChatItem.ID) -> Void = { _ in }
-    var onCancelUserEdit: () -> Void = {}
-    var onSaveUserEdit: (ChatItem.ID, String) -> Bool = { _, _ in false }
-    var streamingMessageID: ChatItem.ID?
-    var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
-    var isGenerating: Bool = false
+    var onRegenerate: (ChatItem.ID) -> Void = { _ in }
     var responseModel: String?
+    var isAgentRunning = false
+
+    @State private var isTailVisible = true
+    @State private var followsTail = true
+    @State private var scrollRequest = 0
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
     }
 
-    /// A run of consecutive tool calls renders as one grouped, collapsible card; everything else renders
-    /// as its own item.
-    private enum RenderUnit: Identifiable {
-        case item(ChatItem)
-        case toolGroup(id: String, items: [ChatItem])
-
-        var id: String {
-            switch self {
-            case .item(let item): item.id
-            case .toolGroup(let id, _): id
-            }
-        }
-    }
-
-    private var renderUnits: [RenderUnit] {
-        var units: [RenderUnit] = []
-        var group: [ChatItem] = []
-        func flush() {
-            guard !group.isEmpty else { return }
-            units.append(.toolGroup(id: "tools-\(group[0].id)", items: group))
-            group.removeAll()
-        }
-        for item in items {
-            if item.kind == .toolCall {
-                group.append(item)
-            } else {
-                flush()
-                units.append(.item(item))
-            }
-        }
-        flush()
-        return units
+    private var newestUserID: ChatItem.ID? {
+        items.last { $0.kind == .user }?.id
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
+        let units = ChatTimelineBuilder.makeUnits(from: items)
+        let tailID = units.last?.id
+        let tailToken = TranscriptTailToken(
+            unitCount: units.count,
+            tailID: tailID,
+            lastAnswered: items.last?.answered ?? false
+        )
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(renderUnits) { unit in
-                        switch unit {
+                    ForEach(units) { unit in
+                        switch unit.content {
                         case .item(let item):
                             ChatItemView(
                                 item: item,
@@ -73,64 +50,76 @@ struct ChatMessageList: View {
                                 isPendingApproval: item.id == pendingApproval?.id,
                                 isPendingOnboard: item.id == pendingOnboard?.id,
                                 isPendingPlanReview: item.id == pendingPlanReview?.id,
-                                showAgentActions: item.id == lastAgentID &&
-                                    item.id != streamingMessageID &&
-                                    !isGenerating &&
-                                    editingUserMessageID == nil,
-                                canEditUserMessage: item.id == editableUserMessageID,
-                                isEditingUserMessage: item.id == editingUserMessageID,
-                                isStreaming: item.id == streamingMessageID,
-                                modelName: item.id == lastAgentID ? responseModel : nil,
+                                showAgentActions: item.kind == .agent,
+                                modelName: item.model ?? (item.id == lastAgentID ? responseModel : nil),
                                 onAskUserResponse: onAskUserResponse,
                                 onApprovalResponse: onApprovalResponse,
                                 onOnboardSubmit: onOnboardSubmit,
                                 onPlanReviewResponse: onPlanReviewResponse,
-                                onRegenerate: onRegenerate,
-                                onBeginUserEdit: { onBeginUserEdit(item.id) },
-                                onCancelUserEdit: onCancelUserEdit,
-                                onSaveUserEdit: { onSaveUserEdit(item.id, $0) },
-                                onStreamComplete: { onStreamComplete(item.id) }
+                                onRegenerate: { onRegenerate(item.id) }
                             )
-                            .id(unit.id)
-                            .transition(AppMotion.messageTransition)
 
-                        case .toolGroup(_, let toolItems):
-                            ToolCallGroupCard(
-                                items: toolItems,
-                                pendingApprovalID: pendingApproval?.id,
-                                onApprovalResponse: onApprovalResponse
+                        case .activity(let activityItems, let durationMS):
+                            AgentActivityGroup(
+                                items: activityItems,
+                                durationMS: durationMS,
+                                isRunning: isAgentRunning && unit.id == tailID
                             )
-                            .id(unit.id)
-                            .transition(AppMotion.messageTransition)
                         }
                     }
 
                     Color.clear
-                        .frame(height: 1)
-                        .id("bottom")
+                        .frame(height: 12)
+                        .id(transcriptBottomAnchorID)
+                        .onScrollVisibilityChange(threshold: 0.1) { visible in
+                            isTailVisible = visible
+                            if visible {
+                                followsTail = true
+                            }
+                        }
                 }
                 .frame(maxWidth: AppTheme.contentMaxWidth)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 18)
-                .padding(.vertical, 14)
-                .animation(AppMotion.standard, value: items.map(\.id))
+                .padding(.top, 12)
+                .padding(.bottom, 6)
                 .contentShape(.rect)
-                // Tapping the transcript (anywhere not on an interactive control) dismisses the keyboard.
                 .onTapGesture { dismissKeyboard() }
             }
+            // Restored conversations should open on the latest turn. Limiting this to the initial
+            // offset preserves the user's manual scroll position for every interaction afterwards.
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
             .accessibilityIdentifier(AccessibilityID.chatList)
             .scrollDismissesKeyboard(.interactively)
-            // Open pinned to the newest message, and stay pinned while content grows — the typewriter
-            // reveal grows a bubble's height without mutating `items`, and the system anchor tracks
-            // that natively. This replaces the old 50ms scrollTo loop, which fought LazyVStack layout
-            // mid-reveal and bounced the viewport between the current and the previous turn (the
-            // "two positions flickering" bug).
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .defaultScrollAnchor(.bottom, for: .sizeChanges)
-            .onChange(of: items) { _, _ in
-                withAnimation(.smooth(duration: 0.22)) {
-                    proxy.scrollTo("bottom", anchor: .bottom)
+            .onScrollPhaseChange { _, phase in
+                switch phase {
+                case .tracking, .interacting:
+                    followsTail = false
+                case .idle:
+                    if isTailVisible {
+                        followsTail = true
+                    }
+                case .decelerating, .animating:
+                    break
                 }
+            }
+            .onChange(of: newestUserID) { oldID, newID in
+                guard let newID, newID != oldID else { return }
+                followsTail = true
+                scrollRequest &+= 1
+            }
+            .onChange(of: tailToken) { _, _ in
+                guard followsTail else { return }
+                scrollRequest &+= 1
+            }
+            .onAppear {
+                followsTail = true
+                scrollRequest &+= 1
+            }
+            .task(id: scrollRequest) {
+                await Task.yield()
+                guard !Task.isCancelled, followsTail else { return }
+                proxy.scrollTo(transcriptBottomAnchorID, anchor: .bottom)
             }
         }
     }
@@ -138,6 +127,12 @@ struct ChatMessageList: View {
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
+}
+
+private struct TranscriptTailToken: Equatable {
+    var unitCount: Int
+    var tailID: String?
+    var lastAnswered: Bool
 }
 
 #Preview("Chat Message List") {

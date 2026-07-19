@@ -2,52 +2,31 @@ import SwiftUI
 
 struct ChatItemView: View {
     var item: ChatItem
-    var isPendingAskUser: Bool
-    var isPendingApproval: Bool
-    var isPendingOnboard: Bool
-    var isPendingPlanReview: Bool
+    var isPendingAskUser: Bool = false
+    var isPendingApproval: Bool = false
+    var isPendingOnboard: Bool = false
+    var isPendingPlanReview: Bool = false
     var showAgentActions: Bool = false
-    var canEditUserMessage: Bool = false
-    var isEditingUserMessage: Bool = false
-    var isStreaming: Bool = false
     var modelName: String? = nil
-    var onAskUserResponse: (String) -> Void
-    var onApprovalResponse: (Bool, String, String?, String?) -> Void
-    var onOnboardSubmit: (String?, Double?) -> Void
-    var onPlanReviewResponse: (String) -> Void
+    var onAskUserResponse: (String) -> Void = { _ in }
+    var onApprovalResponse: (Bool, String, String?, String?) -> Void = { _, _, _, _ in }
+    var onOnboardSubmit: (String?, Double?) -> Void = { _, _ in }
+    var onPlanReviewResponse: (String) -> Void = { _ in }
     var onRegenerate: () -> Void = {}
-    var onBeginUserEdit: () -> Void = {}
-    var onCancelUserEdit: () -> Void = {}
-    var onSaveUserEdit: (String) -> Bool = { _ in false }
-    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         switch item.kind {
         case .user:
-            UserBubble(
-                item: item,
-                canEdit: canEditUserMessage,
-                isEditing: isEditingUserMessage,
-                onBeginEditing: onBeginUserEdit,
-                onCancelEditing: onCancelUserEdit,
-                onSaveEditing: onSaveUserEdit
-            )
+            UserBubble(item: item)
         case .agent:
             AgentBubble(
                 item: item,
                 showActions: showAgentActions,
-                isStreaming: isStreaming,
                 modelName: modelName,
-                onRegenerate: onRegenerate,
-                onStreamComplete: onStreamComplete
+                onRegenerate: onRegenerate
             )
         case .thinking:
-            // Only show the thinking row while it's actively running (the peeling-onion animation) or
-            // when it carries reasoning text. A finished, empty "model" row is redundant — the model
-            // now appears as a footer under the reply.
-            if item.status == .running || !item.content.isEmpty {
-                ThinkingRow(item: item)
-            }
+            ThinkingRow(item: item)
         case .toolCall:
             ToolCallCard(item: item, isPendingApproval: isPendingApproval, onApprovalResponse: onApprovalResponse)
         case .askUser:
@@ -70,6 +49,14 @@ struct ChatItemView: View {
             PlanReviewCard(item: item, isPending: isPendingPlanReview, onResponse: onPlanReviewResponse)
         case .filesReceived:
             FilesReceivedRow(item: item)
+        case .ulwTurnsReached:
+            StatusPill(systemImage: "hourglass.bottomhalf.filled", text: item.content, tint: .orange)
+        case .unknown:
+            StatusPill(
+                systemImage: "questionmark.bubble.fill",
+                text: item.content.nilIfEmpty ?? "Agent event: \(item.eventType ?? "unknown")",
+                tint: .secondary
+            )
         }
     }
 }

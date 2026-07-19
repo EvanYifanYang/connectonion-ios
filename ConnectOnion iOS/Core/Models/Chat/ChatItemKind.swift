@@ -1,6 +1,6 @@
 import Foundation
 
-enum ChatItemKind: String, Codable, Sendable {
+enum ChatItemKind: String, Codable, Hashable, Sendable {
     case user
     case agent
     case thinking
@@ -15,4 +15,6 @@ enum ChatItemKind: String, Codable, Sendable {
     case toolBlocked = "tool_blocked"
     case planReview = "plan_review"
     case filesReceived = "files_received"
+    case ulwTurnsReached = "ulw_turns_reached"
+    case unknown
 }

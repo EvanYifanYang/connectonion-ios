@@ -145,7 +145,13 @@ struct Sprint2AttachmentComposerTests {
         let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
 
         viewModel.send("What is in this image?", images: ["data:image/png;base64,aW1hZ2U="])
-        await waitUntil { client.reconnectCount == 1 && viewModel.sessionState == .connected }
+        // Gate on the recovered reply actually landing, not just on reconnect + connected: the
+        // recovery bubble is appended at the reconnect's terminal .output, which can arrive a beat
+        // after sessionState flips to .connected — reading items before then is a cold-run flake.
+        await waitUntil {
+            client.reconnectCount == 1 && viewModel.sessionState == .connected
+                && viewModel.items.contains { $0.kind == .agent && $0.content == "Recovered image reply" }
+        }
 
         #expect(client.reconnectCount == 1)
         #expect(viewModel.sessionState == .connected)

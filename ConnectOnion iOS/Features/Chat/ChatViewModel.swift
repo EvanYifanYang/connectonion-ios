@@ -1,7 +1,6 @@
 import Factory
 import Foundation
 import Observation
-import SwiftUI
 
 @MainActor
 @Observable
@@ -22,15 +21,19 @@ final class ChatViewModel {
     private let conversation: ConversationRecord
 
     var items: [ChatItem]
-    var sessionState: SessionActiveState = .idle
+    var sessionState: SessionActiveState = .idle {
+        didSet {
+            guard sessionState != oldValue else { return }
+            onSessionStateChange(sessionState)
+        }
+    }
     var errorMessage: String?
     var elapsedTime: TimeInterval = 0
-    /// The freshly-arrived agent message that should type itself out (client-side reveal). Cleared once
-    /// the bubble finishes revealing. Nil for restored/older messages, so they render in full.
-    var streamingMessageID: ChatItem.ID?
     /// The model that produced the latest reply, shown as a footer under it. Captured from events (the
     /// server's final `chatItems` may drop the thinking row that carries it).
     var lastResponseModel: String?
+    /// The reply currently being typed out client-side, or nil when no typewriter reveal is active.
+    var streamingMessageID: ChatItem.ID?
     private(set) var latestTurnCompleted = false
 
     @ObservationIgnored
@@ -40,11 +43,14 @@ final class ChatViewModel {
     @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
+    @ObservationIgnored private let onSessionStateChange: (SessionActiveState) -> Void
+    @ObservationIgnored private let onReplyReady: () -> Void
+    @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
     @ObservationIgnored private let customInstructionsProvider: @MainActor () -> String
     @ObservationIgnored private let personalityProvider: @MainActor () -> PersonalityMode
-    @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
     @ObservationIgnored private var streamTask: Task<Void, Never>?
     @ObservationIgnored private var timerTask: Task<Void, Never>?
+    @ObservationIgnored private var persistTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var pendingUserItem: ChatItem?
     @ObservationIgnored private var inFlightInput: AgentInput?
@@ -64,18 +70,22 @@ final class ChatViewModel {
         conversation: ConversationRecord,
         agent: AgentConfig,
         client: ConnectOnionClientProviding? = nil,
+        onSessionStateChange: @escaping (SessionActiveState) -> Void = { _ in },
+        onReplyReady: @escaping () -> Void = {},
+        onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in },
         customInstructionsProvider: @escaping @MainActor () -> String = { CustomInstructions.saved },
-        personalityProvider: @escaping @MainActor () -> PersonalityMode = { PersonalityMode.saved },
-        onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in }
+        personalityProvider: @escaping @MainActor () -> PersonalityMode = { PersonalityMode.saved }
     ) {
         self.conversation = conversation
         self.agent = agent
         let restoredItems = conversation.messages
-        items = Self.sanitizingUserPrompts(in: restoredItems)
+        items = AgentContentSanitizer.sanitize(Self.sanitizingUserPrompts(in: restoredItems))
         clientOverride = client
+        self.onSessionStateChange = onSessionStateChange
+        self.onReplyReady = onReplyReady
+        self.onReplyCompleted = onReplyCompleted
         self.customInstructionsProvider = customInstructionsProvider
         self.personalityProvider = personalityProvider
-        self.onReplyCompleted = onReplyCompleted
         finalizeRunningItems() // restored items must never resume the live "running" animation
         lastResponseModel = items.last { $0.kind == .agent && $0.model?.isEmpty == false }?.model
             ?? items.last { $0.kind == .thinking && $0.model?.isEmpty == false }?.model
@@ -92,6 +102,13 @@ final class ChatViewModel {
         for index in items.indices where items[index].status == .running {
             items[index].status = .done
         }
+    }
+
+    deinit {
+        streamTask?.cancel()
+        timerTask?.cancel()
+        persistTask?.cancel()
+        automaticReconnectTask?.cancel()
     }
 
     var pendingAskUser: ChatItem? {
@@ -120,6 +137,12 @@ final class ChatViewModel {
 
     var shouldShowStopButton: Bool {
         (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
+    }
+
+    /// Context usage is cumulative for the conversation, so expose the latest known value at the
+    /// conversation level instead of attaching it to an individual activity group in the UI.
+    var contextPercent: Double? {
+        items.reversed().compactMap(\.contextPercent).first
     }
 
     var isGeneratingReply: Bool {
@@ -208,22 +231,32 @@ final class ChatViewModel {
         }
     }
 
-    /// Called by the agent bubble once its typewriter reveal finishes, so it renders in full and the
-    /// action row appears.
+    /// The session store survives navigation, so sanitize again whenever the retained chat is shown.
+    func prepareForPresentation() {
+        sanitizeAllContent()
+    }
+
+    /// Clear the typewriter marker once a message finishes revealing (called when streaming completes).
     func markStreamingComplete(_ id: ChatItem.ID) {
         if streamingMessageID == id {
             streamingMessageID = nil
         }
     }
 
-    /// Re-run the most recent user turn: drop it and its reply, then send the same input again so a
-    /// fresh response streams in its place (no duplicate user bubble). `send` already cancels any
-    /// in-flight stream.
+    /// Convenience: regenerate the most recent agent reply (no-op if there is none).
     func regenerate() {
-        guard let lastUserIndex = items.lastIndex(where: { $0.kind == .user }) else { return }
-        let userItem = items[lastUserIndex]
+        guard let latest = items.last(where: { $0.kind == .agent })?.id else { return }
+        regenerate(replyID: latest)
+    }
+
+    /// Re-run the user turn that produced a particular reply. Regenerating an older reply creates a
+    /// new branch, so dependent turns after it are removed together with the selected exchange.
+    func regenerate(replyID: ChatItem.ID) {
+        guard let replyIndex = items.firstIndex(where: { $0.id == replyID && $0.kind == .agent }),
+              let userIndex = items[..<replyIndex].lastIndex(where: { $0.kind == .user }) else { return }
+        let userItem = items[userIndex]
         captureRegenerationBackup()
-        items.removeSubrange(lastUserIndex...)
+        items.removeSubrange(userIndex...)
         persist()
         send(userItem.content, images: userItem.images, files: userItem.files, isRegenerate: true)
     }
@@ -284,6 +317,8 @@ final class ChatViewModel {
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
+        // Answering a card hands control back to the user (composer returns to send). If the agent
+        // resumes on the live stream, the incoming events flip sessionState back to .active.
         sessionState = .connected
         updateLiveActivityAfterUserAction("Continuing after your answer")
 
@@ -297,9 +332,7 @@ final class ChatViewModel {
     }
 
     func respondToApproval(approved: Bool, scope: String, mode: String? = nil, feedback: String? = nil) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
-        }
+        ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         persist()
         sessionState = .connected
         updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
@@ -313,9 +346,7 @@ final class ChatViewModel {
     }
 
     func submitOnboard(inviteCode: String?, payment: Double? = nil) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
-        }
+        ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         persist()
         sessionState = .connected
         updateLiveActivityAfterUserAction("Verification submitted")
@@ -329,9 +360,7 @@ final class ChatViewModel {
     }
 
     func respondToPlanReview(_ message: String) {
-        withAnimation(.smooth(duration: 0.2)) {
-            ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
-        }
+        ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         persist()
         sessionState = .connected
         updateLiveActivityAfterUserAction("Plan feedback sent")
@@ -361,6 +390,7 @@ final class ChatViewModel {
         }
         stopTimer()
         sessionState = items.isEmpty ? .idle : .connected
+        persist()
         liveActivity.end(
             conversationID: conversation.id,
             phase: .stopped,
@@ -375,11 +405,14 @@ final class ChatViewModel {
 
     private func handle(_ event: ConnectOnionClientEvent) {
         switch event {
-        case .connected(let sessionID, let status, _, let session, let chatItems):
+        case .connected(let sessionID, let status, let serverNewer, let session, let chatItems):
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
-            conversation.rawSession = session
-            if !chatItems.isEmpty, !isRegenerating {
-                items = Self.sanitizingUserPrompts(in: chatItems)
+            if serverNewer, !isRegenerating {
+                conversation.rawSession = session
+                ChatEventReducer.reconcile(
+                    with: AgentContentSanitizer.sanitize(Self.sanitizingUserPrompts(in: chatItems)),
+                    items: &items
+                )
                 persist()
             }
 
@@ -388,11 +421,11 @@ final class ChatViewModel {
                 optimisticUserItemID = pendingUserItem.id
                 inFlightUserItemID = pendingUserItem.id
                 inFlightWasFirstPrompt = wasFirstPrompt
-                append(pendingUserItem, animated: true, shouldPersist: false)
+                append(pendingUserItem, shouldPersist: false)
 
                 var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
                 placeholder.status = .running
-                append(placeholder, animated: true, shouldPersist: false)
+                append(placeholder, shouldPersist: false)
 
                 self.pendingUserItem = nil
                 sessionState = .active
@@ -424,7 +457,11 @@ final class ChatViewModel {
             clearOptimisticPlaceholder()
             if let newState = ChatEventReducer.apply(event, to: &items) {
                 sessionState = newState
+                if newState == .waiting {
+                    onReplyReady()
+                }
             }
+            sanitizeItemsAffected(by: event)
             // A fresh assistant reply arrived via the reducer (the usual path for a real agent) — type
             // it out client-side. A merged/incremental update keeps the same id, so it won't retrigger.
             if event.type == "assistant",
@@ -447,12 +484,16 @@ final class ChatViewModel {
             if event.type == "mode_changed", let rawMode = event.payload[string: "mode"], let mode = ApprovalMode(rawValue: rawMode) {
                 conversation.mode = mode
             }
-            persist()
+            schedulePersist()
             if event.type == "ONBOARD_SUCCESS" {
                 resumeDeferredOnboardInput()
             }
 
-        case .output(let result, let session, let chatItems):
+        case .output(let result, let serverNewer, let session, let chatItems):
+            // Capture turn-scoped metrics before a newer canonical snapshot can omit intermediate
+            // events. They are persisted on the final reply below.
+            let completedTurnDurationMS = currentTurnDurationMS
+            let completedContextPercent = contextPercent
             automaticReconnectAttempts = 0
             automaticReconnectTask?.cancel()
             let regenerating = isRegenerating
@@ -482,19 +523,19 @@ final class ChatViewModel {
 
             regenerateBackup = nil // a usable replacement exists, so the old exchange is no longer needed
             isRegenerating = false
-            // Keep our locally-built replacement view so stale canonical data cannot resurrect the
-            // removed exchange or append the revision as a duplicate turn.
-            if !chatItems.isEmpty, !regenerating {
-                items = sanitizedChatItems
+            let finalResult = AgentContentSanitizer.sanitize(replacementResult ?? result)
+            // Only adopt a newer server snapshot, and reconcile it at a user-turn boundary so an
+            // unacknowledged local turn and locally answered cards cannot be rolled back.
+            if serverNewer, !regenerating {
+                ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(chatItems), items: &items)
             }
-            let finalResult = replacementResult ?? result
             // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
             // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
             // is the last item, so we still append the fresh bubble below it.
             if !finalResult.isEmpty, !(items.last?.kind == .agent && items.last?.content == finalResult) {
                 let agentItem = ChatItem(kind: .agent, content: finalResult)
-                append(agentItem, animated: true, shouldPersist: false)
+                append(agentItem, shouldPersist: false)
             }
             finalizeRunningItems()
             // Type the reply out client-side. The host server never emits a live "assistant" event — the
@@ -512,6 +553,14 @@ final class ChatViewModel {
                let index = items.lastIndex(where: { $0.kind == .agent }) {
                 items[index].model = model
             }
+            if let index = items.lastIndex(where: { $0.kind == .agent }) {
+                items[index].durationMS = completedTurnDurationMS
+                    ?? currentTurnDurationMS
+                    ?? items[index].durationMS
+                items[index].contextPercent = completedContextPercent
+                    ?? contextPercent
+                    ?? items[index].contextPercent
+            }
             lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
             sessionState = .connected
@@ -519,6 +568,7 @@ final class ChatViewModel {
             latestTurnCompleted = hasCompletedLatestExchange
             stopTimer()
             persist()
+            onReplyReady()
             client.disconnect()
             liveActivity.complete(
                 conversationID: conversation.id,
@@ -534,14 +584,8 @@ final class ChatViewModel {
         }
     }
 
-    private func append(_ item: ChatItem, animated: Bool, shouldPersist: Bool = true) {
-        if animated {
-            withAnimation(.smooth(duration: 0.24)) {
-                items.append(item)
-            }
-        } else {
-            items.append(item)
-        }
+    private func append(_ item: ChatItem, shouldPersist: Bool = true) {
+        items.append(item)
 
         if shouldPersist {
             persist()
@@ -551,17 +595,13 @@ final class ChatViewModel {
     private func clearOptimisticPlaceholder() {
         guard let index = items.firstIndex(where: { $0.id == "__optimistic__" }) else { return }
         let id = items[index].id
-        withAnimation(.smooth(duration: 0.2)) {
-            items.removeAll { $0.id == id }
-        }
+        items.removeAll { $0.id == id }
     }
 
     private func discardInFlightUserPrompt() {
         let userItemID = inFlightUserItemID ?? optimisticUserItemID
         if let userItemID {
-            withAnimation(.smooth(duration: 0.2)) {
-                items.removeAll { $0.id == userItemID }
-            }
+            items.removeAll { $0.id == userItemID }
         }
         clearInFlightInput()
         self.optimisticUserItemID = nil
@@ -622,9 +662,18 @@ final class ChatViewModel {
     }
 
     private func snapshot() -> ConversationSession {
-        var session = conversation.session
-        session.messages = items.filter { $0.id != "__optimistic__" }
-        return session
+        ConversationSession(
+            id: conversation.id,
+            agentAddress: conversation.agentAddress,
+            remoteSessionID: conversation.remoteSessionID,
+            title: conversation.title,
+            createdAt: conversation.createdAt,
+            updatedAt: conversation.updatedAt,
+            mode: conversation.mode,
+            messages: items.filter { $0.id != "__optimistic__" },
+            rawSession: conversation.rawSession,
+            lastRenderedEventID: conversation.lastRenderedEventID
+        )
     }
 
     /// Regeneration is a replacement branch, not another input on the existing remote session.
@@ -648,7 +697,48 @@ final class ChatViewModel {
     }
 
     private func persist() {
+        persistTask?.cancel()
+        persistTask = nil
         conversation.messages = items.filter { $0.id != "__optimistic__" }
+    }
+
+    /// Stream bursts can contain many tool/LLM events in a few milliseconds. Persist their latest
+    /// state once after the burst instead of JSON-encoding the full transcript for every event.
+    private func schedulePersist() {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            self?.persist()
+        }
+    }
+
+    private func sanitizeAllContent() {
+        let sanitizedItems = AgentContentSanitizer.sanitize(items)
+        guard sanitizedItems != items else { return }
+        items = sanitizedItems
+        persist()
+    }
+
+    /// The reducer normally touches one event id. Sanitize only those rows so a long transcript is
+    /// not rescanned for every streamed event; nil-id events fall back to the newly appended tail.
+    private func sanitizeItemsAffected(by event: ServerEvent) {
+        var indices: [Int] = []
+        if let eventID = event.id {
+            indices = items.indices.filter { items[$0].id == eventID }
+        }
+        if indices.isEmpty, let lastIndex = items.indices.last {
+            indices = [lastIndex]
+        }
+
+        for index in indices.reversed() {
+            guard items.indices.contains(index) else { continue }
+            if let sanitizedItem = AgentContentSanitizer.sanitize(items[index]) {
+                items[index] = sanitizedItem
+            } else {
+                items.remove(at: index)
+            }
+        }
     }
 
     private func fail(_ message: String) {
@@ -869,6 +959,19 @@ final class ChatViewModel {
     private var hasInFlightAttachments: Bool {
         guard let inFlightInput else { return false }
         return !inFlightInput.images.isEmpty || !inFlightInput.files.isEmpty
+    }
+
+    private var currentTurnDurationMS: Int? {
+        guard let userIndex = items.lastIndex(where: { $0.kind == .user }) else { return nil }
+        let eventDurationMS = items[userIndex...].reduce(0) { partialResult, item in
+            partialResult + (item.durationMS ?? 0) + (item.timingMS ?? 0)
+        }
+        if eventDurationMS > 0 {
+            return eventDurationMS
+        }
+
+        let wallClockDurationMS = Int((elapsedTime * 1_000).rounded())
+        return wallClockDurationMS > 0 ? wallClockDurationMS : nil
     }
 
     private func startTimer() {

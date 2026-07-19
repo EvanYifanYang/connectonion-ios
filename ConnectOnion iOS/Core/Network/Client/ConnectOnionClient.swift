@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 @MainActor
 final class ConnectOnionClient: ConnectOnionClientProviding {
@@ -9,6 +10,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     private var transport: WebSocketTransporting?
     private var route: AgentRoute?
     private var codec: ProtocolCodec
+    private let logger = Logger(subsystem: "com.romantcD.ConnectOnion-iOS", category: "AgentClient")
 
     init(
         directory: AgentDirectoryServicing = AgentDirectoryService(),
@@ -26,7 +28,12 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             Task { @MainActor in
                 do {
                     let context = try await connect(agent: agent, session: session, continuation: continuation)
-                    let message = try codec.inputMessage(input: input, agentAddress: agent.address, route: context.route)
+                    let message = try codec.inputMessage(
+                        input: input,
+                        agentAddress: agent.address,
+                        route: context.route,
+                        sessionID: session.remoteSessionID ?? session.id.uuidString
+                    )
                     try await context.transport.send(text: encodedInputMessageText(message))
                     try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
                 } catch {
@@ -125,7 +132,13 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         finishOnIdle: Bool
     ) async throws {
         for try await rawMessage in stream {
-            let event = try codec.decode(rawMessage)
+            let event: ServerEvent
+            do {
+                event = try codec.decode(rawMessage)
+            } catch {
+                logger.error("Ignoring malformed WebSocket event: \(error.localizedDescription, privacy: .public)")
+                continue
+            }
 
             if event.type == "PING" {
                 try await transport?.send(json: ["type": .string("PONG")])
@@ -183,15 +196,34 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     private func outputEvent(from event: ServerEvent) -> ConnectOnionClientEvent {
         .output(
             result: event.payload[string: "result"] ?? "",
+            serverNewer: event.payload[bool: "server_newer"] ?? false,
             session: event.payload["session"],
             chatItems: decodeChatItems(from: event.payload["chat_items"])
         )
     }
 
     private func decodeChatItems(from value: JSONValue?) -> [ChatItem] {
-        guard let value else { return [] }
-        guard let data = try? JSONEncoder().encode(value) else { return [] }
-        return (try? JSONDecoder().decode([ChatItem].self, from: data)) ?? []
+        guard let values = value?.arrayValue else { return [] }
+
+        return values.enumerated().compactMap { index, value in
+            do {
+                let data = try JSONEncoder().encode(value)
+                let item = try JSONDecoder().decode(ChatItem.self, from: data)
+                return AgentContentSanitizer.sanitize(item)
+            } catch {
+                logger.warning(
+                    "Preserving malformed chat item at index \(index, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+                var item = ChatItem(
+                    id: value.objectValue?["id"]?.stringValue ?? UUID().uuidString,
+                    kind: .unknown,
+                    content: "Unsupported chat item"
+                )
+                item.eventType = value.objectValue?["type"]?.stringValue ?? "unknown"
+                item.rawPayload = value.objectValue ?? ["value": value]
+                return item
+            }
+        }
     }
 }
 

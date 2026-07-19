@@ -52,6 +52,10 @@ enum ChatEventReducer {
             upsert(filesReceived(from: event), in: &items)
             return .active
 
+        case "ulw_turns_reached":
+            upsert(ulwTurnsReached(from: event), in: &items)
+            return .waiting
+
         case "ask_user":
             upsert(askUser(from: event), in: &items)
             return .waiting
@@ -76,8 +80,87 @@ enum ChatEventReducer {
             return .active
 
         default:
+            guard !ignoredEventTypes.contains(event.type) else { return nil }
+            upsert(unknownItem(from: event), in: &items)
             return nil
         }
+    }
+
+    /// Applies an authoritative server snapshot without discarding a newer local turn. This mirrors
+    /// the web client's user-turn boundary, while also retaining locally answered state for items
+    /// represented in both timelines.
+    static func reconcile(with serverItems: [ChatItem], items: inout [ChatItem]) {
+        guard !serverItems.isEmpty else { return }
+
+        let localItems = items
+        var claimedLocalIndices: Set<Int> = []
+        var exactIndices: [ChatItemIdentity: [Int]] = [:]
+        for index in localItems.indices.reversed() {
+            exactIndices[ChatItemIdentity(localItems[index]), default: []].append(index)
+        }
+        var semanticCursor = localItems.startIndex
+
+        func matchingLocalIndex(for serverItem: ChatItem) -> Int? {
+            let identity = ChatItemIdentity(serverItem)
+            while let candidate = exactIndices[identity]?.popLast() {
+                if !claimedLocalIndices.contains(candidate) {
+                    return candidate
+                }
+            }
+
+            // Different server/client ids are uncommon. Preserve ordered semantic matching without
+            // restarting a full scan at index zero for every canonical item.
+            if semanticCursor < localItems.endIndex {
+                for index in semanticCursor..<localItems.endIndex
+                where !claimedLocalIndices.contains(index)
+                    && localItems[index].semanticallyMatches(serverItem) {
+                    semanticCursor = localItems.index(after: index)
+                    return index
+                }
+            }
+            for index in localItems.startIndex..<semanticCursor
+            where !claimedLocalIndices.contains(index)
+                && localItems[index].semanticallyMatches(serverItem) {
+                return index
+            }
+            return nil
+        }
+
+        var reconciled: [ChatItem] = []
+        reconciled.reserveCapacity(max(serverItems.count, localItems.count))
+        for serverItem in serverItems {
+            guard let matchingIndex = matchingLocalIndex(for: serverItem) else {
+                reconciled.append(serverItem)
+                continue
+            }
+            claimedLocalIndices.insert(matchingIndex)
+            let localItem = localItems[matchingIndex]
+            reconciled.append(localItem.merging(serverItem))
+        }
+
+        let serverUserCount = serverItems.lazy.filter { $0.kind == .user }.count
+        var localUserCount = 0
+        var localSuffixStart = localItems.endIndex
+
+        for index in localItems.indices where localItems[index].kind == .user {
+            localUserCount += 1
+            if localUserCount > serverUserCount {
+                localSuffixStart = index
+                break
+            }
+        }
+
+        for localItem in localItems[localSuffixStart...] {
+            if let index = reconciled.firstIndex(where: {
+                $0.id == localItem.id && $0.kind == localItem.kind
+            }) {
+                reconciled[index] = localItem.merging(reconciled[index])
+            } else {
+                reconciled.append(localItem)
+            }
+        }
+
+        items = reconciled
     }
 
     static func upsert(_ item: ChatItem, in items: inout [ChatItem]) {
@@ -126,7 +209,24 @@ enum ChatEventReducer {
     }
 }
 
+private struct ChatItemIdentity: Hashable {
+    var id: ChatItem.ID
+    var kind: ChatItemKind
+
+    init(_ item: ChatItem) {
+        id = item.id
+        kind = item.kind
+    }
+}
+
 private extension ChatEventReducer {
+    static var ignoredEventTypes: Set<String> {
+        [
+            "", "PING", "PONG", "CONNECTED", "OUTPUT", "ERROR",
+            "SESSION_STATUS", "SESSION_MERGED", "session_sync", "mode_changed"
+        ]
+    }
+
     static func toolCall(from event: ServerEvent) -> ChatItem {
         var item = ChatItem(id: event.id ?? UUID().uuidString, kind: .toolCall)
         item.name = event.payload[string: "name"] ?? "tool"
@@ -137,7 +237,15 @@ private extension ChatEventReducer {
 
     static func applyToolResult(_ event: ServerEvent, to items: inout [ChatItem]) {
         let id = event.id ?? UUID().uuidString
-        guard let index = items.firstIndex(where: { $0.id == id && $0.kind == .toolCall }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == id && $0.kind == .toolCall }) else {
+            var item = ChatItem(id: id, kind: .toolCall)
+            item.name = event.payload[string: "name"] ?? event.payload[string: "tool"] ?? "tool"
+            item.status = event.payload[string: "status"] == "error" ? .error : .done
+            item.result = event.payload[string: "result"]
+            item.timingMS = event.payload[int: "timing_ms"]
+            items.append(item)
+            return
+        }
         items[index].status = event.payload[string: "status"] == "error" ? .error : .done
         items[index].result = event.payload[string: "result"]
         items[index].timingMS = event.payload[int: "timing_ms"]
@@ -152,7 +260,16 @@ private extension ChatEventReducer {
 
     static func applyLLMResult(_ event: ServerEvent, to items: inout [ChatItem]) {
         let id = event.id ?? UUID().uuidString
-        guard let index = items.firstIndex(where: { $0.id == id && $0.kind == .thinking }) else { return }
+        guard let index = items.firstIndex(where: { $0.id == id && $0.kind == .thinking }) else {
+            var item = ChatItem(id: id, kind: .thinking)
+            item.status = event.payload[string: "status"] == "error" ? .error : .done
+            item.durationMS = event.payload[int: "duration_ms"]
+            item.model = event.payload[string: "model"]
+            item.contextPercent = event.payload[double: "context_percent"]
+            item.usage = decode(TokenUsage.self, from: event.payload["usage"])
+            items.append(item)
+            return
+        }
         items[index].status = event.payload[string: "status"] == "error" ? .error : .done
         items[index].durationMS = event.payload[int: "duration_ms"]
         items[index].model = event.payload[string: "model"] ?? items[index].model
@@ -169,12 +286,24 @@ private extension ChatEventReducer {
     }
 
     static func agentMessage(from event: ServerEvent) -> ChatItem? {
-        guard let content = event.payload[string: "content"], !content.isEmpty else { return nil }
+        guard let rawContent = event.payload[string: "content"] else { return nil }
+        let content = AgentContentSanitizer.sanitize(rawContent)
+        guard !content.isEmpty else { return nil }
         return ChatItem(id: event.id ?? UUID().uuidString, kind: .agent, content: content)
     }
 
     static func applyAgentImage(_ event: ServerEvent, to items: inout [ChatItem]) {
         guard let image = event.payload[string: "image"] else { return }
+
+        let targetID = items.last(where: { $0.kind == .agent })?.id
+        for index in items.indices.reversed()
+        where items[index].kind == .agent && items[index].id != targetID && items[index].images.contains(image) {
+            items[index].images.removeAll { $0 == image }
+            if items[index].content.isEmpty && items[index].images.isEmpty {
+                items.remove(at: index)
+            }
+        }
+
         if let index = items.lastIndex(where: { $0.kind == .agent }) {
             if !items[index].images.contains(image) {
                 items[index].images.append(image)
@@ -236,6 +365,29 @@ private extension ChatEventReducer {
         return item
     }
 
+    static func ulwTurnsReached(from event: ServerEvent) -> ChatItem {
+        var item = ChatItem(id: event.id ?? UUID().uuidString, kind: .ulwTurnsReached)
+        item.turnsUsed = event.payload[int: "turns_used"]
+        item.maxTurns = event.payload[int: "max_turns"]
+        if let turnsUsed = item.turnsUsed, let maxTurns = item.maxTurns {
+            item.content = "Ultra work limit reached (\(turnsUsed)/\(maxTurns) turns)"
+        } else {
+            item.content = "Ultra work limit reached"
+        }
+        return item
+    }
+
+    static func unknownItem(from event: ServerEvent) -> ChatItem {
+        var item = ChatItem(id: event.id ?? UUID().uuidString, kind: .unknown)
+        item.eventType = event.type.isEmpty ? "unknown" : event.type
+        item.rawPayload = event.payload
+        item.content = event.payload[string: "message"]
+            ?? event.payload[string: "text"]
+            ?? event.payload[string: "reason"]
+            ?? "Agent event: \(item.eventType ?? "unknown")"
+        return item
+    }
+
     static func askUser(from event: ServerEvent) -> ChatItem {
         var item = ChatItem(id: event.id ?? UUID().uuidString, kind: .askUser)
         item.content = event.payload[string: "text"] ?? event.payload[string: "question"] ?? ""
@@ -283,6 +435,45 @@ private extension ChatEventReducer {
 }
 
 private extension ChatItem {
+    func semanticallyMatches(_ other: ChatItem) -> Bool {
+        guard kind == other.kind else { return false }
+
+        switch kind {
+        case .user, .agent:
+            return content == other.content
+        case .thinking:
+            return !content.isEmpty || !other.content.isEmpty
+                ? content == other.content
+                : model == other.model
+        case .toolCall:
+            return name == other.name && arguments == other.arguments
+        case .askUser:
+            return content == other.content
+        case .approvalNeeded:
+            return tool == other.tool && arguments == other.arguments && description == other.description
+        case .onboardRequired:
+            return methods == other.methods && paymentAmount == other.paymentAmount
+        case .onboardSuccess:
+            return level == other.level && content == other.content
+        case .intent:
+            return ack == other.ack && isBuild == other.isBuild
+        case .evaluation:
+            return evalPath == other.evalPath && content == other.content
+        case .compact:
+            return content == other.content && contextPercent == other.contextPercent
+        case .toolBlocked:
+            return tool == other.tool && reason == other.reason && command == other.command
+        case .planReview:
+            return planContent == other.planContent
+        case .filesReceived:
+            return receivedFiles == other.receivedFiles
+        case .ulwTurnsReached:
+            return turnsUsed == other.turnsUsed && maxTurns == other.maxTurns
+        case .unknown:
+            return eventType == other.eventType && content == other.content
+        }
+    }
+
     func merging(_ other: ChatItem) -> ChatItem {
         var copy = self
         copy.createdAt = createdAt
@@ -291,7 +482,11 @@ private extension ChatItem {
         if !other.files.isEmpty { copy.files = other.files }
         copy.name = other.name ?? name
         if !other.arguments.isEmpty { copy.arguments = other.arguments }
-        copy.status = other.status ?? status
+        if other.status == .running, status == .done || status == .error {
+            copy.status = status
+        } else {
+            copy.status = other.status ?? status
+        }
         copy.result = other.result ?? result
         copy.timingMS = other.timingMS ?? timingMS
         copy.model = other.model ?? model
@@ -320,6 +515,10 @@ private extension ChatItem {
         copy.command = other.command ?? command
         copy.planContent = other.planContent ?? planContent
         if !other.receivedFiles.isEmpty { copy.receivedFiles = other.receivedFiles }
+        copy.turnsUsed = other.turnsUsed ?? turnsUsed
+        copy.maxTurns = other.maxTurns ?? maxTurns
+        copy.eventType = other.eventType ?? eventType
+        if !other.rawPayload.isEmpty { copy.rawPayload = other.rawPayload }
         return copy
     }
 }

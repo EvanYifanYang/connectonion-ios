@@ -14,7 +14,6 @@ enum ShellRoute: Hashable {
 struct AppShellView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(ChatSessionStore.self) private var chatSessions
     @Query(sort: \AgentConfigRecord.createdAt) private var agents: [AgentConfigRecord]
     @Query(sort: \ConversationRecord.updatedAt, order: .reverse) private var conversations: [ConversationRecord]
 
@@ -29,6 +28,9 @@ struct AppShellView: View {
     @State private var deletingAgent: AgentConfigRecord?
     @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
+    // Read the single store RootView owns + injects, so AgentHomeView's @Environment sees the same
+    // instance that actually holds the sessions (otherwise the "generating" indicator never fires).
+    @Environment(ChatSessionStore.self) private var chatSessionStore
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
 
     var body: some View {
@@ -123,7 +125,7 @@ struct AppShellView: View {
             applyAppearance(appearance)
             publishWidgetSnapshot()
             configureAgentInfoRefresh()
-            syncVisibleConversation()
+            chatSessionStore.setAppActive(scenePhase == .active)
         }
         .onChange(of: agents.map(\.address)) { _, addresses in
             publishWidgetSnapshot()
@@ -147,15 +149,14 @@ struct AppShellView: View {
         }
         .onChange(of: path) { _, _ in
             configureAgentInfoRefresh()
-            syncVisibleConversation()
         }
         .onChange(of: scenePhase) { _, phase in
+            chatSessionStore.setAppActive(phase == .active)
             if phase == .active {
                 configureAgentInfoRefresh()
             } else {
                 infoStore.stopAutoRefresh()
             }
-            syncVisibleConversation()
         }
         .onOpenURL { url in
             handleDeepLink(url)
@@ -229,13 +230,15 @@ struct AppShellView: View {
         case .conversation(let id):
             if let conversation = conversations.first(where: { $0.id == id }),
                let agent = agent(for: conversation.agentAddress) {
+                let viewModel = chatSessionStore.session(for: conversation, agent: agent.config)
                 ChatScreen(
                     conversation: conversation,
                     agent: agent,
                     info: infoStore.infoByAddress[agent.address],
                     initialInput: pendingInputs[id],
                     onInitialInputConsumed: { pendingInputs[id] = nil },
-                    viewModel: chatSessions.viewModel(for: conversation, agent: agent.config)
+                    viewModel: viewModel,
+                    sessionStore: chatSessionStore
                 )
                 .id(id)
             }
@@ -259,19 +262,6 @@ struct AppShellView: View {
         case nil:
             return nil
         }
-    }
-
-    private func syncVisibleConversation() {
-        guard scenePhase == .active,
-              case .conversation(let id) = path.last else {
-            chatSessions.setVisibleConversation(id: nil, conversation: nil)
-            return
-        }
-
-        chatSessions.setVisibleConversation(
-            id: id,
-            conversation: conversations.first { $0.id == id }
-        )
     }
 
     private func refreshAgentInfo() async {
@@ -331,7 +321,7 @@ struct AppShellView: View {
     private func deleteAgent(_ agent: AgentConfigRecord) {
         let related = conversations.filter { $0.agentAddress == agent.address }
         let relatedIDs = Set(related.map(\.id))
-        relatedIDs.forEach(chatSessions.removeSession)
+        relatedIDs.forEach(chatSessionStore.removeSession)
         related.forEach(modelContext.delete)
         modelContext.delete(agent)
 
@@ -348,7 +338,7 @@ struct AppShellView: View {
     }
 
     private func deleteConversation(_ conversation: ConversationRecord) {
-        chatSessions.removeSession(for: conversation.id)
+        chatSessionStore.removeSession(for: conversation.id)
         modelContext.delete(conversation)
         // Pop the chat if it's open; a delete from the list (not on the stack) is a no-op here.
         path.removeAll { $0 == .conversation(conversation.id) }
@@ -492,13 +482,11 @@ private enum AgentScannerPresentation: String, Identifiable {
 #Preview("Loaded Shell") {
     let _ = PreviewFixtures.installMockDependencies()
     AppShellView()
-        .environment(ChatSessionStore())
         .modelContainer(PreviewFixtures.seededContainer())
 }
 
 #Preview("Empty Shell") {
     let _ = PreviewFixtures.installMockDependencies()
     AppShellView()
-        .environment(ChatSessionStore())
         .modelContainer(PreviewFixtures.container())
 }

@@ -23,13 +23,14 @@ struct ThinkingRow: View {
             return content
         }
 
-        let model = item.model ?? "thinking"
+        var details = [item.model ?? "thinking"]
         if item.status == .done {
-            let tokens = item.usage?.totalTokens.map { " · \($0) tok" } ?? ""
-            return "\(model)\(tokens)"
+            if let totalTokens = item.usage?.totalTokens {
+                details.append("\(totalTokens) tok")
+            }
         }
 
-        return model
+        return details.joined(separator: " · ")
     }
 }
 

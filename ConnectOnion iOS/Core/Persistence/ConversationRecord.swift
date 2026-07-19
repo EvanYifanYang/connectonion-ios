@@ -16,6 +16,7 @@ final class ConversationRecord {
     /// Set when the user pins this chat to the top of the agent's list (most recent pin sorts first).
     var pinnedAt: Date?
     /// True when a reply completed while this conversation was not visible in the foreground.
+    /// Local presentation state; cleared when the conversation becomes visible.
     var hasUnread: Bool = false
 
     init(

@@ -8,9 +8,9 @@ struct ChatSessionStoreTests {
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
         let client = ControlledReplyClient()
         let store = ChatSessionStore()
-        let viewModel = store.viewModel(for: conversation, agent: agent.config, client: client)
+        let viewModel = store.session(for: conversation, agent: agent.config, client: client)
 
-        store.setVisibleConversation(id: nil, conversation: nil)
+        // No conversation is visible (store default) → an incoming reply must mark it unread.
         viewModel.send("Finish this in the background")
         await waitUntil { viewModel.sessionState == .active }
         #expect(store.isGeneratingReply(for: conversation.id))
@@ -21,7 +21,7 @@ struct ChatSessionStoreTests {
         #expect(conversation.hasUnread)
         #expect(viewModel.streamingMessageID == nil)
         #expect(conversation.messages.contains { $0.kind == .agent && $0.content == "Background reply" })
-        #expect(store.viewModel(for: conversation, agent: agent.config) === viewModel)
+        #expect(store.session(for: conversation, agent: agent.config) === viewModel)
     }
 
     @Test @MainActor func visibleReplyCompletesWithoutUnreadAndOpeningClearsExistingUnread() async {
@@ -29,9 +29,9 @@ struct ChatSessionStoreTests {
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
         let client = ControlledReplyClient()
         let store = ChatSessionStore()
-        let viewModel = store.viewModel(for: conversation, agent: agent.config, client: client)
+        let viewModel = store.session(for: conversation, agent: agent.config, client: client)
 
-        store.setVisibleConversation(id: conversation.id, conversation: conversation)
+        store.conversationDidAppear(conversation)
         #expect(!conversation.hasUnread)
 
         viewModel.send("Keep this chat open")
@@ -49,7 +49,7 @@ struct ChatSessionStoreTests {
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
         let client = ControlledReplyClient()
         let store = ChatSessionStore()
-        let viewModel = store.viewModel(for: conversation, agent: agent.config, client: client)
+        let viewModel = store.session(for: conversation, agent: agent.config, client: client)
 
         viewModel.send("Keep working")
         await waitUntil { viewModel.sessionState == .active }

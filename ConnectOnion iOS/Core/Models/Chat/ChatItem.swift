@@ -38,6 +38,10 @@ struct ChatItem: Codable, Equatable, Identifiable, Sendable {
     var command: String?
     var planContent: String?
     var receivedFiles: [ReceivedFile]
+    var turnsUsed: Int?
+    var maxTurns: Int?
+    var eventType: String?
+    var rawPayload: [String: JSONValue]
 
     init(
         id: String = UUID().uuidString,
@@ -59,6 +63,7 @@ struct ChatItem: Codable, Equatable, Identifiable, Sendable {
         batchRemaining = []
         methods = []
         receivedFiles = []
+        rawPayload = [:]
     }
 }
 
@@ -104,69 +109,101 @@ extension ChatItem {
         case command
         case planContent = "plan_content"
         case receivedFiles = "received_files"
+        case turnsUsed = "turns_used"
+        case maxTurns = "max_turns"
+        case eventType = "event_type"
+        case rawPayload = "raw_payload"
+        case args
+        case image
+        case message
+        case text
+        case question
+        case summary
+        case error
+        case createdAtSnake = "created_at"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        id = container.decodeLossy(String.self, forKey: .id) ?? UUID().uuidString
 
-        if let decodedKind = try container.decodeIfPresent(ChatItemKind.self, forKey: .kind) {
-            kind = decodedKind
-        } else if let type = try container.decodeIfPresent(String.self, forKey: .type),
-                  let decodedKind = ChatItemKind(rawValue: type) {
-            kind = decodedKind
-        } else {
-            kind = .agent
+        let kindValue = container.decodeLossy(String.self, forKey: .kind)
+        let typeValue = container.decodeLossy(String.self, forKey: .type)
+        let rawKind = kindValue.flatMap(ChatItemKind.init(rawValue:)) != nil ? kindValue : typeValue ?? kindValue
+        kind = rawKind.flatMap(ChatItemKind.init(rawValue:)) ?? .unknown
+        eventType = container.decodeLossy(String.self, forKey: .eventType)
+        if eventType == nil, kind == .unknown {
+            eventType = typeValue ?? kindValue
         }
 
-        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
-        let decodedContent = try container.decodeIfPresent(String.self, forKey: .content)
-        let decodedAck = try container.decodeIfPresent(String.self, forKey: .ack)
-        content = decodedContent ?? decodedAck ?? ""
-        images = try container.decodeIfPresent([String].self, forKey: .images) ?? []
-        files = try container.decodeIfPresent([FileAttachment].self, forKey: .files) ?? []
-        name = try container.decodeIfPresent(String.self, forKey: .name)
-        arguments = try container.decodeIfPresent([String: JSONValue].self, forKey: .arguments) ?? [:]
-        status = try container.decodeIfPresent(ExecutionStatus.self, forKey: .status)
-        result = try container.decodeIfPresent(String.self, forKey: .result)
-        timingMS = try container.decodeIfPresent(Int.self, forKey: .timingMS)
-        model = try container.decodeIfPresent(String.self, forKey: .model)
-        durationMS = try container.decodeIfPresent(Int.self, forKey: .durationMS)
-        contextPercent = try container.decodeIfPresent(Double.self, forKey: .contextPercent)
-        usage = try container.decodeIfPresent(TokenUsage.self, forKey: .usage)
-        options = try container.decodeIfPresent([String].self, forKey: .options) ?? []
-        multiSelect = try container.decodeIfPresent(Bool.self, forKey: .multiSelect) ?? false
-        inputType = try container.decodeIfPresent(String.self, forKey: .inputType)
-        fields = try container.decodeIfPresent([AskUserField].self, forKey: .fields) ?? []
-        answered = try container.decodeIfPresent(Bool.self, forKey: .answered) ?? false
-        answer = try container.decodeIfPresent(String.self, forKey: .answer)
-        tool = try container.decodeIfPresent(String.self, forKey: .tool)
-        description = try container.decodeIfPresent(String.self, forKey: .description)
-        batchRemaining = try container.decodeIfPresent([BatchApproval].self, forKey: .batchRemaining) ?? []
-        methods = try container.decodeIfPresent([String].self, forKey: .methods) ?? []
-        let decodedPaymentAmount = try container.decodeIfPresent(Double.self, forKey: .paymentAmount)
-        let decodedPaymentAmountSnake = try container.decodeIfPresent(Double.self, forKey: .paymentAmountSnake)
+        createdAt = container.decodeLossy(Date.self, forKey: .createdAt)
+            ?? container.decodeServerDate(forKey: .createdAtSnake)
+            ?? .now
+        let decodedContent = container.decodeLossy(String.self, forKey: .content)
+        let decodedAck = container.decodeLossy(String.self, forKey: .ack)
+        content = decodedContent
+            ?? decodedAck
+            ?? container.decodeLossy(String.self, forKey: .message)
+            ?? container.decodeLossy(String.self, forKey: .text)
+            ?? container.decodeLossy(String.self, forKey: .question)
+            ?? container.decodeLossy(String.self, forKey: .summary)
+            ?? container.decodeLossy(String.self, forKey: .error)
+            ?? ""
+        images = container.decodeLossy([String].self, forKey: .images) ?? []
+        if let image = container.decodeLossy(String.self, forKey: .image), !images.contains(image) {
+            images.append(image)
+        }
+        files = container.decodeLossy([FileAttachment].self, forKey: .files) ?? []
+        name = container.decodeLossy(String.self, forKey: .name)
+        arguments = container.decodeLossy([String: JSONValue].self, forKey: .arguments)
+            ?? container.decodeLossy([String: JSONValue].self, forKey: .args)
+            ?? [:]
+        status = container.decodeLossy(String.self, forKey: .status).flatMap(ExecutionStatus.init(rawValue:))
+        result = container.decodeLossy(String.self, forKey: .result)
+        timingMS = container.decodeLossy(Int.self, forKey: .timingMS)
+        model = container.decodeLossy(String.self, forKey: .model)
+        durationMS = container.decodeLossy(Int.self, forKey: .durationMS)
+        contextPercent = container.decodeLossy(Double.self, forKey: .contextPercent)
+        usage = container.decodeLossy(TokenUsage.self, forKey: .usage)
+        options = container.decodeLossy([String].self, forKey: .options) ?? []
+        multiSelect = container.decodeLossy(Bool.self, forKey: .multiSelect) ?? false
+        inputType = container.decodeLossy(String.self, forKey: .inputType)
+        fields = container.decodeLossy([AskUserField].self, forKey: .fields) ?? []
+        answered = container.decodeLossy(Bool.self, forKey: .answered) ?? false
+        answer = container.decodeLossy(String.self, forKey: .answer)
+        tool = container.decodeLossy(String.self, forKey: .tool)
+        description = container.decodeLossy(String.self, forKey: .description)
+        batchRemaining = container.decodeLossy([BatchApproval].self, forKey: .batchRemaining) ?? []
+        methods = container.decodeLossy([String].self, forKey: .methods) ?? []
+        let decodedPaymentAmount = container.decodeLossy(Double.self, forKey: .paymentAmount)
+        let decodedPaymentAmountSnake = container.decodeLossy(Double.self, forKey: .paymentAmountSnake)
         paymentAmount = decodedPaymentAmount ?? decodedPaymentAmountSnake
-        let decodedPaymentAddress = try container.decodeIfPresent(String.self, forKey: .paymentAddress)
-        let decodedPaymentAddressSnake = try container.decodeIfPresent(String.self, forKey: .paymentAddressSnake)
+        let decodedPaymentAddress = container.decodeLossy(String.self, forKey: .paymentAddress)
+        let decodedPaymentAddressSnake = container.decodeLossy(String.self, forKey: .paymentAddressSnake)
         paymentAddress = decodedPaymentAddress ?? decodedPaymentAddressSnake
-        level = try container.decodeIfPresent(String.self, forKey: .level)
-        ack = try container.decodeIfPresent(String.self, forKey: .ack)
-        isBuild = try container.decodeIfPresent(Bool.self, forKey: .isBuild)
-        passed = try container.decodeIfPresent(Bool.self, forKey: .passed)
-        expected = try container.decodeIfPresent(String.self, forKey: .expected)
-        evalPath = try container.decodeIfPresent(String.self, forKey: .evalPath)
-        reason = try container.decodeIfPresent(String.self, forKey: .reason)
-        command = try container.decodeIfPresent(String.self, forKey: .command)
-        planContent = try container.decodeIfPresent(String.self, forKey: .planContent)
-        receivedFiles = try container.decodeIfPresent([ReceivedFile].self, forKey: .receivedFiles) ?? []
+        level = container.decodeLossy(String.self, forKey: .level)
+        ack = container.decodeLossy(String.self, forKey: .ack)
+        isBuild = container.decodeLossy(Bool.self, forKey: .isBuild)
+        passed = container.decodeLossy(Bool.self, forKey: .passed)
+        expected = container.decodeLossy(String.self, forKey: .expected)
+        evalPath = container.decodeLossy(String.self, forKey: .evalPath)
+        reason = container.decodeLossy(String.self, forKey: .reason)
+        command = container.decodeLossy(String.self, forKey: .command)
+        planContent = container.decodeLossy(String.self, forKey: .planContent)
+        receivedFiles = container.decodeLossy([ReceivedFile].self, forKey: .receivedFiles) ?? []
+        turnsUsed = container.decodeLossy(Int.self, forKey: .turnsUsed)
+        maxTurns = container.decodeLossy(Int.self, forKey: .maxTurns)
+        rawPayload = container.decodeLossy([String: JSONValue].self, forKey: .rawPayload) ?? [:]
+        if rawPayload.isEmpty, kind == .unknown {
+            rawPayload = Self.decodeRawPayload(from: decoder)
+        }
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(kind, forKey: .kind)
-        try container.encode(kind.rawValue, forKey: .type)
+        try container.encode(eventType ?? kind.rawValue, forKey: .type)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(content, forKey: .content)
         try container.encode(images, forKey: .images)
@@ -202,5 +239,49 @@ extension ChatItem {
         try container.encodeIfPresent(command, forKey: .command)
         try container.encodeIfPresent(planContent, forKey: .planContent)
         try container.encode(receivedFiles, forKey: .receivedFiles)
+        try container.encodeIfPresent(turnsUsed, forKey: .turnsUsed)
+        try container.encodeIfPresent(maxTurns, forKey: .maxTurns)
+        try container.encodeIfPresent(eventType, forKey: .eventType)
+        if !rawPayload.isEmpty {
+            try container.encode(rawPayload, forKey: .rawPayload)
+        }
+    }
+
+    private static func decodeRawPayload(from decoder: Decoder) -> [String: JSONValue] {
+        guard let container = try? decoder.container(keyedBy: DynamicCodingKey.self) else { return [:] }
+        return container.allKeys.reduce(into: [:]) { result, key in
+            if let value = try? container.decode(JSONValue.self, forKey: key) {
+                result[key.stringValue] = value
+            }
+        }
+    }
+}
+
+private struct DynamicCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int?
+
+    init?(stringValue: String) {
+        self.stringValue = stringValue
+    }
+
+    init?(intValue: Int) {
+        stringValue = String(intValue)
+        self.intValue = intValue
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decodeLossy<T: Decodable>(_ type: T.Type, forKey key: Key) -> T? {
+        guard contains(key) else { return nil }
+        return try? decode(T.self, forKey: key)
+    }
+
+    func decodeServerDate(forKey key: Key) -> Date? {
+        if let timestamp = decodeLossy(Double.self, forKey: key) {
+            return Date(timeIntervalSince1970: timestamp)
+        }
+        guard let value = decodeLossy(String.self, forKey: key) else { return nil }
+        return ISO8601DateFormatter().date(from: value)
     }
 }

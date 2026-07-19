@@ -103,8 +103,12 @@ struct AgentEditorView: View {
         .fullScreenCover(item: $presentedScanner) { _ in
             AgentQRCodeScannerView { payload in
                 address = payload.address
-                // The QR URL host is discovery context, not a user-configured direct endpoint.
-                endpoint = ""
+                if let name = payload.name {
+                    alias = name
+                }
+                // A connectonion:// deep link carries the agent's direct endpoint; legacy address /
+                // hosted-URL payloads don't (their host is discovery context), so clear the field.
+                endpoint = payload.endpoint?.absoluteString ?? ""
             }
         }
         // A compact bottom sheet sized to the fields (no wasted vertical space), still draggable up

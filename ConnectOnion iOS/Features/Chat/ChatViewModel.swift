@@ -317,8 +317,9 @@ final class ChatViewModel {
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
-        sessionState = .active
-        startTimer()
+        // Answering a card hands control back to the user (composer returns to send). If the agent
+        // resumes on the live stream, the incoming events flip sessionState back to .active.
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Continuing after your answer")
 
         Task {
@@ -333,8 +334,7 @@ final class ChatViewModel {
     func respondToApproval(approved: Bool, scope: String, mode: String? = nil, feedback: String? = nil) {
         ChatEventReducer.markLatestApprovalAnswered(approved: approved, scope: scope, mode: mode, in: &items)
         persist()
-        sessionState = .active
-        startTimer()
+        sessionState = .connected
         updateLiveActivityAfterUserAction(approved ? "Approval sent" : "Skipped the tool call")
         Task {
             do {
@@ -348,8 +348,7 @@ final class ChatViewModel {
     func submitOnboard(inviteCode: String?, payment: Double? = nil) {
         ChatEventReducer.markLatestOnboardSubmitted(inviteCode: inviteCode, payment: payment, in: &items)
         persist()
-        sessionState = .active
-        startTimer()
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Verification submitted")
         Task {
             do {
@@ -363,8 +362,7 @@ final class ChatViewModel {
     func respondToPlanReview(_ message: String) {
         ChatEventReducer.markLatestPlanReviewAnswered(message: message, in: &items)
         persist()
-        sessionState = .active
-        startTimer()
+        sessionState = .connected
         updateLiveActivityAfterUserAction("Plan feedback sent")
         Task {
             do {

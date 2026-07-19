@@ -17,6 +17,10 @@ final class AgentInfoStore {
     @ObservationIgnored private var focusedAddress: String?
     @ObservationIgnored private var pendingRefreshAddresses = Set<String>()
     @ObservationIgnored private var endpointsByAddress: [String: URL] = [:]
+    /// Consecutive offline probes per agent. An already-online agent only flips to offline after
+    /// `offlineThreshold` consecutive failed probes, so one slow/dropped poll can't flap the dot.
+    @ObservationIgnored private var offlineStrikesByAddress: [String: Int] = [:]
+    private static let offlineThreshold = 3
 
     /// The user-configured direct endpoints, keyed by agent address, so the status probe can reach a
     /// relay-less local agent. Call this whenever the agent list changes.
@@ -53,6 +57,19 @@ final class AgentInfoStore {
 
             for address in batch {
                 let info = await directory.fetchAgentInfo(address: address, preferredEndpoint: endpointsByAddress[address])
+
+                // Offline hysteresis: never demote a currently-online agent on a single failed/slow
+                // probe. Hold the last-known-online entry until `offlineThreshold` consecutive
+                // failures accumulate; any successful probe resets the counter.
+                if !info.online, infoByAddress[address]?.online == true {
+                    let strikes = (offlineStrikesByAddress[address] ?? 0) + 1
+                    offlineStrikesByAddress[address] = strikes
+                    if strikes < Self.offlineThreshold { continue }
+                }
+                if info.online {
+                    offlineStrikesByAddress[address] = 0
+                }
+
                 withAnimation(AppMotion.quick) {
                     infoByAddress[address] = info
                 }
@@ -102,6 +119,7 @@ final class AgentInfoStore {
         focusedRefreshTask = nil
         autoRefreshAddresses = []
         focusedAddress = nil
+        offlineStrikesByAddress.removeAll()
     }
 
     private var immediateRefreshAddresses: [String] {

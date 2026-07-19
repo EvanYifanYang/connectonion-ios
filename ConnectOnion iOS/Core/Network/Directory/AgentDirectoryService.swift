@@ -115,7 +115,9 @@ struct AgentDirectoryService: AgentDirectoryServicing {
     private func directInfo(endpoint: URL, address: String) async -> AgentInfo? {
         let url = endpoint.appending(path: "info")
         var request = URLRequest(url: url)
-        request.timeoutInterval = 3
+        // 3s was tight enough that a radio wake / slow LAN response timed out and read as offline;
+        // widen it so a healthy-but-slow agent isn't misreported (offline hysteresis backs this up).
+        request.timeoutInterval = 7
 
         do {
             let (data, response) = try await session.data(for: request)

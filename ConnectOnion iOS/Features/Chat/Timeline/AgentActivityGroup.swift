@@ -49,7 +49,10 @@ struct AgentActivityGroup: View {
                 // This stack is already nested inside the transcript's LazyVStack. Keeping the inner
                 // group eager avoids nested lazy-layout gaps when the outer scroll view is restored.
                 VStack(spacing: 2) {
-                    ForEach(items) { item in
+                    // Empty "Thinking · N tok" rows (bare llm_call markers) repeat once per LLM step and
+                    // carry no detail — the elapsed/token metrics already live in the summary. Hide them
+                    // so the expanded trace shows the meaningful work (tool calls, real thinking notes).
+                    ForEach(items.filter { !($0.kind == .thinking && $0.content.isEmpty) }) { item in
                         ChatItemView(item: item)
                     }
                 }

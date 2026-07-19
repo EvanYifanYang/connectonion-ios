@@ -20,7 +20,9 @@ final class AgentInfoStore {
     /// Consecutive offline probes per agent. An already-online agent only flips to offline after
     /// `offlineThreshold` consecutive failed probes, so one slow/dropped poll can't flap the dot.
     @ObservationIgnored private var offlineStrikesByAddress: [String: Int] = [:]
-    private static let offlineThreshold = 3
+    // 2 consecutive failures (with the widened 7s probe timeout) still absorbs a single slow/dropped
+    // poll but detects a genuine shutdown within ~2 poll cycles instead of 3.
+    private static let offlineThreshold = 2
 
     /// The user-configured direct endpoints, keyed by agent address, so the status probe can reach a
     /// relay-less local agent. Call this whenever the agent list changes.
@@ -81,7 +83,7 @@ final class AgentInfoStore {
         addresses: [String],
         focusedAddress: String? = nil,
         focusedInterval: Duration = .seconds(10),
-        allInterval: Duration = .seconds(60),
+        allInterval: Duration = .seconds(30),
         refreshImmediately: Bool = true
     ) {
         autoRefreshAddresses = Self.uniqueAddresses(addresses)

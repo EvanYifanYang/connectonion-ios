@@ -79,6 +79,17 @@ enum ChatEventReducer {
         case "RUNTIME_INPUT_ACK":
             return .active
 
+        // Verification/invite was rejected by the host. The exact wire type isn't in this codebase
+        // (only REQUIRED/SUCCESS are), so match the plausible names; an unmatched one still surfaces
+        // via the default `unknown` item + the DEBUG log in ChatViewModel.handle(.server).
+        case "ONBOARD_ERROR", "ONBOARD_FAILED", "ONBOARD_REJECTED", "ONBOARD_INVALID",
+             "ONBOARD_DENIED", "VERIFICATION_FAILED", "INVITE_INVALID", "INVITE_REJECTED":
+            let message = event.payload[string: "message"]
+                ?? event.payload[string: "error"]
+                ?? event.payload[string: "reason"]
+            markLatestOnboardRejected(message: message, in: &items)
+            return .waiting
+
         default:
             guard !ignoredEventTypes.contains(event.type) else { return nil }
             upsert(unknownItem(from: event), in: &items)
@@ -193,6 +204,7 @@ enum ChatEventReducer {
     static func markLatestOnboardSubmitted(inviteCode: String?, payment: Double?, in items: inout [ChatItem]) {
         guard let index = items.lastIndex(where: { $0.kind == .onboardRequired && !$0.answered }) else { return }
         items[index].answered = true
+        items[index].reason = nil // clear any prior rejection error on a fresh submit
         if let inviteCode, !inviteCode.isEmpty {
             items[index].answer = "Invite submitted"
         } else if payment != nil {
@@ -200,6 +212,15 @@ enum ChatEventReducer {
         } else {
             items[index].answer = "Verification submitted"
         }
+    }
+
+    /// Re-opens the most recent onboarding card so the user can retry, stashing the server's
+    /// rejection message in `reason` (an otherwise-unused field on onboardRequired items) for display.
+    static func markLatestOnboardRejected(message: String?, in items: inout [ChatItem]) {
+        guard let index = items.lastIndex(where: { $0.kind == .onboardRequired }) else { return }
+        items[index].answered = false
+        items[index].answer = nil
+        items[index].reason = message ?? "That code wasn't accepted. Check it and try again."
     }
 
     static func markLatestPlanReviewAnswered(message: String, in items: inout [ChatItem]) {

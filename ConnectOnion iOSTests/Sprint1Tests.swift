@@ -195,6 +195,39 @@ struct Sprint1ChatEventTests {
         #expect(items[0].answer == "Invite submitted")
     }
 
+    @Test func onboardRejectionReopensCardWithErrorAndReturnsToWaiting() {
+        var items: [ChatItem] = []
+
+        _ = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("ONBOARD_REQUIRED"),
+                "id": .string("onboard-1"),
+                "methods": .array([.string("invite_code")])
+            ]),
+            to: &items
+        )
+        ChatEventReducer.markLatestOnboardSubmitted(inviteCode: "wrong-code", payment: nil, in: &items)
+        #expect(items[0].answered)
+
+        // A rejected code must re-open the card (retryable), surface the reason, and leave the
+        // session .waiting so the composer stops showing the ■ processing button.
+        let state = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("ONBOARD_ERROR"),
+                "id": .string("onboard-1"),
+                "message": .string("Invalid invite code")
+            ]),
+            to: &items
+        )
+
+        #expect(state == .waiting)
+        #expect(items.count == 1)
+        #expect(items[0].kind == .onboardRequired)
+        #expect(!items[0].answered)
+        #expect(items[0].answer == nil)
+        #expect(items[0].reason == "Invalid invite code")
+    }
+
     @Test func planReviewResponseClearsPendingReview() {
         var items: [ChatItem] = []
 

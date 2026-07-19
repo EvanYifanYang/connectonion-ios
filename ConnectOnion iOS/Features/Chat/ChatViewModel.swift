@@ -443,6 +443,15 @@ final class ChatViewModel {
 
         case .server(let event):
             let previousAgentID = items.last(where: { $0.kind == .agent })?.id
+            #if DEBUG
+            // Surface the exact wire type of any verification/invite event so an unhandled rejection
+            // name (not in ChatEventReducer's candidate set) can be identified from one repro.
+            if event.type.range(of: "ONBOARD", options: .caseInsensitive) != nil
+                || event.type.range(of: "VERIF", options: .caseInsensitive) != nil
+                || event.type.range(of: "INVITE", options: .caseInsensitive) != nil {
+                print("🔎 [onboard] server event type=\(event.type) payload=\(event.payload)")
+            }
+            #endif
             if event.type == "ONBOARD_REQUIRED", inFlightWasFirstPrompt {
                 if let inFlightInput {
                     deferredOnboardTurn = DeferredOnboardTurn(

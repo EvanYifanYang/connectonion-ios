@@ -14,6 +14,16 @@ struct OnboardRequiredCard: View {
                 .appFont(.headline)
 
             if isPending {
+                if let reason = item.reason, !reason.isEmpty {
+                    Label(reason, systemImage: "exclamationmark.triangle.fill")
+                        .appFont(.footnote, weight: .medium)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier(AccessibilityID.onboardStatus)
+                        .transition(AppMotion.panelTransition)
+                }
+
                 if item.methods.contains("invite_code") {
                     HStack(spacing: 8) {
                         TextField("Invite code", text: $inviteCode)

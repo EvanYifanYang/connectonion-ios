@@ -13,6 +13,8 @@ struct ChatItemView: View {
     var onOnboardSubmit: (String?, Double?) -> Void = { _, _ in }
     var onPlanReviewResponse: (String) -> Void = { _ in }
     var onRegenerate: () -> Void = {}
+    var isStreaming: Bool = false
+    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         switch item.kind {
@@ -22,8 +24,10 @@ struct ChatItemView: View {
             AgentBubble(
                 item: item,
                 showActions: showAgentActions,
+                isStreaming: isStreaming,
                 modelName: modelName,
-                onRegenerate: onRegenerate
+                onRegenerate: onRegenerate,
+                onStreamComplete: onStreamComplete
             )
         case .thinking:
             ThinkingRow(item: item)

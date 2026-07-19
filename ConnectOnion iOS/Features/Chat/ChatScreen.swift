@@ -44,7 +44,9 @@ struct ChatScreen: View {
             onPlanReviewResponse: viewModel.respondToPlanReview,
             onRegenerate: viewModel.regenerate(replyID:),
             responseModel: viewModel.lastResponseModel,
-            isAgentRunning: viewModel.shouldShowStopButton
+            isAgentRunning: viewModel.shouldShowStopButton,
+            streamingMessageID: viewModel.streamingMessageID,
+            onStreamComplete: viewModel.markStreamingComplete
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInset(

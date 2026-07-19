@@ -4,15 +4,21 @@ import UIKit
 struct AgentBubble: View {
     var item: ChatItem
     var showActions: Bool = false
+    var isStreaming: Bool = false
     var modelName: String? = nil
     var onRegenerate: () -> Void = {}
+    var onStreamComplete: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !item.content.isEmpty {
-                MarkdownMessageView(text: item.content)
-                    .equatable()
-                    .appFont(.body)
+                if isStreaming {
+                    StreamingMessageText(text: item.content, onComplete: onStreamComplete)
+                } else {
+                    MarkdownMessageView(text: item.content)
+                        .equatable()
+                        .appFont(.body)
+                }
             }
 
             ForEach(item.images, id: \.self) { image in
@@ -92,6 +98,58 @@ private struct MessageActionsRow: View {
             try? await Task.sleep(for: .seconds(1.6))
             copied = false
         }
+    }
+}
+
+/// The transport delivers a reply whole, so reveal it client-side for a streaming feel: inline
+/// markdown is parsed ONCE into an AttributedString, then a growing prefix of that already-formatted
+/// string is shown (re-parsing a partial prefix every tick reflows and flickers). Block syntax
+/// (lists, code fences) is left to the final MarkdownMessageView after `onComplete`.
+private struct StreamingMessageText: View {
+    let text: String
+    var onComplete: () -> Void
+
+    @State private var revealed = 0
+    @State private var attributed = AttributedString()
+
+    var body: some View {
+        let count = attributed.characters.count
+        let end = attributed.index(attributed.startIndex, offsetByCharacters: min(revealed, count))
+        let shown = AttributedString(attributed[attributed.startIndex..<end])
+
+        let revealedText = Text(shown)
+        let caretText = caret(visible: revealed < count)
+        return Text("\(revealedText)\(caretText)")
+            .appFont(.body)
+            .lineSpacing(3)
+            .tint(.onion)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .task(id: text) { await reveal() }
+    }
+
+    private func caret(visible: Bool) -> Text {
+        visible ? Text("▌").foregroundColor(.onion) : Text("")
+    }
+
+    private func reveal() async {
+        attributed = (try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
+        revealed = 0
+        let total = attributed.characters.count
+        guard total > 0 else { onComplete(); return }
+        // ~1 char/tick so short replies visibly type out; more-per-tick for long replies so the whole
+        // thing still finishes within ~2.5s.
+        let tickMs = 22
+        let maxTicks = 2500.0 / Double(tickMs)
+        let perTick = max(1, Int((Double(total) / maxTicks).rounded(.up)))
+        while revealed < total {
+            try? await Task.sleep(for: .milliseconds(tickMs))
+            if Task.isCancelled { return }
+            revealed = min(total, revealed + perTick)
+        }
+        onComplete()
     }
 }
 

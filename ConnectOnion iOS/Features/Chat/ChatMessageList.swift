@@ -16,6 +16,8 @@ struct ChatMessageList: View {
     var onRegenerate: (ChatItem.ID) -> Void = { _ in }
     var responseModel: String?
     var isAgentRunning = false
+    var streamingMessageID: ChatItem.ID?
+    var onStreamComplete: (ChatItem.ID) -> Void = { _ in }
 
     @State private var isTailVisible = true
     @State private var followsTail = true
@@ -39,6 +41,31 @@ struct ChatMessageList: View {
         items.last { $0.kind == .user }?.id
     }
 
+    // Pulled out of the ForEach body (and pre-computing the flags into locals) so the SwiftUI
+    // type-checker doesn't time out on the ~19-argument ChatItemView call.
+    @ViewBuilder
+    private func itemRow(for item: ChatItem) -> some View {
+        let isStreamingItem = item.id == streamingMessageID
+        let showActions = item.kind == .agent && !isStreamingItem
+        let model: String? = item.id == lastAgentID ? (item.model ?? responseModel) : nil
+        ChatItemView(
+            item: item,
+            isPendingAskUser: item.id == pendingAskUser?.id,
+            isPendingApproval: item.id == pendingApproval?.id,
+            isPendingOnboard: item.id == pendingOnboard?.id,
+            isPendingPlanReview: item.id == pendingPlanReview?.id,
+            showAgentActions: showActions,
+            modelName: model,
+            onAskUserResponse: onAskUserResponse,
+            onApprovalResponse: onApprovalResponse,
+            onOnboardSubmit: onOnboardSubmit,
+            onPlanReviewResponse: onPlanReviewResponse,
+            onRegenerate: { onRegenerate(item.id) },
+            isStreaming: isStreamingItem,
+            onStreamComplete: { onStreamComplete(item.id) }
+        )
+    }
+
     var body: some View {
         let units = ChatTimelineBuilder.makeUnits(from: items)
         let tailID = units.last?.id
@@ -54,20 +81,7 @@ struct ChatMessageList: View {
                     ForEach(units) { unit in
                         switch unit.content {
                         case .item(let item):
-                            ChatItemView(
-                                item: item,
-                                isPendingAskUser: item.id == pendingAskUser?.id,
-                                isPendingApproval: item.id == pendingApproval?.id,
-                                isPendingOnboard: item.id == pendingOnboard?.id,
-                                isPendingPlanReview: item.id == pendingPlanReview?.id,
-                                showAgentActions: item.kind == .agent,
-                                modelName: item.id == lastAgentID ? (item.model ?? responseModel) : nil,
-                                onAskUserResponse: onAskUserResponse,
-                                onApprovalResponse: onApprovalResponse,
-                                onOnboardSubmit: onOnboardSubmit,
-                                onPlanReviewResponse: onPlanReviewResponse,
-                                onRegenerate: { onRegenerate(item.id) }
-                            )
+                            itemRow(for: item)
 
                         case .activity(let activityItems, let durationMS):
                             AgentActivityGroup(

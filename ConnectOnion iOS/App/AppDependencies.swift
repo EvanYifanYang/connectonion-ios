@@ -13,6 +13,8 @@ extension Container {
     }
 
     var connectOnionClient: Factory<ConnectOnionClientProviding> {
+        // Intentionally unscoped: each app-owned chat session needs an independent transport so
+        // starting another conversation cannot replace the first conversation's receive stream.
         self { @MainActor in
             ConnectOnionClient(
                 directory: Container.shared.agentDirectoryService(),

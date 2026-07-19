@@ -12,7 +12,7 @@ struct ChatErrorBanner: View {
                 .foregroundStyle(.red)
 
             Text(message)
-                .font(.footnote)
+                .appFont(.footnote)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 

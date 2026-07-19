@@ -22,6 +22,7 @@ final class ConnectOnion_iOSE2ETests: XCTestCase {
     private let saveAgentButtonID = "connectonion.agent.save.button"
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
+    private let newChatButtonID = "connectonion.agent.newchat.button"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -66,6 +67,14 @@ final class ConnectOnion_iOSE2ETests: XCTestCase {
             let agentRow = app.descendants(matching: .any)
                 .matching(identifier: "connectonion.agent.\(address)").firstMatch
             if agentRow.waitForExistence(timeout: 5) { agentRow.tap() }
+        }
+
+        // The post-add flow now lands on the agent home ("No chats yet"); open a fresh chat so the
+        // chat input appears (the custom-instructions update moved chat behind a "New Chat" tap).
+        let newChatButton = element(newChatButtonID, app)
+        if newChatButton.waitForExistence(timeout: 8) {
+            tap(newChatButtonID, app)
+            pause()
         }
 
         // 2) Send a prompt that should exercise the `add` tool round-trip.

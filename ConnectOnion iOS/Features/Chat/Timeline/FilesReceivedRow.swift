@@ -6,12 +6,12 @@ struct FilesReceivedRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Files received", systemImage: "tray.and.arrow.down")
-                .font(.footnote)
+                .appFont(.footnote)
                 .foregroundStyle(.secondary)
 
             ForEach(item.receivedFiles) { file in
                 Text(file.name)
-                    .font(.footnote.monospaced())
+                    .appFont(.footnote)
                     .lineLimit(1)
             }
         }

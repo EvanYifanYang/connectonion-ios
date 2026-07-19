@@ -54,43 +54,6 @@ enum ConnectOnionWidgetSnapshotStore {
     }
 }
 
-struct ConnectOnionPendingChatRequest: Codable, Equatable, Sendable {
-    var id: UUID
-    var agentAddress: String?
-    var suggestion: String?
-    var createdAt: Date
-
-    init(id: UUID = UUID(), agentAddress: String?, suggestion: String?, createdAt: Date = .now) {
-        self.id = id
-        self.agentAddress = agentAddress
-        self.suggestion = suggestion
-        self.createdAt = createdAt
-    }
-}
-
-enum ConnectOnionPendingChatRequestStore {
-    private static let requestKey = "connectonion.pending.chat.request"
-
-    static func save(_ request: ConnectOnionPendingChatRequest) {
-        guard let data = try? JSONEncoder().encode(request) else { return }
-        let defaults = ConnectOnionAppGroup.defaults
-        defaults.set(data, forKey: requestKey)
-        defaults.synchronize()
-    }
-
-    static func consume() -> ConnectOnionPendingChatRequest? {
-        let defaults = ConnectOnionAppGroup.defaults
-        defaults.synchronize()
-        guard let data = defaults.data(forKey: requestKey),
-              let request = try? JSONDecoder().decode(ConnectOnionPendingChatRequest.self, from: data) else {
-            return nil
-        }
-        defaults.removeObject(forKey: requestKey)
-        defaults.synchronize()
-        return request
-    }
-}
-
 enum ConnectOnionSharedSuggestions {
     static let defaults = [
         "What can you do?",
@@ -104,6 +67,7 @@ enum ConnectOnionDeepLink {
     static let scheme = "connectonion"
     static let newChatHost = "new-chat"
     static let conversationHost = "conversation"
+    static let scanAgentHost = "scan-agent"
 
     static func newChat(agentAddress: String, suggestion: String? = nil) -> URL {
         var components = URLComponents()
@@ -130,6 +94,13 @@ enum ConnectOnionDeepLink {
         return components.url ?? URL(string: "\(scheme)://\(conversationHost)")!
     }
 
+    static func scanAgent() -> URL {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = scanAgentHost
+        return components.url ?? URL(string: "\(scheme)://\(scanAgentHost)")!
+    }
+
     static func parse(_ url: URL) -> Request? {
         guard url.scheme == scheme,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
@@ -138,11 +109,21 @@ enum ConnectOnionDeepLink {
 
         let queryItems = components.queryItems ?? []
 
+        if url.host == scanAgentHost {
+            return Request(
+                agentAddress: nil,
+                suggestion: nil,
+                conversationID: nil,
+                opensAgentScanner: true
+            )
+        }
+
         if url.host == conversationHost {
             return Request(
                 agentAddress: nil,
                 suggestion: nil,
-                conversationID: queryItems.first { $0.name == "id" }?.value
+                conversationID: queryItems.first { $0.name == "id" }?.value,
+                opensAgentScanner: false
             )
         }
 
@@ -150,12 +131,18 @@ enum ConnectOnionDeepLink {
         let agentAddress = queryItems.first { $0.name == "agent" }?.value
         let suggestion = queryItems.first { $0.name == "suggestion" }?.value
 
-        return Request(agentAddress: agentAddress, suggestion: suggestion, conversationID: nil)
+        return Request(
+            agentAddress: agentAddress,
+            suggestion: suggestion,
+            conversationID: nil,
+            opensAgentScanner: false
+        )
     }
 
     struct Request: Equatable, Sendable {
         var agentAddress: String?
         var suggestion: String?
         var conversationID: String?
+        var opensAgentScanner: Bool
     }
 }

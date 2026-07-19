@@ -1,16 +1,26 @@
 import ActivityKit
 import Foundation
+import OSLog
 
 @MainActor
 final class AgentReplyLiveActivityController {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "ConnectOnion",
+        category: "LiveActivity"
+    )
     private var activityIDs: [UUID: String] = [:]
     private var latestStates: [UUID: AgentReplyActivityAttributes.ContentState] = [:]
+    private var completionEndTasks: [UUID: Task<Void, Never>] = [:]
     private var currentConversationID: UUID?
 
     init() {}
 
     func start(conversationID: UUID, agentAddress: String, agentName: String) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            logger.notice("Live Activities are disabled; skipping conversation \(conversationID.uuidString, privacy: .public)")
+            return
+        }
+        cancelCompletionEnd(for: conversationID)
         restoreTrackedActivity(for: conversationID)
         endOtherActiveActivities(except: conversationID)
         currentConversationID = conversationID
@@ -25,37 +35,35 @@ final class AgentReplyLiveActivityController {
             return
         }
 
-        Task {
-            do {
-                let activity = try Activity<AgentReplyActivityAttributes>.request(
-                    attributes: AgentReplyActivityAttributes(
-                        conversationID: conversationID.uuidString,
-                        agentAddress: agentAddress,
-                        agentName: agentName
-                    ),
-                    content: ActivityContent(state: state, staleDate: nil),
-                    pushType: nil
-                )
-                let activityID = activity.id
-                guard let latestState = latestStates[conversationID] else {
-                    await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
-                    return
-                }
-
-                activityIDs[conversationID] = activityID
-                if latestState != state {
-                    await Self.updateActivity(id: activityID, state: latestState)
-                }
-            } catch {
-                activityIDs[conversationID] = nil
+        do {
+            // `request` is synchronous. Requesting inline ensures a fast reply can't complete before
+            // the Activity ID is recorded, which previously left an orphaned "Connecting" activity.
+            let activity = try Activity<AgentReplyActivityAttributes>.request(
+                attributes: AgentReplyActivityAttributes(
+                    conversationID: conversationID.uuidString,
+                    agentAddress: agentAddress,
+                    agentName: agentName
+                ),
+                content: ActivityContent(state: state, staleDate: nil),
+                pushType: nil
+            )
+            activityIDs[conversationID] = activity.id
+            logger.info("Started Live Activity \(activity.id, privacy: .public) for conversation \(conversationID.uuidString, privacy: .public)")
+        } catch {
+            latestStates[conversationID] = nil
+            activityIDs[conversationID] = nil
+            if currentConversationID == conversationID {
+                currentConversationID = nil
             }
+            logger.error("Failed to start Live Activity for conversation \(conversationID.uuidString, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
     func complete(
         conversationID: UUID,
         headline: String,
-        detail: String
+        detail: String,
+        retention: TimeInterval = 5 * 60
     ) {
         let startedAt = latestStates[conversationID]?.startedAt ?? .now
         let state = AgentReplyActivityAttributes.ContentState(
@@ -66,14 +74,28 @@ final class AgentReplyLiveActivityController {
             startedAt: startedAt,
             updatedAt: .now
         )
-        guard let activityID = activityIDs[conversationID] else { return }
-        latestStates[conversationID] = nil
-        activityIDs[conversationID] = nil
-        if currentConversationID == conversationID {
-            currentConversationID = nil
+        latestStates[conversationID] = state
+        cancelCompletionEnd(for: conversationID)
+
+        guard let activityID = activityIDs[conversationID] else {
+            latestStates[conversationID] = nil
+            return
         }
+
         Task {
-            await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
+            await Self.updateActivity(id: activityID, state: state)
+        }
+
+        // Ending an activity removes it from the Dynamic Island immediately, regardless of the Lock
+        // Screen dismissal policy. Keep the terminal state active briefly so "Reply ready" is visible.
+        completionEndTasks[conversationID] = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(max(0, retention)))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.finishCompletedActivity(conversationID: conversationID, state: state)
         }
     }
 
@@ -107,6 +129,7 @@ final class AgentReplyLiveActivityController {
         headline: String,
         detail: String
     ) {
+        cancelCompletionEnd(for: conversationID)
         let startedAt = latestStates[conversationID]?.startedAt ?? .now
         let state = AgentReplyActivityAttributes.ContentState(
             phase: phase,
@@ -119,6 +142,9 @@ final class AgentReplyLiveActivityController {
         latestStates[conversationID] = nil
         let activityID = activityIDs[conversationID]
         activityIDs[conversationID] = nil
+        if currentConversationID == conversationID {
+            currentConversationID = nil
+        }
 
         guard let activityID else { return }
         Task {
@@ -127,13 +153,22 @@ final class AgentReplyLiveActivityController {
     }
 
     private func cancelCompletionEnd(for conversationID: UUID) {
-        _ = conversationID
+        completionEndTasks[conversationID]?.cancel()
+        completionEndTasks[conversationID] = nil
     }
 
     private func restoreTrackedActivity(for conversationID: UUID) {
-        guard activityIDs[conversationID] == nil else { return }
+        let activities = Activity<AgentReplyActivityAttributes>.activities
+        if let trackedActivityID = activityIDs[conversationID] {
+            guard activities.contains(where: { $0.id == trackedActivityID }) else {
+                activityIDs[conversationID] = nil
+                return restoreTrackedActivity(for: conversationID)
+            }
+            return
+        }
+
         let conversationKey = conversationID.uuidString
-        guard let existingActivity = Activity<AgentReplyActivityAttributes>.activities.first(where: { activity in
+        guard let existingActivity = activities.first(where: { activity in
             activity.attributes.conversationID == conversationKey
         }) else {
             return
@@ -158,6 +193,7 @@ final class AgentReplyLiveActivityController {
                 continue
             }
 
+            cancelCompletionEnd(for: otherConversationID)
             latestStates[otherConversationID] = nil
             activityIDs[otherConversationID] = nil
 
@@ -179,6 +215,22 @@ final class AgentReplyLiveActivityController {
             startedAt: activity.content.state.startedAt,
             updatedAt: .now
         )
+    }
+
+    private func finishCompletedActivity(
+        conversationID: UUID,
+        state: AgentReplyActivityAttributes.ContentState
+    ) async {
+        latestStates[conversationID] = nil
+        let activityID = activityIDs[conversationID]
+        activityIDs[conversationID] = nil
+        completionEndTasks[conversationID] = nil
+        if currentConversationID == conversationID {
+            currentConversationID = nil
+        }
+
+        guard let activityID else { return }
+        await Self.endActivity(id: activityID, state: state, dismissalPolicy: .immediate)
     }
 
     nonisolated private static func updateActivity(

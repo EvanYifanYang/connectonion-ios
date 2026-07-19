@@ -13,7 +13,7 @@ struct VoiceRecordingBar: View {
         HStack(spacing: 12) {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
+                    .appFont(.body, weight: .semibold)
                     .foregroundStyle(.secondary)
                     .frame(width: 40, height: 40)
                     .background(Color(.tertiarySystemFill), in: .circle)
@@ -27,7 +27,7 @@ struct VoiceRecordingBar: View {
 
             Button(action: onConfirm) {
                 Image(systemName: "checkmark")
-                    .font(.body.weight(.semibold))
+                    .appFont(.body, weight: .semibold)
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
                     .background(Color.onion, in: .circle)

@@ -21,13 +21,16 @@ struct AppShellView: View {
     /// Pairs each agent card with its pushed home for the zoom navigation transition.
     @Namespace private var agentZoomNamespace
     @State private var pendingInputs: [UUID: AgentInput] = [:]
-    @State private var showingAddAgent = false
+    @State private var agentEditorDraft: AgentEditorDraft?
+    @State private var presentedAgentScanner: AgentScannerPresentation?
     @State private var showingSettings = false
     @State private var editingAgent: AgentConfigRecord?
     @State private var deletingAgent: AgentConfigRecord?
     @State private var deletingConversation: ConversationRecord?
     @State private var infoStore = AgentInfoStore()
-    @State private var chatSessionStore = ChatSessionStore()
+    // Read the single store RootView owns + injects, so AgentHomeView's @Environment sees the same
+    // instance that actually holds the sessions (otherwise the "generating" indicator never fires).
+    @Environment(ChatSessionStore.self) private var chatSessionStore
     @AppStorage(AppearanceMode.storageKey) private var appearance: AppearanceMode = .system
 
     var body: some View {
@@ -37,7 +40,7 @@ struct AppShellView: View {
                 infoByAddress: infoStore.infoByAddress,
                 zoomNamespace: agentZoomNamespace,
                 onSelectAgent: { path.append(.agentHome($0.address)) },
-                onAddAgent: { showingAddAgent = true },
+                onAddAgent: { agentEditorDraft = .empty },
                 onSettings: { showingSettings = true },
                 onRenameAgent: { renameAgentName($0, to: $1) },
                 onDeleteAgent: { agent in afterMenuDismiss { deletingAgent = agent } },
@@ -51,10 +54,20 @@ struct AppShellView: View {
         // replacing iOS's pure-black dark background.
         .background(Color.appCanvas.ignoresSafeArea())
         .accessibilityIdentifier(AccessibilityID.appShell)
-        .sheet(isPresented: $showingAddAgent) {
-            AgentEditorView { address, alias, endpoint in
+        .sheet(item: $agentEditorDraft) { draft in
+            AgentEditorView(
+                initialAddress: draft.address,
+                initialAlias: draft.alias,
+                initialEndpoint: draft.endpoint
+            ) { address, alias, endpoint in
                 addAgent(address: address, alias: alias, endpoint: endpoint)
-            }        }
+            }
+        }
+        .fullScreenCover(item: $presentedAgentScanner) { _ in
+            AgentQRCodeScannerView { payload in
+                handleScannedAgent(payload)
+            }
+        }
         .sheet(item: $editingAgent) { agent in
             AgentEditorView(
                 title: "Edit Agent",
@@ -111,7 +124,6 @@ struct AppShellView: View {
         .task {
             applyAppearance(appearance)
             publishWidgetSnapshot()
-            consumePendingWidgetRequest()
             configureAgentInfoRefresh()
             chatSessionStore.setAppActive(scenePhase == .active)
         }
@@ -141,19 +153,13 @@ struct AppShellView: View {
         .onChange(of: scenePhase) { _, phase in
             chatSessionStore.setAppActive(phase == .active)
             if phase == .active {
-                consumePendingWidgetRequest()
                 configureAgentInfoRefresh()
             } else {
                 infoStore.stopAutoRefresh()
             }
         }
         .onOpenURL { url in
-            guard let request = ConnectOnionDeepLink.parse(url) else { return }
-            if let conversationID = request.conversationID {
-                openConversation(id: conversationID)
-            } else {
-                handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
-            }
+            handleDeepLink(url)
         }
         .onDisappear {
             infoStore.stopAutoRefresh()
@@ -200,7 +206,6 @@ struct AppShellView: View {
                     agent: agent,
                     info: infoStore.infoByAddress[address],
                     conversations: conversations(for: address),
-                    runningConversationIDs: chatSessionStore.runningConversationIDs,
                     onNewChat: { path.append(.newChat(address)) },
                     onOpenConversation: { path.append(.conversation($0.id)) },
                     onRenameConversation: { renameConversation($0, to: $1) },
@@ -293,7 +298,7 @@ struct AppShellView: View {
             modelContext.insert(AgentConfigRecord(address: validAddress.rawValue, alias: alias, preferredEndpoint: endpoint))
         }
 
-        showingAddAgent = false
+        agentEditorDraft = nil
         infoStore.refresh(addresses: [validAddress.rawValue])
         path = [.agentHome(validAddress.rawValue)]
     }
@@ -309,7 +314,7 @@ struct AppShellView: View {
         showingSettings = false
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
-            showingAddAgent = true
+            agentEditorDraft = .empty
         }
     }
 
@@ -367,24 +372,10 @@ struct AppShellView: View {
         }
     }
 
-    private func consumePendingWidgetRequest() {
-        if let request = ConnectOnionPendingChatRequestStore.consume() {
-            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
-            return
-        }
-        // Retry after a short delay to handle the race condition where the widget
-        // extension's perform() hasn't finished writing to UserDefaults yet.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
-            guard let request = ConnectOnionPendingChatRequestStore.consume() else { return }
-            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
-        }
-    }
-
     private func handleNewChatRequest(agentAddress: String?, suggestion: String?) {
         let agent = agentAddress.flatMap(agent(for:)) ?? agents.first
         guard let agent else {
-            showingAddAgent = true
+            agentEditorDraft = .empty
             return
         }
 
@@ -394,6 +385,41 @@ struct AppShellView: View {
         } else {
             path = [.agentHome(agent.address)]
             startConversation(agent: agent, input: AgentInput(prompt: trimmedSuggestion))
+        }
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard let request = ConnectOnionDeepLink.parse(url) else { return }
+
+        if request.opensAgentScanner {
+            presentAgentScanner()
+        } else if let conversationID = request.conversationID {
+            openConversation(id: conversationID)
+        } else {
+            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+        }
+    }
+
+    private func presentAgentScanner() {
+        guard presentedAgentScanner == nil else { return }
+        let dismissesPresentedSheet = agentEditorDraft != nil || showingSettings
+        agentEditorDraft = nil
+        showingSettings = false
+
+        Task { @MainActor in
+            if dismissesPresentedSheet {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+            presentedAgentScanner = .agentQRCode
+        }
+    }
+
+    private func handleScannedAgent(_ payload: AgentQRCodePayload) {
+        presentedAgentScanner = nil
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            agentEditorDraft = AgentEditorDraft(address: payload.address)
         }
     }
 
@@ -436,6 +462,21 @@ struct AppShellView: View {
 
         return "Ready"
     }
+}
+
+private struct AgentEditorDraft: Identifiable {
+    var id = UUID()
+    var address = ""
+    var alias = ""
+    var endpoint: URL?
+
+    static var empty: AgentEditorDraft { AgentEditorDraft() }
+}
+
+private enum AgentScannerPresentation: String, Identifiable {
+    case agentQRCode
+
+    var id: String { rawValue }
 }
 
 #Preview("Loaded Shell") {

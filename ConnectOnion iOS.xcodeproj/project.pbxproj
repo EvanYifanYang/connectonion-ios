@@ -8,8 +8,10 @@
 
 /* Begin PBXBuildFile section */
 		07FA00012FDBE00000000001 /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 07FA00032FDBE00000000003 /* Factory */; };
+		07FA10112FDBE00000000021 /* Onion.png in Resources */ = {isa = PBXBuildFile; fileRef = 07FA10122FDBE00000000022 /* Onion.png */; };
 		07FA100C2FDBE0000000001C /* ConnectOnionWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 07FA10032FDBE00000000013 /* ConnectOnionWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		07FB00012FDBE00000000001 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 07FB00032FDBE00000000003 /* Lottie */; };
+		07FC00012FDBE00000000001 /* Highlighter in Frameworks */ = {isa = PBXBuildFile; productRef = 07FC00032FDBE00000000003 /* Highlighter */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -53,6 +55,7 @@
 		073234712FDBD99100BDE6B4 /* ConnectOnion iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ConnectOnion iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0732347B2FDBD99100BDE6B4 /* ConnectOnion iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ConnectOnion iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		07FA10032FDBE00000000013 /* ConnectOnionWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ConnectOnionWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		07FA10122FDBE00000000022 /* Onion.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = Onion.png; path = "ConnectOnion iOS/Assets.xcassets/logo.imageset/Onion.png"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -89,6 +92,7 @@
 			files = (
 				07FA00012FDBE00000000001 /* Factory in Frameworks */,
 				07FB00012FDBE00000000001 /* Lottie in Frameworks */,
+				07FC00012FDBE00000000001 /* Highlighter in Frameworks */,
 			);
 		};
 		0732346E2FDBD99100BDE6B4 /* Frameworks */ = {
@@ -112,6 +116,7 @@
 		073234592FDBD98F00BDE6B4 = {
 			isa = PBXGroup;
 			children = (
+				07FA10122FDBE00000000022 /* Onion.png */,
 				073234642FDBD98F00BDE6B4 /* ConnectOnion iOS */,
 				07FA10012FDBE00000000011 /* ConnectOnionShared */,
 				07FA10022FDBE00000000012 /* ConnectOnionWidget */,
@@ -157,6 +162,7 @@
 			packageProductDependencies = (
 				07FA00032FDBE00000000003 /* Factory */,
 				07FB00032FDBE00000000003 /* Lottie */,
+				07FC00032FDBE00000000003 /* Highlighter */,
 			);
 			productName = "ConnectOnion iOS";
 			productReference = 073234622FDBD98F00BDE6B4 /* ConnectOnion iOS.app */;
@@ -261,6 +267,7 @@
 			packageReferences = (
 				07FA00022FDBE00000000002 /* XCRemoteSwiftPackageReference "Factory" */,
 				07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */,
+				07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 073234632FDBD98F00BDE6B4 /* Products */;
@@ -294,6 +301,7 @@
 		07FA10062FDBE00000000016 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				07FA10112FDBE00000000021 /* Onion.png in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
@@ -723,6 +731,14 @@
 				minimumVersion = 4.6.0;
 			};
 		};
+		07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/smittytone/HighlighterSwift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -735,6 +751,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 07FB00022FDBE00000000002 /* XCRemoteSwiftPackageReference "lottie-spm" */;
 			productName = Lottie;
+		};
+		07FC00032FDBE00000000003 /* Highlighter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 07FC00022FDBE00000000002 /* XCRemoteSwiftPackageReference "HighlighterSwift" */;
+			productName = Highlighter;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

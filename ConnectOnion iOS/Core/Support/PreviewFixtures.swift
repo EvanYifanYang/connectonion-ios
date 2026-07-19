@@ -7,6 +7,7 @@ enum PreviewFixtures {
     enum Scenario: String {
         case standard
         case empty
+        case metadataEmpty = "metadata-empty"
         case approval
         case askText = "ask-text"
         case askOptions = "ask-options"
@@ -43,7 +44,9 @@ enum PreviewFixtures {
         Container.shared.connectOnionClient.register { @MainActor in
             MockConnectOnionClient(mode: scenario == .onboardFirstMessage ? .onboardFirstMessage : .standard)
         }
-        Container.shared.agentDirectoryService.register { MockAgentDirectoryService() }
+        Container.shared.agentDirectoryService.register {
+            MockAgentDirectoryService(includesCapabilities: scenario != .metadataEmpty)
+        }
     }
 
     static var sampleAgent: AgentConfigRecord {
@@ -60,7 +63,7 @@ enum PreviewFixtures {
 
     static func sampleConversation(for scenario: Scenario) -> ConversationRecord {
         switch scenario {
-        case .standard, .empty, .onboardFirstMessage:
+        case .standard, .empty, .metadataEmpty, .onboardFirstMessage:
             return sampleConversation
         case .approval:
             return conversation(title: "Approval flow", messages: [sampleUserMessage, sampleApproval])
@@ -89,6 +92,13 @@ enum PreviewFixtures {
             acceptedInputs: AgentAcceptedInputs(text: true, images: true, files: .init(maxFileSizeMB: 10, maxFilesPerRequest: 4)),
             online: true
         )
+    }
+
+    static var sampleAgentInfoWithoutCapabilities: AgentInfo {
+        var info = sampleAgentInfo
+        info.tools = []
+        info.skills = []
+        return info
     }
 
     static var sampleSkills: [SkillInfo] {
@@ -258,6 +268,9 @@ enum PreviewFixtures {
 
         let context = container.mainContext
         let agent = sampleAgent
+        if scenario == .metadataEmpty {
+            agent.cachedInfo = sampleAgentInfoWithoutCapabilities
+        }
         context.insert(agent)
 
         guard scenario != .onboardFirstMessage else { return container }

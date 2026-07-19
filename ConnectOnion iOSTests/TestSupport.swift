@@ -53,6 +53,7 @@ final class FailingConnectOnionClient: ConnectOnionClientProviding {
 @MainActor
 final class StreamingConnectOnionClient: ConnectOnionClientProviding {
     private(set) var sentInputs: [AgentInput] = []
+    private(set) var sentSessions: [ConversationSession] = []
     var replyText: String
 
     init(replyText: String = "Connected. Streaming mock response") {
@@ -61,9 +62,119 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         sentInputs.append(input)
+        sentSessions.append(session)
         return AsyncThrowingStream { continuation in
-            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
             continuation.yield(.output(result: replyText, serverNewer: false, session: nil, chatItems: []))
+            continuation.finish()
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
+/// Holds a connected stream open until the test explicitly completes or disconnects it.
+@MainActor
+final class ControlledReplyClient: ConnectOnionClientProviding {
+    private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
+    private(set) var disconnectCount = 0
+
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            self.continuation = continuation
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func complete(with reply: String) {
+        continuation?.yield(.output(result: reply, serverNewer: false, session: nil, chatItems: []))
+        continuation?.finish()
+        continuation = nil
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+
+    func disconnect() {
+        disconnectCount += 1
+        continuation?.finish()
+        continuation = nil
+    }
+}
+
+/// Emits one current-turn event and then fails. Regeneration must keep its rollback snapshot until
+/// this terminal failure rather than discarding it as soon as the first event arrives.
+@MainActor
+final class PartialRegenerateFailureClient: ConnectOnionClientProviding {
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+            continuation.yield(.server(ServerEvent(payload: [
+                "type": .string("llm_call"),
+                "id": .string("replacement-thinking"),
+                "model": .string("co/replacement")
+            ])))
+            continuation.finish(throwing: URLError(.networkConnectionLost))
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        send(input: AgentInput(prompt: "Reconnect"), to: agent, session: session)
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
+/// Terminates normally without a replacement answer. The view model must treat this as an
+/// unsuccessful regeneration and restore the exchange it removed optimistically.
+@MainActor
+final class EmptyRegenerateOutputClient: ConnectOnionClientProviding {
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
+            continuation.yield(.output(result: "", serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -88,12 +199,20 @@ final class OnboardFirstMessageClient: ConnectOnionClientProviding {
     private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
     private var onboardAccepted = false
     private(set) var sentInputs: [AgentInput] = []
+    private(set) var sentSessions: [ConversationSession] = []
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         sentInputs.append(input)
+        sentSessions.append(session)
         return AsyncThrowingStream { continuation in
             self.continuation = continuation
-            continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.connected(
+                sessionID: session.remoteSessionID ?? session.id.uuidString,
+                status: "connected",
+                serverNewer: false,
+                session: nil,
+                chatItems: []
+            ))
 
             if !onboardAccepted {
                 continuation.yield(.server(ServerEvent(payload: [

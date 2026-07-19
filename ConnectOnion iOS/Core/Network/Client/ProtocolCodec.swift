@@ -37,10 +37,11 @@ struct ProtocolCodec {
         sessionID: String? = nil
     ) throws -> [String: JSONValue] {
         let timestamp = Int(Date.now.timeIntervalSince1970)
+        let prompt = input.transmittedPrompt
         var message: [String: JSONValue] = [
             "type": .string("INPUT"),
             "input_id": .string(UUID().uuidString),
-            "prompt": .string(input.prompt),
+            "prompt": .string(prompt),
             "timestamp": .number(Double(timestamp))
         ]
 
@@ -63,7 +64,7 @@ struct ProtocolCodec {
         }
 
         var payload: [String: JSONValue] = [
-            "prompt": .string(input.prompt),
+            "prompt": .string(prompt),
             "timestamp": .number(Double(timestamp))
         ]
         if !route.isDirect {

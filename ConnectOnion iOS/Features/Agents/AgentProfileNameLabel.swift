@@ -2,7 +2,7 @@ import SwiftUI
 
 struct AgentProfileNameLabel: View {
     var name: String
-    var font: Font = .footnote
+    var textStyle: Font.TextStyle = .footnote
 
     var body: some View {
         Label {
@@ -12,7 +12,7 @@ struct AgentProfileNameLabel: View {
             Image(systemName: "person.text.rectangle")
                 .imageScale(.small)
         }
-        .font(font)
+        .appFont(textStyle)
         .foregroundStyle(.secondary)
         .accessibilityLabel("Remote profile name \(name)")
     }

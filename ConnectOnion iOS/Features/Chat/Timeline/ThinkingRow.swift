@@ -8,7 +8,7 @@ struct ThinkingRow: View {
             OnionThinkingMark(active: item.status == .running)
 
             Text(text)
-                .font(.footnote.monospaced())
+                .appFont(.footnote)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 

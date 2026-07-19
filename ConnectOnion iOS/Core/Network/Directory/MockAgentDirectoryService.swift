@@ -1,15 +1,25 @@
 import Foundation
 
 struct MockAgentDirectoryService: AgentDirectoryServicing {
+    var includesCapabilities = true
+
     func fetchAgentInfo(address: String, preferredEndpoint: URL?) async -> AgentInfo {
         AgentInfo(
             address: address,
             name: "OpenOnion",
-            tools: ["bash", "read_file", "ask_user", "write_plan"],
-            skills: [
-                SkillInfo(name: "summarize", description: "Summarize content"),
-                SkillInfo(name: "debug", description: "Debug a problem")
-            ],
+            tools: includesCapabilities
+                ? ["bash", "read_file", "ask_user", "write_file", "search", "plan_review", "eval"]
+                : [],
+            skills: includesCapabilities
+                ? [
+                    SkillInfo(name: "summarize", description: "Summarize a document"),
+                    SkillInfo(name: "research", description: "Research a topic"),
+                    SkillInfo(name: "debug", description: "Debug an error"),
+                    SkillInfo(name: "ship", description: "Prepare a release"),
+                    SkillInfo(name: "audit", description: "Review a codebase"),
+                    SkillInfo(name: "explain", description: "Explain a tricky file")
+                ]
+                : [],
             trust: "careful",
             version: "1.0",
             model: "co/gemini-2.5-flash",

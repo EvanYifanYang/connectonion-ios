@@ -55,7 +55,10 @@ struct ConnectOnion_iOSApp: App {
 /// is skipped — no double welcome. Also skipped under UI testing so element queries aren't delayed.
 private struct RootView: View {
     @Query private var agents: [AgentConfigRecord]
+    @AppStorage(UIFontPreference.storageKey) private var uiFontPreference: UIFontPreference = .system
+    @AppStorage(FontSizePreference.uiStorageKey) private var uiFontSize = FontSizePreference.defaultUI
     @State private var splashDismissed = ProcessInfo.processInfo.arguments.contains("--ui-testing")
+    @State private var chatSessions = ChatSessionStore()
 
     private var showSplash: Bool { !splashDismissed && !agents.isEmpty }
 
@@ -68,6 +71,17 @@ private struct RootView: View {
                     withAnimation(.easeOut(duration: 0.25)) { splashDismissed = true }
                 }
                 .transition(.opacity)
+            }
+        }
+        .font(uiFontPreference.font(.body, pointSize: uiFontSize))
+        .environment(\.uiFontPreference, uiFontPreference)
+        .environment(\.uiFontSize, FontSizePreference.normalizedUI(uiFontSize))
+        .environment(chatSessions)
+        .onAppear {
+            // The splash is a launch-only decision. If this launch starts in the first-run state,
+            // keep it dismissed even after the user adds their first agent later in the session.
+            if agents.isEmpty {
+                splashDismissed = true
             }
         }
     }

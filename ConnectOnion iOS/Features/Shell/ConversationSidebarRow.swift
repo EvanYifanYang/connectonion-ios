@@ -4,7 +4,7 @@ struct ConversationSidebarRow: View {
     var conversation: ConversationRecord
     var agentName: String
     var isSelected: Bool
-    var isAgentRunning: Bool = false
+    var isGenerating: Bool = false
     var onSelect: () -> Void
     var onRename: (String) -> Void
     var onRequestDelete: () -> Void
@@ -58,7 +58,7 @@ struct ConversationSidebarRow: View {
     private var renameEditor: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: "text.bubble")
-                .font(.title3)
+                .appFont(.title3)
                 .foregroundStyle(.secondary)
                 .frame(width: 42, height: 42)
 
@@ -79,47 +79,24 @@ struct ConversationSidebarRow: View {
     private var rowButton: some View {
         Button(action: handleRowTap) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "text.bubble")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 42, height: 42)
+                conversationStatusIcon
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 7) {
-                        Text(conversation.title)
-                            .font(.body)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-
-                        if conversation.hasUnread {
-                            Circle()
-                                .fill(Color.onion)
-                                .frame(width: 8, height: 8)
-                                .accessibilityHidden(true)
-                        }
-                    }
-
-                    if isAgentRunning {
-                        HStack(spacing: 5) {
-                            OnionThinkingMark(active: true, diameter: 14)
-                            Text("Working")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(Color.onion)
-                        }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                    }
-                }
+                Text(conversation.title)
+                    .appFont(.body)
+                    .fontWeight(conversation.hasUnread ? .semibold : .regular)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Spacer(minLength: 0)
 
                 if isPinned {
                     Image(systemName: "pin.fill")
-                        .font(.caption)
+                        .appFont(.caption)
                         .foregroundStyle(Color.onion.opacity(0.7))
                 }
 
                 Text(relativeTime)
-                    .font(.caption)
+                    .appFont(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.tertiary)
 
@@ -127,7 +104,7 @@ struct ConversationSidebarRow: View {
                     menuActions
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.body.weight(.semibold))
+                        .appFont(.body, weight: .semibold)
                         .foregroundStyle(.primary)
                         .frame(width: 44, height: 44)
                         .contentShape(.circle)
@@ -144,7 +121,8 @@ struct ConversationSidebarRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(conversation.title)
+        .accessibilityValue(accessibilityStatus)
         // The id lives on the SELECT button itself (like AgentSidebarRow): a container-level id
         // shadows onto child buttons, so firstMatch could resolve to the ellipsis menu and a row
         // "tap" would open the actions menu instead of the chat.
@@ -156,15 +134,36 @@ struct ConversationSidebarRow: View {
         conversation.pinnedAt != nil
     }
 
-    private var accessibilityLabel: String {
-        var parts = [conversation.title]
-        if isAgentRunning {
-            parts.append("Agent working")
+    private var conversationStatusIcon: some View {
+        ZStack(alignment: .topTrailing) {
+            if isGenerating {
+                OnionThinkingMark(active: true, diameter: 28)
+            } else {
+                Image(systemName: "text.bubble")
+                    .appFont(.title3)
+                    .foregroundStyle(.secondary)
+            }
+
+            if conversation.hasUnread {
+                Circle()
+                    .fill(Color.onion)
+                    .frame(width: 9, height: 9)
+                    .overlay {
+                        Circle().stroke(Color.appCanvas, lineWidth: 1.5)
+                    }
+                    .offset(x: 2, y: -2)
+            }
         }
-        if conversation.hasUnread {
-            parts.append("Unread reply")
+        .frame(width: 42, height: 42)
+    }
+
+    private var accessibilityStatus: String {
+        switch (conversation.hasUnread, isGenerating) {
+        case (true, true): "Unread, generating reply"
+        case (true, false): "Unread"
+        case (false, true): "Generating reply"
+        case (false, false): ""
         }
-        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -198,7 +197,7 @@ struct ConversationSidebarRow: View {
     private var deleteAction: some View {
         Button(role: .destructive, action: commitDelete) {
             Image(systemName: "trash.fill")
-                .font(.title3.weight(.semibold))
+                .appFont(.title3, weight: .semibold)
                 .foregroundStyle(.white)
                 .frame(width: actionWidth - actionGap, height: rowHeight)
                 .background(Color.red, in: .rect(cornerRadius: 20))

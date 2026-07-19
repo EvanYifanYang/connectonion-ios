@@ -5,10 +5,11 @@ import UIKit
 /// One agent's home: its identity, a "New chat" action, and the list of conversations that belong to
 /// this agent. Pushed when an agent is tapped in the agent-centric navigation (P4).
 struct AgentHomeView: View {
+    @Environment(ChatSessionStore.self) private var chatSessions
+
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var conversations: [ConversationRecord]
-    var runningConversationIDs: Set<UUID> = []
     var onNewChat: () -> Void
     var onOpenConversation: (ConversationRecord) -> Void
     var onRenameConversation: (ConversationRecord, String) -> Void
@@ -85,7 +86,7 @@ struct AgentHomeView: View {
                                 conversation: conversation,
                                 agentName: agent.displayName(info: info),
                                 isSelected: false,
-                                isAgentRunning: runningConversationIDs.contains(conversation.id),
+                                isGenerating: chatSessions.isGeneratingReply(for: conversation.id),
                                 onSelect: { onOpenConversation(conversation) },
                                 onRename: { onRenameConversation(conversation, $0) },
                                 onRequestDelete: { onRequestDeleteConversation(conversation) },
@@ -114,7 +115,7 @@ struct AgentHomeView: View {
     private var newChatButton: some View {
         Button(action: onNewChat) {
             Label("New Chat", systemImage: "plus")
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 22)
                 .padding(.vertical, 14)
@@ -128,13 +129,13 @@ struct AgentHomeView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.largeTitle)
+                .appFont(.largeTitle)
                 .foregroundStyle(.tertiary)
             Text("No chats yet")
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(.secondary)
             Text("Start a new chat with \(agent.displayName(info: info)).")
-                .font(.subheadline)
+                .appFont(.subheadline)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
@@ -159,6 +160,7 @@ struct AgentHomeView: View {
                 onDeleteConversation: { _ in }
             )
         }
+        .environment(ChatSessionStore())
         .modelContainer(container)
     } else {
         Text("Preview unavailable")

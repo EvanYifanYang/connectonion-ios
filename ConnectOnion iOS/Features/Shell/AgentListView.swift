@@ -132,7 +132,7 @@ struct AgentListView: View {
             onAddAgent()
         } label: {
             Label("New Agent", systemImage: "plus")
-                .font(.headline)
+                .appFont(.headline)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 22)
                 .padding(.vertical, 14)

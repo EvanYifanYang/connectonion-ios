@@ -79,6 +79,7 @@ struct ChatScreen: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Conversation Info", systemImage: "info.circle") {

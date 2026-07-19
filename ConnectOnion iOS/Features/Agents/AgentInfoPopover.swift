@@ -21,10 +21,10 @@ struct AgentInfoPopover: View {
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(.callout)
+                .appFont(.callout)
             Spacer(minLength: 12)
             Text(value)
-                .font(.footnote.monospaced())
+                .appFont(.footnote)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
                 .lineLimit(1)

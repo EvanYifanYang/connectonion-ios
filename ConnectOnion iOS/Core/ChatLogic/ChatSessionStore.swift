@@ -13,7 +13,7 @@ final class ChatSessionStore {
     @ObservationIgnored private var visibleConversation: ConversationRecord?
     @ObservationIgnored private var isAppActive = true
 
-    func session(for conversation: ConversationRecord, agent: AgentConfig) -> ChatViewModel {
+    func session(for conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) -> ChatViewModel {
         if let existing = sessions[conversation.id] {
             return existing
         }
@@ -22,17 +22,25 @@ final class ChatSessionStore {
         let viewModel = ChatViewModel(
             conversation: conversation,
             agent: agent,
+            client: client,
             onSessionStateChange: { [weak self] state in
                 self?.updateRunningState(state, conversationID: conversationID)
             },
             onReplyReady: { [weak self, weak conversation] in
                 guard let conversation else { return }
                 self?.markReplyReady(for: conversation)
+            },
+            onReplyCompleted: { [weak self] conversation in
+                self?.replyCompleted(for: conversation)
             }
         )
         sessions[conversationID] = viewModel
         updateRunningState(viewModel.sessionState, conversationID: conversationID)
         return viewModel
+    }
+
+    func isGeneratingReply(for conversationID: UUID) -> Bool {
+        sessions[conversationID]?.isGeneratingReply ?? false
     }
 
     func conversationDidAppear(_ conversation: ConversationRecord) {
@@ -80,5 +88,15 @@ final class ChatSessionStore {
     private func markReplyReady(for conversation: ConversationRecord) {
         let isVisible = isAppActive && visibleConversation?.id == conversation.id
         conversation.hasUnread = !isVisible
+    }
+
+    private func replyCompleted(for conversation: ConversationRecord) {
+        let isVisible = isAppActive && visibleConversation?.id == conversation.id
+        conversation.hasUnread = !isVisible
+
+        // A reply that finished off-screen should already be fully rendered when the user opens it.
+        if !isVisible {
+            sessions[conversation.id]?.streamingMessageID = nil
+        }
     }
 }

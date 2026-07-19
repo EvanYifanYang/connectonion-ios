@@ -12,7 +12,7 @@ struct AgentBubble: View {
             if !item.content.isEmpty {
                 MarkdownMessageView(text: item.content)
                     .equatable()
-                    .font(.body)
+                    .appFont(.body)
             }
 
             ForEach(item.images, id: \.self) { image in
@@ -44,7 +44,7 @@ struct AgentBubble: View {
                     HStack(spacing: 6) {
                         OnionThinkingMark(active: false, diameter: 16)
                         Text(modelName)
-                            .font(.footnote.monospaced())
+                            .appFont(.footnote)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.top, 2)

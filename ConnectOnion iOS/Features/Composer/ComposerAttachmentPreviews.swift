@@ -50,7 +50,7 @@ private struct AttachmentRemoveButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.caption2.weight(.bold))
+                .appFont(.caption2, weight: .bold)
                 .foregroundStyle(Color(.systemBackground))
                 .frame(width: 22, height: 22)
                 .background(Color(.label), in: .circle)
@@ -80,7 +80,7 @@ private struct ImageAttachmentPreview: View {
                 ZStack {
                     Color(.systemGray6)
                     Image(systemName: "photo")
-                        .font(.title3)
+                        .appFont(.title3)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -116,7 +116,7 @@ private struct FileAttachmentPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(badge)
-                .font(.caption2.weight(.bold))
+                .appFont(.caption2, weight: .bold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .padding(.horizontal, 6)
@@ -126,7 +126,7 @@ private struct FileAttachmentPreview: View {
             Spacer(minLength: 0)
 
             Text(baseName)
-                .font(.subheadline.weight(.medium))
+                .appFont(.subheadline, weight: .medium)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
                 .foregroundStyle(.primary)

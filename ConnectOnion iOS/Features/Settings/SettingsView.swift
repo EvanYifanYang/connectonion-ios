@@ -51,6 +51,9 @@ struct SettingsView: View {
                 Section {
                     AppearancePicker(selection: $appearance)
                         .padding(.vertical, 6)
+                        // The default row separator insets from the leading edge, so it looked
+                        // off-center under the full-width theme swatches. Span it edge to edge.
+                        .alignmentGuide(.listRowSeparatorLeading) { _ in 0 }
 
                     DisclosureGroup("Advanced", isExpanded: $showAdvancedAppearance) {
                         PreferencePickerRow(

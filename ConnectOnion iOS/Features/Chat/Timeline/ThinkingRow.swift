@@ -23,7 +23,9 @@ struct ThinkingRow: View {
             return content
         }
 
-        var details = [item.model ?? "thinking"]
+        // Per-step rows show a neutral label, never the model name — the model is attributed once
+        // per turn in the bottom AgentBubble footer, so repeating it here read as clutter.
+        var details = [item.status == .running ? "Working" : "Thinking"]
         if item.status == .done {
             if let totalTokens = item.usage?.totalTokens {
                 details.append("\(totalTokens) tok")

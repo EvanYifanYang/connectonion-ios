@@ -528,6 +528,7 @@ struct ChatInputBar: View {
         imageAttachments = []
         fileAttachments = []
         attachmentError = nil
+        isFocused = false
         onSend(trimmed, images, files)
     }
 

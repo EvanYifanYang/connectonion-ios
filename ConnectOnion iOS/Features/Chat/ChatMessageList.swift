@@ -20,6 +20,16 @@ struct ChatMessageList: View {
     @State private var isTailVisible = true
     @State private var followsTail = true
     @State private var scrollRequest = 0
+    // ChatGPT-style "send pins the new prompt to the top, leaving room below for the reply".
+    // While a turn is pinned we reserve a bottom gap sized to the viewport so the prompt can
+    // actually reach the top, and we suppress tail-follow so the reply grows in below it.
+    @State private var viewportHeight: CGFloat = 0
+    @State private var topPinnedUserID: ChatItem.ID?
+    @State private var topPinRequest = 0
+
+    private var bottomReserveHeight: CGFloat {
+        topPinnedUserID != nil ? max(12, viewportHeight - 140) : 12
+    }
 
     private var lastAgentID: ChatItem.ID? {
         items.last { $0.kind == .agent }?.id
@@ -51,7 +61,7 @@ struct ChatMessageList: View {
                                 isPendingOnboard: item.id == pendingOnboard?.id,
                                 isPendingPlanReview: item.id == pendingPlanReview?.id,
                                 showAgentActions: item.kind == .agent,
-                                modelName: item.model ?? (item.id == lastAgentID ? responseModel : nil),
+                                modelName: item.id == lastAgentID ? (item.model ?? responseModel) : nil,
                                 onAskUserResponse: onAskUserResponse,
                                 onApprovalResponse: onApprovalResponse,
                                 onOnboardSubmit: onOnboardSubmit,
@@ -69,7 +79,7 @@ struct ChatMessageList: View {
                     }
 
                     Color.clear
-                        .frame(height: 12)
+                        .frame(height: bottomReserveHeight)
                         .id(transcriptBottomAnchorID)
                         .onScrollVisibilityChange(threshold: 0.1) { visible in
                             isTailVisible = visible
@@ -91,6 +101,7 @@ struct ChatMessageList: View {
             .defaultScrollAnchor(.bottom, for: .initialOffset)
             .accessibilityIdentifier(AccessibilityID.chatList)
             .scrollDismissesKeyboard(.interactively)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
             .onScrollPhaseChange { _, phase in
                 switch phase {
                 case .tracking, .interacting:
@@ -105,12 +116,20 @@ struct ChatMessageList: View {
             }
             .onChange(of: newestUserID) { oldID, newID in
                 guard let newID, newID != oldID else { return }
-                followsTail = true
-                scrollRequest &+= 1
+                // Pin the just-sent prompt to the top and open the bottom reserve, rather than
+                // following the tail — this leaves empty space for the incoming reply.
+                followsTail = false
+                topPinnedUserID = newID
+                topPinRequest &+= 1
             }
             .onChange(of: tailToken) { _, _ in
                 guard followsTail else { return }
                 scrollRequest &+= 1
+            }
+            .onChange(of: isAgentRunning) { _, running in
+                // Release the pinned turn when the reply finishes: the reserve collapses and
+                // normal tail-follow resumes for subsequent turns.
+                if !running { topPinnedUserID = nil }
             }
             .onAppear {
                 followsTail = true
@@ -118,8 +137,16 @@ struct ChatMessageList: View {
             }
             .task(id: scrollRequest) {
                 await Task.yield()
-                guard !Task.isCancelled, followsTail else { return }
+                guard !Task.isCancelled, followsTail, topPinnedUserID == nil else { return }
                 proxy.scrollTo(transcriptBottomAnchorID, anchor: .bottom)
+            }
+            .task(id: topPinRequest) {
+                guard topPinRequest > 0, let pinID = topPinnedUserID else { return }
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo("item-\(pinID)", anchor: .top)
+                }
             }
         }
     }

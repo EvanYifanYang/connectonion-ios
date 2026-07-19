@@ -26,6 +26,10 @@ struct AttachmentStrip: View {
             }
         }
         .scrollIndicators(.hidden)
+        // Hug the images so the enclosing trailing-aligned VStack can push the strip to the
+        // right edge like the user's text bubble; a greedy horizontal ScrollView otherwise
+        // fills the full width and lays its content out from the leading edge (left).
+        .fixedSize(horizontal: true, vertical: false)
         .frame(maxWidth: 620, alignment: .trailing)
     }
 }

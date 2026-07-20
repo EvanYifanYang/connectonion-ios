@@ -79,6 +79,17 @@ enum ChatEventReducer {
         case "RUNTIME_INPUT_ACK":
             return .active
 
+        // The host uses a generic ERROR frame for an invalid invite code and keeps the pending
+        // CONNECT alive so the client can retry on the same socket. Treat ERROR as an onboarding
+        // rejection only while a submitted onboarding card is awaiting its result; unrelated agent
+        // errors must retain their existing handling in ConnectOnionClient.
+        case "ERROR" where hasSubmittedOnboardingAwaitingResult(in: items):
+            let message = event.payload[string: "message"]
+                ?? event.payload[string: "error"]
+                ?? event.payload[string: "reason"]
+            markLatestOnboardRejected(message: message, in: &items)
+            return .waiting
+
         // Verification/invite was rejected by the host. The exact wire type isn't in this codebase
         // (only REQUIRED/SUCCESS are), so match the plausible names; an unmatched one still surfaces
         // via the default `unknown` item + the DEBUG log in ChatViewModel.handle(.server).
@@ -221,6 +232,17 @@ enum ChatEventReducer {
         items[index].answered = false
         items[index].answer = nil
         items[index].reason = message ?? "That code wasn't accepted. Check it and try again."
+    }
+
+    private static func hasSubmittedOnboardingAwaitingResult(in items: [ChatItem]) -> Bool {
+        guard let requiredIndex = items.lastIndex(where: { $0.kind == .onboardRequired }),
+              items[requiredIndex].answered else {
+            return false
+        }
+        guard let successIndex = items.lastIndex(where: { $0.kind == .onboardSuccess }) else {
+            return true
+        }
+        return successIndex < requiredIndex
     }
 
     static func markLatestPlanReviewAnswered(message: String, in items: inout [ChatItem]) {

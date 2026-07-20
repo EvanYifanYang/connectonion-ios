@@ -209,12 +209,11 @@ struct Sprint1ChatEventTests {
         ChatEventReducer.markLatestOnboardSubmitted(inviteCode: "wrong-code", payment: nil, in: &items)
         #expect(items[0].answered)
 
-        // A rejected code must re-open the card (retryable), surface the reason, and leave the
-        // session .waiting so the composer stops showing the ■ processing button.
+        // ConnectOnion sends a generic ERROR for a rejected invite while leaving the pending CONNECT
+        // alive. It must re-open the card, surface the reason, and leave the session waiting for retry.
         let state = ChatEventReducer.apply(
             ServerEvent(payload: [
-                "type": .string("ONBOARD_ERROR"),
-                "id": .string("onboard-1"),
+                "type": .string("ERROR"),
                 "message": .string("Invalid invite code")
             ]),
             to: &items
@@ -226,6 +225,22 @@ struct Sprint1ChatEventTests {
         #expect(!items[0].answered)
         #expect(items[0].answer == nil)
         #expect(items[0].reason == "Invalid invite code")
+    }
+
+    @Test func genericErrorWithoutPendingOnboardingDoesNotCreateOrReopenACard() {
+        var items = [ChatItem(kind: .agent, content: "Earlier reply")]
+
+        let state = ChatEventReducer.apply(
+            ServerEvent(payload: [
+                "type": .string("ERROR"),
+                "message": .string("Unrelated agent error")
+            ]),
+            to: &items
+        )
+
+        #expect(state == nil)
+        #expect(items.count == 1)
+        #expect(items[0].kind == .agent)
     }
 
     @Test func planReviewResponseClearsPendingReview() {

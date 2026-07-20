@@ -25,40 +25,43 @@ struct AgentLandingView: View {
     @State private var greeting = AgentLandingView.greetings.randomElement() ?? "How can I help you?"
 
     var body: some View {
-        VStack(spacing: 0) {
-            GeometryReader { geometry in
-                ScrollView {
-                    VStack(spacing: 30) {
-                        // The brand logo over a single warm, serif greeting — no repeated agent hero.
-                        // The onion assembles itself layer-by-layer when the landing appears.
-                        VStack(spacing: 18) {
-                            OnionRevealView(trigger: greeting)
-                                .frame(width: 60, height: 60)
-                            Text(greeting)
-                                .appFont(.title, weight: .medium)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.6)
-                                .multilineTextAlignment(.center)
-                        }
-
-                        LandingSuggestions(suggestions: Self.suggestions) { suggestion in
-                            onSend(AgentInput(prompt: suggestion))
-                        }
-
-                        AgentLandingCapabilities(
-                            tools: info?.tools ?? [],
-                            skills: info?.skills ?? []
-                        )
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 30) {
+                    // The brand logo over a single warm, serif greeting — no repeated agent hero.
+                    // The onion assembles itself layer-by-layer when the landing appears.
+                    VStack(spacing: 18) {
+                        OnionRevealView(trigger: greeting)
+                            .frame(width: 60, height: 60)
+                        Text(greeting)
+                            .appFont(.title, weight: .medium)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                            .multilineTextAlignment(.center)
                     }
-                    .frame(maxWidth: 540)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 32)
-                    .frame(minHeight: geometry.size.height, alignment: .center)
-                }
-                .scrollDismissesKeyboard(.interactively)
-            }
 
+                    LandingSuggestions(suggestions: Self.suggestions) { suggestion in
+                        onSend(AgentInput(prompt: suggestion))
+                    }
+
+                    AgentLandingCapabilities(
+                        tools: info?.tools ?? [],
+                        skills: info?.skills ?? []
+                    )
+                }
+                .frame(maxWidth: 540)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 32)
+                .frame(minHeight: geometry.size.height, alignment: .center)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        // Host the composer as a bottom safe-area inset (like ChatScreen) so it gets its own stable
+        // layout pass. As a VStack sibling of the greedy GeometryReader, attaching an image animated
+        // the composer taller, shrinking the GeometryReader's height every frame and remeasuring the
+        // vertical TextField at interpolated heights — which garbled its (CJK) glyph rendering.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             LandingComposer(
                 acceptedInputs: info?.acceptedInputs,
                 skills: info?.skills ?? [],

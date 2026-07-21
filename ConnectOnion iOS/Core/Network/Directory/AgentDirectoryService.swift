@@ -64,18 +64,32 @@ struct AgentDirectoryService: AgentDirectoryServicing {
     }
 
     func resolveRoute(for address: String, preferredEndpoint: URL?) async throws -> AgentRoute {
+        // The preferred endpoint is the highest-priority *direct* candidate, not a make-or-break
+        // decision. If it can't be reached — e.g. the agent is on a campus / NAT'd LAN whose address
+        // *looks* usable but this iPhone can't actually route to it — fall through to the relay record
+        // and try the advertised endpoints, then the relay itself, before giving up. Previously a
+        // configured endpoint short-circuited the whole relay fallback below, so an agent reachable
+        // only via relay surfaced as "connection failed".
         if let preferredEndpoint,
-           isUsableFromCurrentDevice(preferredEndpoint) {
-            if let direct = await verifiedDirectRoute(httpURL: preferredEndpoint, address: address) {
-                logger.info("Using preferred direct endpoint \(preferredEndpoint.absoluteString, privacy: .public)")
-                return direct
-            }
-            logger.error("Preferred endpoint unavailable: \(preferredEndpoint.absoluteString, privacy: .public)")
-            throw AgentDirectoryError.preferredEndpointUnavailable(preferredEndpoint)
+           isUsableFromCurrentDevice(preferredEndpoint),
+           let direct = await verifiedDirectRoute(httpURL: preferredEndpoint, address: address) {
+            logger.info("Using preferred direct endpoint \(preferredEndpoint.absoluteString, privacy: .public)")
+            return direct
         }
 
         guard AgentAddress.isValid(address) else { throw AgentDirectoryError.invalidAddress }
-        guard let relayData = await relayRecord(address: address) else { throw AgentDirectoryError.directoryUnavailable }
+
+        // If the preferred endpoint was unreachable and nothing below works either, that configured
+        // endpoint is the most actionable thing to name; otherwise the directory itself is the issue.
+        let unreachableError: AgentDirectoryError = preferredEndpoint
+            .map(AgentDirectoryError.preferredEndpointUnavailable) ?? .directoryUnavailable
+
+        guard let relayData = await relayRecord(address: address) else {
+            if let preferredEndpoint {
+                logger.error("Preferred endpoint unreachable and no relay record: \(preferredEndpoint.absoluteString, privacy: .public)")
+            }
+            throw unreachableError
+        }
 
         let relaySummary = relayData.relay ?? "nil"
         let endpointSummary = relayData.endpoints.map(\.absoluteString).joined(separator: ",")
@@ -89,11 +103,18 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         }
 
         if relayData.relay != nil {
-            logger.info("Using relay route")
+            if preferredEndpoint != nil {
+                logger.info("Preferred endpoint unreachable — using relay route instead")
+            } else {
+                logger.info("Using relay route")
+            }
             return relayRoute()
         }
 
         logger.error("No reachable route for iPhone. Advertised endpoints: \(endpointSummary, privacy: .public)")
+        if preferredEndpoint != nil {
+            throw unreachableError
+        }
         throw AgentDirectoryError.noReachableRoute(relayData.endpoints)
     }
 

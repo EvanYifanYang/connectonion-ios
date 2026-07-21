@@ -1,3 +1,13 @@
+//
+//  ChatInputBar.swift
+//
+//  Purpose: Implements ChatInputBar for the Features/Composer module.
+//  Collaborates with: AttachmentSheet, AttachmentStrip, CameraPicker, ComposerAttachmentPreviews, RecentPhotos, SkillCommandPalette.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers

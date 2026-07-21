@@ -1,10 +1,13 @@
 //
 //  ConnectOnion_iOSApp.swift
-//  ConnectOnion iOS
 //
-//  Created by Junhua Di on 2026/6/12.
+//  Purpose: Implements ConnectOnion_iOSApp for the App module.
+//  Collaborates with: AppDependencies.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
 //
-
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 import SwiftData
 

@@ -1,3 +1,13 @@
+//
+//  ConnectOnionLiveActivity.swift
+//
+//  Purpose: Implements ConnectOnionLiveActivity for the ConnectOnionWidget module.
+//  Collaborates with: ConnectOnionWidget, ConnectOnionWidgetBundle.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import ActivityKit
 import SwiftUI
 import UIKit

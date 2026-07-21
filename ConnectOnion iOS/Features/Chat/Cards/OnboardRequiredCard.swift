@@ -1,3 +1,13 @@
+//
+//  OnboardRequiredCard.swift
+//
+//  Purpose: Implements OnboardRequiredCard for the Features/Chat/Cards module.
+//  Collaborates with: ApprovalButtons, ApprovalNeededCard, AskUserCard, PlanReviewCard, ToolCallCard, ToolCallGroupCard.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct OnboardRequiredCard: View {

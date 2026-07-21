@@ -1,3 +1,13 @@
+//
+//  ChatViewModel.swift
+//
+//  Purpose: Implements ChatViewModel for the Features/Chat module.
+//  Collaborates with: ChatErrorBanner, ChatHeaderView, ChatItemView, ChatMessageList, ChatScreen, ChatTimeline.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Factory
 import Foundation
 import Observation

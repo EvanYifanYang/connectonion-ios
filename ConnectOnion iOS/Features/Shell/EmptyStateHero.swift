@@ -1,3 +1,13 @@
+//
+//  EmptyStateHero.swift
+//
+//  Purpose: Implements EmptyStateHero for the Features/Shell module.
+//  Collaborates with: AgentAvatar, AgentListView, AgentSidebarRow, AppShellView, ConnectOnionWordmark, ConversationSidebarRow.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 /// The no-agent state doubles as the new-user welcome: the onion grows itself from the core outward

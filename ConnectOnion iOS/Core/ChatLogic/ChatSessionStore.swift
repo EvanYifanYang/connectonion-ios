@@ -1,3 +1,13 @@
+//
+//  ChatSessionStore.swift
+//
+//  Purpose: Implements ChatSessionStore for the Core/ChatLogic module.
+//  Collaborates with: ChatEventReducer.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import Observation
 

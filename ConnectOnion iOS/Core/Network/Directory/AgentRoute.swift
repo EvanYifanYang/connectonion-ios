@@ -1,3 +1,13 @@
+//
+//  AgentRoute.swift
+//
+//  Purpose: Implements AgentRoute for the Core/Network/Directory module.
+//  Collaborates with: AgentDirectoryService, AgentDirectoryServicing, AgentProfile, DirectAgentInfo, MockAgentDirectoryService, RelayAgentRecord.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 enum AgentRoute: Equatable, Sendable {

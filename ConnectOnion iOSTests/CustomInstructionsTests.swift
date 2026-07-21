@@ -1,3 +1,13 @@
+//
+//  CustomInstructionsTests.swift
+//
+//  Purpose: Implements CustomInstructionsTests for the ConnectOnion iOSTests module.
+//  Collaborates with: AgentQRCodePayloadTests, AgentRoutingTests, ChatSessionStoreTests, PersonalisationPreferencesTests, Sprint1Tests, Sprint2Tests.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import Testing
 @testable import ConnectOnion_iOS

@@ -1,3 +1,13 @@
+//
+//  RecentPhotos.swift
+//
+//  Purpose: Implements RecentPhotos for the Features/Composer module.
+//  Collaborates with: AttachmentSheet, AttachmentStrip, CameraPicker, ChatInputBar, ComposerAttachmentPreviews, SkillCommandPalette.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Photos
 import SwiftUI
 import UIKit

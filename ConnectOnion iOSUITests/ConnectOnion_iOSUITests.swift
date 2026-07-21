@@ -1,3 +1,13 @@
+//
+//  ConnectOnion_iOSUITests.swift
+//
+//  Purpose: Implements ConnectOnion_iOSUITests for the ConnectOnion iOSUITests module.
+//  Collaborates with: ConnectOnion_iOSE2ETests.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import XCTest
 
 final class ConnectOnion_iOSUITests: XCTestCase {

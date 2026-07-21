@@ -1,3 +1,13 @@
+//
+//  MockIdentityStore.swift
+//
+//  Purpose: Implements MockIdentityStore for the Core/Crypto module.
+//  Collaborates with: ClientIdentity, IdentityProviding, IdentityStoreError, KeychainIdentityStore, SignedEnvelope.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import CryptoKit
 import Foundation
 

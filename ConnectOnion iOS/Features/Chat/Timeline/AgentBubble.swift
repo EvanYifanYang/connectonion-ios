@@ -1,3 +1,13 @@
+//
+//  AgentBubble.swift
+//
+//  Purpose: Implements AgentBubble for the Features/Chat/Timeline module.
+//  Collaborates with: AgentActivityGroup, CompactRow, EvaluationRow, FilesReceivedRow, IntentRow, MarkdownMessageView.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 import UIKit
 

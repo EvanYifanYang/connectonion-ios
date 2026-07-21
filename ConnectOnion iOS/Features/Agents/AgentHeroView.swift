@@ -1,3 +1,13 @@
+//
+//  AgentHeroView.swift
+//
+//  Purpose: Implements AgentHeroView for the Features/Agents module.
+//  Collaborates with: AgentCapabilityLine, AgentEditorView, AgentHomeView, AgentInfoPopover, AgentInfoStore, AgentLandingView.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct AgentHeroView: View {

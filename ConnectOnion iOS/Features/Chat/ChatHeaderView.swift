@@ -1,3 +1,13 @@
+//
+//  ChatHeaderView.swift
+//
+//  Purpose: Implements ChatHeaderView for the Features/Chat module.
+//  Collaborates with: ChatErrorBanner, ChatItemView, ChatMessageList, ChatScreen, ChatTimeline, ChatViewModel.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct ChatHeaderView: View {

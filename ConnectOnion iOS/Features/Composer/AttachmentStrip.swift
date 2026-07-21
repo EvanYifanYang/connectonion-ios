@@ -1,3 +1,13 @@
+//
+//  AttachmentStrip.swift
+//
+//  Purpose: Implements AttachmentStrip for the Features/Composer module.
+//  Collaborates with: AttachmentSheet, CameraPicker, ChatInputBar, ComposerAttachmentPreviews, RecentPhotos, SkillCommandPalette.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 import UIKit
 

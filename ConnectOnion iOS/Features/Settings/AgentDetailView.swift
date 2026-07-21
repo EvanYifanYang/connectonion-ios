@@ -1,3 +1,13 @@
+//
+//  AgentDetailView.swift
+//
+//  Purpose: Implements AgentDetailView for the Features/Settings module.
+//  Collaborates with: AppearancePicker, SettingsView.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 /// Edit one added agent from Settings: its display name, its direct endpoint (the LAN address a

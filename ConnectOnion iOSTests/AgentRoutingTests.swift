@@ -1,3 +1,13 @@
+//
+//  AgentRoutingTests.swift
+//
+//  Purpose: Implements AgentRoutingTests for the ConnectOnion iOSTests module.
+//  Collaborates with: AgentQRCodePayloadTests, ChatSessionStoreTests, CustomInstructionsTests, PersonalisationPreferencesTests, Sprint1Tests, Sprint2Tests.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import Testing
 import os

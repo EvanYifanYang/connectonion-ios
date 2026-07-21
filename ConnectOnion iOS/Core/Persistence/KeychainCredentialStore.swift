@@ -1,3 +1,13 @@
+//
+//  KeychainCredentialStore.swift
+//
+//  Purpose: Implements KeychainCredentialStore for the Core/Persistence module.
+//  Collaborates with: AgentConfigRecord, ConversationRecord.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import Security
 

@@ -1,3 +1,13 @@
+//
+//  AppDependencies.swift
+//
+//  Purpose: Implements AppDependencies for the App module.
+//  Collaborates with: ConnectOnion_iOSApp.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Factory
 import Foundation
 

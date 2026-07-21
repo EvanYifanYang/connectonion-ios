@@ -1,3 +1,13 @@
+//
+//  RelayAgentRecord.swift
+//
+//  Purpose: Implements RelayAgentRecord for the Core/Network/Directory module.
+//  Collaborates with: AgentDirectoryService, AgentDirectoryServicing, AgentProfile, AgentRoute, DirectAgentInfo, MockAgentDirectoryService.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 struct RelayAgentRecord: Decodable, Sendable {

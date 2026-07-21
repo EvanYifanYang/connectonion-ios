@@ -1,3 +1,13 @@
+//
+//  HexCoding.swift
+//
+//  Purpose: Implements HexCoding for the Core/Support module.
+//  Collaborates with: AccessibilityID, AgentContentSanitizer, AttachmentEncoding, CustomInstructions, JSONValue, PersonalisationPreferences.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 enum HexCoding {

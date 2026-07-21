@@ -1,3 +1,13 @@
+//
+//  AgentDirectoryService.swift
+//
+//  Purpose: Implements AgentDirectoryService for the Core/Network/Directory module.
+//  Collaborates with: AgentDirectoryServicing, AgentProfile, AgentRoute, DirectAgentInfo, MockAgentDirectoryService, RelayAgentRecord.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import OSLog
 

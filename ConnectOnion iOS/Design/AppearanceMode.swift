@@ -1,3 +1,13 @@
+//
+//  AppearanceMode.swift
+//
+//  Purpose: Implements AppearanceMode for the Design module.
+//  Collaborates with: AppColors, AppMotion, AppTheme, BrandColor, GlassSurfaceModifier, QuietPressButtonStyle.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 /// The user's theme preference, persisted via `@AppStorage(AppearanceMode.storageKey)` and applied

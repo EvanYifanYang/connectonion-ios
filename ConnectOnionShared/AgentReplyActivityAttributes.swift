@@ -1,3 +1,13 @@
+//
+//  AgentReplyActivityAttributes.swift
+//
+//  Purpose: Implements AgentReplyActivityAttributes for the ConnectOnionShared module.
+//  Collaborates with: ConnectOnionSharedData.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import ActivityKit
 import Foundation
 

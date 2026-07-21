@@ -1,3 +1,13 @@
+//
+//  GlassSurfaceModifier.swift
+//
+//  Purpose: Implements GlassSurfaceModifier for the Design module.
+//  Collaborates with: AppColors, AppMotion, AppTheme, AppearanceMode, BrandColor, QuietPressButtonStyle.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct GlassSurfaceModifier: ViewModifier {

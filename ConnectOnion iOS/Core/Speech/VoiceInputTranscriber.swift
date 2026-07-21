@@ -1,3 +1,13 @@
+//
+//  VoiceInputTranscriber.swift
+//
+//  Purpose: Implements VoiceInputTranscriber for the Core/Speech module.
+//  Collaborates with: the owning feature or module.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import AVFoundation
 import Foundation
 import Observation

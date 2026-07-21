@@ -1,3 +1,13 @@
+//
+//  ConversationSidebarRow.swift
+//
+//  Purpose: Implements ConversationSidebarRow for the Features/Shell module.
+//  Collaborates with: AgentAvatar, AgentListView, AgentSidebarRow, AppShellView, ConnectOnionWordmark, EmptyStateHero.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct ConversationSidebarRow: View {

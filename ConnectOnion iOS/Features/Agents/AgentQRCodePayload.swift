@@ -1,3 +1,13 @@
+//
+//  AgentQRCodePayload.swift
+//
+//  Purpose: Implements AgentQRCodePayload for the Features/Agents module.
+//  Collaborates with: AgentCapabilityLine, AgentEditorView, AgentHeroView, AgentHomeView, AgentInfoPopover, AgentInfoStore.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 /// The agent connection details encoded in a ConnectOnion QR code.

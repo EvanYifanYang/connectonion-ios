@@ -1,3 +1,13 @@
+//
+//  ConnectOnionClient.swift
+//
+//  Purpose: Implements ConnectOnionClient for the Core/Network/Client module.
+//  Collaborates with: AgentInput, ConnectOnionClientEvent, ConnectOnionClientProviding, MockConnectOnionClient, ProtocolCodec, ServerEvent.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 import OSLog
 

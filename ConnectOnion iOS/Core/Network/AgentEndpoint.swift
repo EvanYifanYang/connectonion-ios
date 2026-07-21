@@ -1,3 +1,13 @@
+//
+//  AgentEndpoint.swift
+//
+//  Purpose: Implements AgentEndpoint for the Core/Network module.
+//  Collaborates with: the owning feature or module.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 /// Parses a user-entered agent endpoint into a normalized `http(s)` URL. Shared by the add-agent

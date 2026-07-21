@@ -1,3 +1,13 @@
+//
+//  AgentConfig.swift
+//
+//  Purpose: Implements AgentConfig for the Core/Models/Agent module.
+//  Collaborates with: AgentAcceptedInputs, AgentAddress, AgentInfo+Merging, AgentInfo, SkillInfo.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import Foundation
 
 struct AgentConfig: Codable, Equatable, Identifiable, Sendable {

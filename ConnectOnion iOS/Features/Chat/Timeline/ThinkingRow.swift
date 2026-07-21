@@ -1,3 +1,13 @@
+//
+//  ThinkingRow.swift
+//
+//  Purpose: Implements ThinkingRow for the Features/Chat/Timeline module.
+//  Collaborates with: AgentActivityGroup, AgentBubble, CompactRow, EvaluationRow, FilesReceivedRow, IntentRow.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct ThinkingRow: View {

@@ -1,3 +1,13 @@
+//
+//  AgentHomeView.swift
+//
+//  Purpose: Implements AgentHomeView for the Features/Agents module.
+//  Collaborates with: AgentCapabilityLine, AgentEditorView, AgentHeroView, AgentInfoPopover, AgentInfoStore, AgentLandingView.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftData
 import SwiftUI
 import UIKit

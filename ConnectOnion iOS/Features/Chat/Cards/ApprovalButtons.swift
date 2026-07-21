@@ -1,3 +1,13 @@
+//
+//  ApprovalButtons.swift
+//
+//  Purpose: Implements ApprovalButtons for the Features/Chat/Cards module.
+//  Collaborates with: ApprovalNeededCard, AskUserCard, OnboardRequiredCard, PlanReviewCard, ToolCallCard, ToolCallGroupCard.
+//  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
+//               the project architecture described in README.md where applicable.
+//
+//  This file is part of the ConnectOnion iOS application.
+//
 import SwiftUI
 
 struct ApprovalButtons: View {

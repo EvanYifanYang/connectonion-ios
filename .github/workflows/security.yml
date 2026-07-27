@@ -1,0 +1,75 @@
+name: Security Scan
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: a credential that was committed and later removed is still
+          # recoverable from the object store, so scanning the working tree alone
+          # would miss it.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          # Pinned to the version the baseline scan was verified against locally.
+          VERSION=8.30.1
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      - name: Scan commit history
+        run: |
+          # Reviewed false positives live in .gitleaksignore, each with a written
+          # justification. Anything not listed there fails this job.
+          gitleaks git --no-banner --redact --verbose
+
+  dependencies:
+    name: Dependency Inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report pinned Swift package versions
+        run: |
+          # Dependabot does not resolve Swift packages declared inside an .xcodeproj
+          # (it only reads a root Package.swift), so the pinned set is surfaced here
+          # instead. Automated update PRs for GitHub Actions are configured in
+          # .github/dependabot.yml.
+          RESOLVED="ConnectOnion iOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+
+          if [ ! -f "$RESOLVED" ]; then
+            echo "::error::Package.resolved not found at $RESOLVED"
+            exit 1
+          fi
+
+          echo "### Pinned Swift package dependencies" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Package | Version | Source |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+
+          jq -r '
+            .pins
+            | sort_by(.identity)[]
+            | "| \(.identity) | \(.state.version // .state.branch // .state.revision[0:12]) | \(.location) |"
+          ' "$RESOLVED" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Every dependency is pinned to an exact revision." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,26 @@
+# Dependabot configuration — ConnectOnion iOS
+#
+# Scope note: this project declares its Swift packages inside
+# "ConnectOnion iOS.xcodeproj", not a root Package.swift. Dependabot's Swift
+# ecosystem only reads a root manifest, so it cannot open update PRs for Factory,
+# HighlighterSwift, Lottie, and the rest. Those pins are reported instead by the
+# "Dependency Inventory" job in .github/workflows/security.yml, and are reviewed
+# manually against upstream releases.
+#
+# GitHub Actions versions are covered here, since a compromised or outdated action
+# runs with repository credentials.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"

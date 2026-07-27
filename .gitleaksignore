@@ -1,0 +1,13 @@
+# Reviewed gitleaks findings that are confirmed false positives.
+#
+# Each entry records the fingerprint, what the scanner matched, and why it is safe.
+# Anything not listed here is treated as a genuine leak and fails CI.
+
+# Matched the literal string "Curve25519.Signing.PrivateKey" — a CryptoKit type
+# name on a property declaration, not a credential. The generic-api-key rule fires
+# because the `privateKey:` prefix precedes a high-entropy-looking token.
+#
+# The mock's actual seed is `Data(repeating: 7, count: 32)`: a deterministic
+# all-sevens test value used only by MockIdentityStore, which never touches the
+# Keychain or a real device identity. Reviewed 2026-07-27.
+19ac9c6fa9e8c9bae69407331f654a322308cd09:ConnectOnion iOS/Core/Crypto/MockIdentityStore.swift:generic-api-key:6

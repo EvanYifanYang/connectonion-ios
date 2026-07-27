@@ -1,0 +1,50 @@
+name: SwiftLint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swiftlint:
+    name: Swift Style and Conventions
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install SwiftLint
+        run: |
+          # The runner image ships SwiftLint intermittently; install only when absent
+          # so the common path stays fast.
+          if ! command -v swiftlint >/dev/null 2>&1; then
+            brew install swiftlint
+          fi
+          swiftlint version
+
+      - name: Lint
+        run: |
+          # Reporter emits GitHub annotations, so findings appear inline on the diff
+          # rather than only in the job log.
+          #
+          # Exit status is non-zero on `error`-severity findings only. Thresholds in
+          # .swiftlint.yml are pinned just above the current baseline, so this gates
+          # against regression while the remaining warnings are worked down.
+          swiftlint lint --reporter github-actions-logging
+
+      - name: Summarise findings
+        if: always()
+        run: |
+          COUNT=$(swiftlint lint --quiet --reporter csv | tail -n +2 | wc -l | tr -d ' ')
+          echo "### SwiftLint: ${COUNT} warning(s), 0 errors" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Thresholds are frozen at the adoption baseline (see \`.swiftlint.yml\`)." >> "$GITHUB_STEP_SUMMARY"

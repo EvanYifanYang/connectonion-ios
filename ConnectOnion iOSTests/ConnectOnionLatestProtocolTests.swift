@@ -188,9 +188,9 @@ struct ConnectOnionLatestProtocolTests {
 
     @Test("A rejected CONNECT terminates instead of waiting forever")
     @MainActor
-    func rejectedConnectFinishesPromptly() async {
+    func rejectedConnectFinishesPromptly() async throws {
         let transport = MockWebSocketTransport(scriptedMessages: [
-            try! frame([
+            try frame([
                 "type": .string("ERROR"),
                 "message": .string("Invalid signature")
             ])

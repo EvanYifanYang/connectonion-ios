@@ -32,6 +32,9 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let newChatToolsSummaryID = "connectonion.chat.new.tools.summary"
     private let newChatSkillsDisclosureID = "connectonion.chat.new.skills.disclosure"
     private let summarizeSkillID = "connectonion.chat.new.skill.summarize"
+    private let organizeSkillID = "connectonion.chat.new.skill.organize"
+    private let chatSkillPaletteID = "connectonion.chat.skill.palette"
+    private let chatOrganizeSkillID = "connectonion.chat.skill.organize"
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
     private let chatStopButtonID = "connectonion.chat.stop.button"
@@ -198,7 +201,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(toolsSummary.label.contains("+1 more"), toolsSummary.label)
 
         let skillsDisclosure = waitForElement(newChatSkillsDisclosureID, in: app)
-        XCTAssertTrue(skillsDisclosure.label.contains("6 skills"), skillsDisclosure.label)
+        XCTAssertTrue(skillsDisclosure.label.contains("8 skills"), skillsDisclosure.label)
         XCTAssertTrue(skillsDisclosure.label.contains("collapsed"), skillsDisclosure.label)
         XCTAssertFalse(app.anyElement(summarizeSkillID).exists, app.debugDescription)
         tapElement(newChatSkillsDisclosureID, in: app)
@@ -206,6 +209,23 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let skill = waitForElement(summarizeSkillID, in: app)
         XCTAssertTrue(skill.label.contains("summarize"), skill.label)
         XCTAssertTrue(skill.label.contains("Summarize a document"), skill.label)
+        app.swipeUp()
+        XCTAssertTrue(waitForElement(organizeSkillID, in: app).isHittable, app.debugDescription)
+    }
+
+    @MainActor
+    func testSlashSkillPaletteKeepsItsViewportAndScrollsToEverySkill() throws {
+        let app = launchUITestApp()
+        openLandingComposer(in: app)
+
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
+        app.typeText("/")
+
+        let palette = waitForElement(chatSkillPaletteID, in: app)
+        palette.swipeUp()
+
+        XCTAssertTrue(waitForElement(chatOrganizeSkillID, in: app).isHittable, app.debugDescription)
     }
 
     @MainActor

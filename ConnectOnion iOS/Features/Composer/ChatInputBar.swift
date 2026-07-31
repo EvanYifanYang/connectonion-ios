@@ -285,8 +285,6 @@ struct ChatInputBar: View {
             .filter { skill in
                 skillQuery.isEmpty || skill.name.localizedCaseInsensitiveContains(skillQuery)
             }
-            .prefix(6)
-            .map { $0 }
     }
 
     private var voiceButtonTitle: String {

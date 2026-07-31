@@ -118,7 +118,9 @@ enum PreviewFixtures {
             SkillInfo(name: "debug", description: "Debug an error"),
             SkillInfo(name: "ship", description: "Prepare a release"),
             SkillInfo(name: "audit", description: "Review a codebase"),
-            SkillInfo(name: "explain", description: "Explain a tricky file")
+            SkillInfo(name: "explain", description: "Explain a tricky file"),
+            SkillInfo(name: "translate", description: "Translate selected content"),
+            SkillInfo(name: "organize", description: "Organize notes into a plan")
         ]
     }
 

@@ -10,9 +10,35 @@
 //
 import SwiftUI
 
+enum AgentConnectionPhase: Equatable, Sendable {
+    case checking
+    case online
+    case offline
+
+    init(info: AgentInfo?) {
+        guard let info else {
+            self = .checking
+            return
+        }
+        self = info.online ? .online : .offline
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .checking:
+            "Checking connection status"
+        case .online:
+            "Online"
+        case .offline:
+            "Offline"
+        }
+    }
+}
+
 struct AgentAvatar: View {
     var title: String
-    var online: Bool?
+    /// Nil intentionally hides the badge (for surfaces that present a full status label nearby).
+    var connectionPhase: AgentConnectionPhase?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -22,25 +48,94 @@ struct AgentAvatar: View {
                 .frame(width: 42, height: 42)
                 .background(.primary, in: .rect(cornerRadius: 13))
 
-            if let online {
-                Circle()
-                    .fill(online ? .green : .secondary)
-                    .frame(width: 11, height: 11)
-                    .overlay {
-                        Circle().stroke(.background, lineWidth: 2)
-                    }
-                    .accessibilityHidden(true)
+            if let connectionPhase {
+                statusBadge(for: connectionPhase)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func statusBadge(for phase: AgentConnectionPhase) -> some View {
+        switch phase {
+        case .checking:
+            ProgressView()
+                .controlSize(.mini)
+                .tint(.secondary)
+                .frame(width: 13, height: 13)
+                .background(.background, in: .circle)
+                .accessibilityHidden(true)
+        case .online, .offline:
+            Circle()
+                .fill(phase == .online ? .green : .secondary)
+                .frame(width: 11, height: 11)
+                .overlay {
+                    Circle().stroke(.background, lineWidth: 2)
+                }
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+struct AgentStatusLabel: View {
+    var connectionPhase: AgentConnectionPhase
+    var showsActivityIndicator = true
+
+    var body: some View {
+        HStack(spacing: 5) {
+            switch connectionPhase {
+            case .checking:
+                if showsActivityIndicator {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            case .online, .offline:
+                Circle()
+                    .fill(connectionPhase == .online ? Color.green : Color.secondary)
+                    .frame(width: 7, height: 7)
+            }
+
+            Text(label)
+                .appFont(.footnote)
+        }
+        .foregroundStyle(foregroundStyle)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(connectionPhase.accessibilityLabel)
+    }
+
+    private var label: String {
+        switch connectionPhase {
+        case .checking:
+            "Checking…"
+        case .online:
+            "Online"
+        case .offline:
+            "Offline"
+        }
+    }
+
+    private var foregroundStyle: Color {
+        switch connectionPhase {
+        case .checking:
+            Color.secondary
+        case .online:
+            Color.green
+        case .offline:
+            Color.secondary
         }
     }
 }
 
 #Preview("Agent Avatar Online") {
-    AgentAvatar(title: "OpenOnion", online: true)
+    AgentAvatar(title: "OpenOnion", connectionPhase: .online)
         .padding()
 }
 
 #Preview("Agent Avatar Offline") {
-    AgentAvatar(title: "OpenOnion", online: false)
+    AgentAvatar(title: "OpenOnion", connectionPhase: .offline)
+        .padding()
+}
+
+#Preview("Agent Avatar Checking") {
+    AgentAvatar(title: "OpenOnion", connectionPhase: .checking)
         .padding()
 }

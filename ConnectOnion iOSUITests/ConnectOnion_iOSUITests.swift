@@ -89,6 +89,20 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     }
 
     @MainActor
+    func testAgentStatusShowsCheckingUntilInitialFetchCompletes() throws {
+        let app = launchUITestApp(scenario: "status-loading")
+        let agent = waitForElement(seededAgentID, in: app)
+
+        XCTAssertTrue(agent.label.contains("Checking connection status"), agent.label)
+
+        let becameOnline = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Online"),
+            object: agent
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [becameOnline], timeout: 6), .completed, app.debugDescription)
+    }
+
+    @MainActor
     func testStandardComposerSendsMockStreamingResponse() throws {
         let app = launchUITestApp()
         openSeededConversation(in: app)

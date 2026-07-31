@@ -12,9 +12,14 @@ import Foundation
 
 struct MockAgentDirectoryService: AgentDirectoryServicing {
     var includesCapabilities = true
+    var responseDelay: Duration = .zero
 
     func fetchAgentInfo(address: String, preferredEndpoint: URL?) async -> AgentInfo {
-        AgentInfo(
+        if responseDelay > .zero {
+            try? await Task.sleep(for: responseDelay)
+        }
+
+        return AgentInfo(
             address: address,
             name: "OpenOnion",
             tools: includesCapabilities

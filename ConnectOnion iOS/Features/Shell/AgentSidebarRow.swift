@@ -26,7 +26,7 @@ struct AgentSidebarRow: View {
         HStack(spacing: 8) {
             if isRenaming {
                 HStack(spacing: 12) {
-                    AgentAvatar(title: displayName, online: info?.online)
+                    AgentAvatar(title: displayName, connectionPhase: connectionPhase)
                     InlineRenameField(
                         text: $draftName,
                         accessibilityID: AccessibilityID.agentRenameField,
@@ -37,7 +37,7 @@ struct AgentSidebarRow: View {
             } else {
                 Button(action: onSelect) {
                     HStack(spacing: 12) {
-                        AgentAvatar(title: displayName, online: info?.online)
+                        AgentAvatar(title: displayName, connectionPhase: connectionPhase)
 
                         VStack(alignment: .leading, spacing: 3) {
                             Text(displayName)
@@ -53,10 +53,18 @@ struct AgentSidebarRow: View {
                                 .foregroundStyle(.secondary)
                             }
 
-                            Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
-                                .appFont(.footnote)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
+                            HStack(spacing: 5) {
+                                AgentStatusLabel(
+                                    connectionPhase: connectionPhase,
+                                    showsActivityIndicator: false
+                                )
+                                Text("·")
+                                    .foregroundStyle(.tertiary)
+                                Text(AgentAddress(rawValue: agent.address)?.shortDisplay ?? agent.address)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .appFont(.footnote)
+                            .lineLimit(1)
                         }
 
                         Spacer(minLength: 0)
@@ -70,7 +78,7 @@ struct AgentSidebarRow: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(displayName)
+                .accessibilityLabel("\(displayName), \(connectionPhase.accessibilityLabel)")
                 .accessibilityIdentifier(AccessibilityID.agent(agent.address))
                 .contextMenu {
                     actions
@@ -104,6 +112,10 @@ struct AgentSidebarRow: View {
 
     private var isPinned: Bool {
         agent.pinnedAt != nil
+    }
+
+    private var connectionPhase: AgentConnectionPhase {
+        AgentConnectionPhase(info: info)
     }
 
     @ViewBuilder

@@ -35,12 +35,18 @@ struct AgentDetailView: View {
         Form {
             Section {
                 HStack(spacing: 12) {
-                    AgentAvatar(title: agent.displayName(info: info), online: info?.online)
+                    AgentAvatar(
+                        title: agent.displayName(info: info),
+                        connectionPhase: AgentConnectionPhase(info: info)
+                    )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(agent.displayName(info: info))
                             .appFont(.headline)
                             .lineLimit(1)
-                        AgentStatusLabel(online: info?.online)
+                        AgentStatusLabel(
+                            connectionPhase: AgentConnectionPhase(info: info),
+                            showsActivityIndicator: false
+                        )
                     }
                 }
                 .padding(.vertical, 4)
@@ -130,27 +136,5 @@ struct AgentDetailView: View {
         agent.updatedAt = .now
         feedbackTrigger += 1
         dismiss()
-    }
-}
-
-/// Small "● Online / Offline" status line reused across agent surfaces.
-struct AgentStatusLabel: View {
-    var online: Bool?
-
-    var body: some View {
-        if let online {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(online ? Color.green : Color.secondary)
-                    .frame(width: 7, height: 7)
-                Text(online ? "Online" : "Offline")
-                    .appFont(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        } else {
-            Text("Checking…")
-                .appFont(.footnote)
-                .foregroundStyle(.tertiary)
-        }
     }
 }

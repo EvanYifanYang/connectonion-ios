@@ -17,6 +17,17 @@ The app is one end of a protocol; a [`connectonion`](https://github.com/openonio
 Python agent is the other. They speak the same wire language: an **Ed25519-signed handshake over a
 WebSocket**, then a stream of typed events.
 
+## Team members
+
+| Name | zID |
+|---|---|
+| Junhua Di | z660187 |
+| Shengyuan Fan | z5616162 |
+| Yifei Ni | z5633384 |
+| JiXun Wu | z5534622 |
+| Yifan Yang | z5671741 |
+| Yiran Zhou | z5561218 |
+
 ## Highlights
 
 - **Agent-centric flow** — the home lists your agents; tap one for its chats, tap a chat for the conversation (a single `NavigationStack`, with a zoom transition into each agent).

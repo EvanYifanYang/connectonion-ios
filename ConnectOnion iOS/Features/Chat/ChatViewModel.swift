@@ -25,6 +25,7 @@ final class ChatViewModel {
     private struct DeferredOnboardTurn {
         let input: AgentInput
         let replacementSessionID: String?
+        let userItemID: ChatItem.ID?
     }
 
     private let agent: AgentConfig
@@ -155,10 +156,16 @@ final class ChatViewModel {
         )
     }
 
-    private func sendCapturedInput(_ input: AgentInput, replacementSessionID: String? = nil) {
+    private func sendCapturedInput(
+        _ input: AgentInput,
+        replacementSessionID: String? = nil,
+        reusingUserItemID: ChatItem.ID? = nil
+    ) {
         // CONNECT carries the history *before* this input; INPUT carries the new prompt separately.
         // Capture it before appending the optimistic rows or the backend would receive the prompt twice.
-        let session = replacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
+        let session = replacementSessionID.map {
+            replacementSnapshot(sessionID: $0, excludingUserItemID: reusingUserItemID)
+        } ?? snapshot(excludingUserItemID: reusingUserItemID)
 
         isRegenerating = replacementSessionID != nil
         latestTurnCompleted = false
@@ -169,16 +176,27 @@ final class ChatViewModel {
         automaticReconnectTask?.cancel()
         inFlightInput = input
         inFlightReplacementSessionID = replacementSessionID
-        var userItem = ChatItem(kind: .user, content: input.prompt)
+        var userItem = reusingUserItemID.flatMap { reusedID in
+            items.first { $0.id == reusedID && $0.kind == .user }
+        } ?? ChatItem(
+            id: reusingUserItemID ?? UUID().uuidString,
+            kind: .user,
+            content: input.prompt
+        )
+        userItem.content = input.prompt
         userItem.images = input.images
         userItem.files = input.files
         pendingUserItem = userItem
         optimisticUserItemID = userItem.id
-        append(userItem, shouldPersist: false)
+        if !items.contains(where: { $0.id == userItem.id }) {
+            append(userItem, shouldPersist: false)
+        }
 
-        var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
-        placeholder.status = .running
-        append(placeholder, shouldPersist: false)
+        if !items.contains(where: { $0.id == "__optimistic__" }) {
+            var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
+            placeholder.status = .running
+            append(placeholder, shouldPersist: false)
+        }
         // Persist the user turn immediately. The presentation-only thinking placeholder is filtered
         // by persist(), so a connection failure keeps the sent bubble without saving fake activity.
         persist()
@@ -271,7 +289,9 @@ final class ChatViewModel {
         )
 
         streamTask?.cancel()
-        let session = inFlightReplacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
+        let session = inFlightReplacementSessionID.map {
+            replacementSnapshot(sessionID: $0)
+        } ?? snapshot()
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -464,10 +484,13 @@ final class ChatViewModel {
                 if let inFlightInput {
                     deferredOnboardTurn = DeferredOnboardTurn(
                         input: inFlightInput,
-                        replacementSessionID: inFlightReplacementSessionID
+                        replacementSessionID: inFlightReplacementSessionID,
+                        userItemID: inFlightUserItemID ?? optimisticUserItemID
                     )
                 }
-                discardInFlightUserPrompt()
+                // The host may require verification after acknowledging the first input. Keep the
+                // already-sent user bubble visible and reuse it when the input is replayed.
+                clearInFlightInput()
             } else {
                 commitOptimisticUserPrompt()
             }
@@ -616,15 +639,6 @@ final class ChatViewModel {
         items.removeAll { $0.id == id }
     }
 
-    private func discardInFlightUserPrompt() {
-        let userItemID = inFlightUserItemID ?? optimisticUserItemID
-        if let userItemID {
-            items.removeAll { $0.id == userItemID }
-        }
-        clearInFlightInput()
-        self.optimisticUserItemID = nil
-    }
-
     private func commitOptimisticUserPrompt() {
         optimisticUserItemID = nil
     }
@@ -642,7 +656,8 @@ final class ChatViewModel {
         Task { @MainActor [weak self] in
             self?.sendCapturedInput(
                 turn.input,
-                replacementSessionID: turn.replacementSessionID
+                replacementSessionID: turn.replacementSessionID,
+                reusingUserItemID: turn.userItemID
             )
         }
     }
@@ -679,7 +694,7 @@ final class ChatViewModel {
             : canonicalResult
     }
 
-    private func snapshot() -> ConversationSession {
+    private func snapshot(excludingUserItemID: ChatItem.ID? = nil) -> ConversationSession {
         ConversationSession(
             id: conversation.id,
             agentAddress: conversation.agentAddress,
@@ -688,7 +703,9 @@ final class ChatViewModel {
             createdAt: conversation.createdAt,
             updatedAt: conversation.updatedAt,
             mode: conversation.mode,
-            messages: items.filter { $0.id != "__optimistic__" },
+            messages: items.filter {
+                $0.id != "__optimistic__" && $0.id != excludingUserItemID
+            },
             rawSession: conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
@@ -697,8 +714,11 @@ final class ChatViewModel {
     /// Regeneration is a replacement branch, not another input on the existing remote session.
     /// Carry the retained local history into a fresh session and omit cursors/raw state that point
     /// at the exchange being replaced.
-    private func replacementSnapshot(sessionID: String) -> ConversationSession {
-        var session = snapshot()
+    private func replacementSnapshot(
+        sessionID: String,
+        excludingUserItemID: ChatItem.ID? = nil
+    ) -> ConversationSession {
+        var session = snapshot(excludingUserItemID: excludingUserItemID)
         session.remoteSessionID = sessionID
         session.rawSession = nil
         session.lastRenderedEventID = nil

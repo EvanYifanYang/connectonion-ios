@@ -21,12 +21,12 @@ WebSocket**, then a stream of typed events.
 
 | Name | zID |
 |---|---|
-| Junhua Di | z660187 |
-| Shengyuan Fan | z5616162 |
-| Yifei Ni | z5633384 |
-| JiXun Wu | z5534622 |
-| Yifan Yang | z5671741 |
-| Yiran Zhou | z5561218 |
+| Junhua Di | Z5660187 |
+| Shengyuan Fan | Z5616162 |
+| Yifei Ni | Z5633384 |
+| JiXun Wu | Z5534622 |
+| Yifan Yang | Z5671741 |
+| Yiran Zhou | Z5561218 |
 
 ## Highlights
 

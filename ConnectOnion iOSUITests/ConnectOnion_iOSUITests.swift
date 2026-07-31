@@ -32,6 +32,9 @@ final class ConnectOnion_iOSUITests: XCTestCase {
     private let newChatToolsSummaryID = "connectonion.chat.new.tools.summary"
     private let newChatSkillsDisclosureID = "connectonion.chat.new.skills.disclosure"
     private let summarizeSkillID = "connectonion.chat.new.skill.summarize"
+    private let organizeSkillID = "connectonion.chat.new.skill.organize"
+    private let chatSkillPaletteID = "connectonion.chat.skill.palette"
+    private let chatOrganizeSkillID = "connectonion.chat.skill.organize"
     private let chatInputID = "connectonion.chat.input"
     private let chatSendButtonID = "connectonion.chat.send.button"
     private let chatStopButtonID = "connectonion.chat.stop.button"
@@ -83,6 +86,20 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         XCTAssertTrue(app.anyElement(chatInputID).waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(app.anyElement(chatSendButtonID).exists)
+    }
+
+    @MainActor
+    func testAgentStatusShowsCheckingUntilInitialFetchCompletes() throws {
+        let app = launchUITestApp(scenario: "status-loading")
+        let agent = waitForElement(seededAgentID, in: app)
+
+        XCTAssertTrue(agent.label.contains("Checking connection status"), agent.label)
+
+        let becameOnline = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Online"),
+            object: agent
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [becameOnline], timeout: 6), .completed, app.debugDescription)
     }
 
     @MainActor
@@ -198,7 +215,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertTrue(toolsSummary.label.contains("+1 more"), toolsSummary.label)
 
         let skillsDisclosure = waitForElement(newChatSkillsDisclosureID, in: app)
-        XCTAssertTrue(skillsDisclosure.label.contains("6 skills"), skillsDisclosure.label)
+        XCTAssertTrue(skillsDisclosure.label.contains("8 skills"), skillsDisclosure.label)
         XCTAssertTrue(skillsDisclosure.label.contains("collapsed"), skillsDisclosure.label)
         XCTAssertFalse(app.anyElement(summarizeSkillID).exists, app.debugDescription)
         tapElement(newChatSkillsDisclosureID, in: app)
@@ -206,6 +223,24 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let skill = waitForElement(summarizeSkillID, in: app)
         XCTAssertTrue(skill.label.contains("summarize"), skill.label)
         XCTAssertTrue(skill.label.contains("Summarize a document"), skill.label)
+        app.swipeUp()
+        XCTAssertTrue(waitForElement(organizeSkillID, in: app).isHittable, app.debugDescription)
+    }
+
+    @MainActor
+    func testSlashSkillPaletteKeepsItsViewportAndScrollsToEverySkill() throws {
+        let app = launchUITestApp()
+        openLandingComposer(in: app)
+
+        let input = waitForElement(chatInputID, in: app)
+        input.tap()
+        app.typeText("/")
+
+        let palette = app.scrollViews[chatSkillPaletteID]
+        XCTAssertTrue(palette.waitForExistence(timeout: 6), app.debugDescription)
+        palette.swipeUp()
+
+        XCTAssertTrue(waitForElement(chatOrganizeSkillID, in: app).isHittable, app.debugDescription)
     }
 
     @MainActor
@@ -257,6 +292,11 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
         let agent = waitForElement(seededAgentID, in: app)
+        let becameOnline = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Online"),
+            object: agent
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [becameOnline], timeout: 6), .completed, agent.label)
         agent.press(forDuration: 0.8)
 
         XCTAssertTrue(app.anyElement(renameAgentButtonID).waitForExistence(timeout: 5), app.debugDescription)

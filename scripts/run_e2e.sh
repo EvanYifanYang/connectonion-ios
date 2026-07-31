@@ -14,6 +14,9 @@
 #   E2E_PORT=8000                 agent port
 #   E2E_SIMULATOR="iPhone 17"     simulator device name
 #   E2E_OS=latest                 simulator OS version
+#   E2E_PYTHON=/path/to/venv/bin/python
+#   E2E_CONNECTONION_SPEC=connectonion==1.5.3  force an isolated PyPI requirement
+#   E2E_CONNECTONION_PATH=/path/to/connectonion  explicit source-development override
 #   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 set -euo pipefail
 
@@ -48,28 +51,56 @@ export DEVELOPER_DIR
 XCODEBUILD="$DEVELOPER_DIR/usr/bin/xcodebuild"
 [ -x "$XCODEBUILD" ] || die "No full Xcode at DEVELOPER_DIR=$DEVELOPER_DIR (install Xcode 26, or set DEVELOPER_DIR)."
 
-# ---------------------------------------------------------------- find connectonion WITH host()
-# NOTE: host() is the agent-server API. The PyPI `connectonion` is behind (0.4.x, no host()); the
-# team's backend checkout (repo/connectonion, v1.2+) has it. So prefer a local checkout.
+# ---------------------------------------------------------------- find the requested PyPI/venv connectonion runtime
 info "Locating connectonion (with host())…"
 PYRUN=()
-for py in python3 python; do
-  if command -v "$py" >/dev/null 2>&1 && "$py" -c "from connectonion import host" >/dev/null 2>&1; then
-    PYRUN=("$py"); ok "Using system python: ${py}"; break
+
+if [ -n "${E2E_PYTHON:-}" ]; then
+  explicit_python="$E2E_PYTHON"
+  if [ -d "$explicit_python" ]; then
+    explicit_python="$explicit_python/bin/python"
   fi
-done
-if [ ${#PYRUN[@]} -eq 0 ]; then
-  # resolve the connectonion backend source: explicit override → sibling checkout → PyPI (may lack host())
-  CO_SRC="${E2E_CONNECTONION_PATH:-}"
-  if [ -z "$CO_SRC" ] && [ -d "$REPO_ROOT/../connectonion" ]; then
-    CO_SRC="$(cd "$REPO_ROOT/../connectonion" && pwd)"
-  fi
-  [ -n "$CO_SRC" ] || CO_SRC="connectonion"
+  [ -x "$explicit_python" ] \
+    || die "E2E_PYTHON is not an executable Python: $explicit_python"
+  PYRUN=("$explicit_python")
+  ok "Using E2E_PYTHON: $explicit_python"
+elif [ -n "${E2E_CONNECTONION_PATH:-}" ]; then
+  [ -e "$E2E_CONNECTONION_PATH" ] \
+    || die "E2E_CONNECTONION_PATH does not exist: $E2E_CONNECTONION_PATH"
   command -v uv >/dev/null 2>&1 \
-    || die "connectonion with host() not importable and 'uv' is not installed. Install the connectonion backend, or set E2E_CONNECTONION_PATH."
-  PYRUN=(uv run --quiet --python 3.12 --with "$CO_SRC" python)
-  ok "Using: uv run --with ${CO_SRC}"
+    || die "E2E_CONNECTONION_PATH requires 'uv'. Install uv or use E2E_PYTHON."
+  PYRUN=(uv run --quiet --python 3.12 --with "$E2E_CONNECTONION_PATH" python)
+  ok "Using explicit source override: $E2E_CONNECTONION_PATH"
+elif [ -n "${E2E_CONNECTONION_SPEC:-}" ]; then
+  command -v uv >/dev/null 2>&1 \
+    || die "E2E_CONNECTONION_SPEC requires 'uv'. Install uv or use E2E_PYTHON."
+  CO_SPEC="$E2E_CONNECTONION_SPEC"
+  PYRUN=(uv run --quiet --python 3.12 --with "$CO_SPEC" python)
+  ok "Using explicit PyPI requirement via: uv run --with $CO_SPEC"
+else
+  for py in python3 python; do
+    if command -v "$py" >/dev/null 2>&1 \
+      && "$py" -c "from connectonion import host" >/dev/null 2>&1; then
+      PYRUN=("$py")
+      ok "Using installed package from: $(command -v "$py")"
+      break
+    fi
+  done
+
+  if [ ${#PYRUN[@]} -eq 0 ]; then
+    command -v uv >/dev/null 2>&1 \
+      || die "connectonion is not importable and 'uv' is not installed. Install it with pip, set E2E_PYTHON, or install uv."
+    CO_SPEC="connectonion>=1.5.3"
+    PYRUN=(uv run --quiet --python 3.12 --with "$CO_SPEC" python)
+    ok "Using PyPI via: uv run --with $CO_SPEC"
+  fi
 fi
+
+"${PYRUN[@]}" -c "from connectonion import host" >/dev/null 2>&1 \
+  || die "The selected Python runtime cannot import connectonion.host. Install connectonion>=1.5.3 or select another runtime."
+
+CO_VERSION="$("${PYRUN[@]}" -c "import connectonion; print(getattr(connectonion, '__version__', 'unknown'))")"
+ok "connectonion version: $CO_VERSION"
 
 # ---------------------------------------------------------------- resolve the agent address + credentials
 [ -d "$CO_DIR" ] || die "No ConnectOnion identity at ~/.co. Run a one-time:  co auth"

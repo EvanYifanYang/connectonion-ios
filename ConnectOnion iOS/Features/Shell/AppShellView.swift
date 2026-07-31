@@ -240,7 +240,17 @@ struct AppShellView: View {
         case .conversation(let id):
             if let conversation = conversations.first(where: { $0.id == id }),
                let agent = agent(for: conversation.agentAddress) {
-                let viewModel = chatSessionStore.session(for: conversation, agent: agent.config)
+                let viewModel = chatSessionStore.session(
+                    for: conversation,
+                    agent: agent.config,
+                    onAgentProfile: { profile in
+                        guard let merged = infoStore.mergeAuthenticatedProfile(
+                            profile,
+                            for: agent.address
+                        ) else { return }
+                        agent.cachedInfo = merged
+                    }
+                )
                 ChatScreen(
                     conversation: conversation,
                     agent: agent,
@@ -309,6 +319,8 @@ struct AppShellView: View {
         }
 
         agentEditorDraft = nil
+        infoStore.activate(address: validAddress.rawValue)
+        infoStore.setEndpoint(endpoint, for: validAddress.rawValue)
         infoStore.refresh(addresses: [validAddress.rawValue])
         path = [.agentHome(validAddress.rawValue)]
     }
@@ -317,6 +329,7 @@ struct AppShellView: View {
         agent.alias = alias
         agent.preferredEndpoint = endpoint
         agent.updatedAt = .now
+        infoStore.setEndpoint(endpoint, for: agent.address)
         infoStore.refresh(addresses: [agent.address])
     }
 
@@ -333,6 +346,7 @@ struct AppShellView: View {
         let relatedIDs = Set(related.map(\.id))
         relatedIDs.forEach(chatSessionStore.removeSession)
         related.forEach(modelContext.delete)
+        infoStore.remove(address: agent.address)
         modelContext.delete(agent)
 
         // If we were viewing (any level of) the deleted agent, pop back to the agent list.

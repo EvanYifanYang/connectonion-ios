@@ -35,7 +35,11 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task { @MainActor in
+            let producerTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
                 do {
                     let context = try await connect(agent: agent, session: session, continuation: continuation)
                     let message = try codec.inputMessage(
@@ -45,23 +49,56 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                         sessionID: session.remoteSessionID ?? session.id.uuidString
                     )
                     try await context.transport.send(text: encodedInputMessageText(message))
-                    try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
+                    try await drainMessages(
+                        from: context.stream,
+                        expectedAgentAddress: context.agentAddress,
+                        continuation: continuation,
+                        finishOnIdle: true
+                    )
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { @Sendable _ in
+                producerTask.cancel()
             }
         }
     }
 
     func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task { @MainActor in
+            let producerTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
                 do {
                     let context = try await connect(agent: agent, session: session, forceNewConnection: true, continuation: continuation)
-                    try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
+                    if context.status == "running" {
+                        try await drainMessages(
+                            from: context.stream,
+                            expectedAgentAddress: context.agentAddress,
+                            continuation: continuation,
+                            finishOnIdle: true
+                        )
+                    } else {
+                        // A 1.5.3 host emits no OUTPUT when a reconnected session is already idle.
+                        // Consume its immediately-following authenticated profile before settling;
+                        // older hosts have no profile, so the bounded fallback closes this idle
+                        // connection instead of waiting forever.
+                        await drainIdleConnectionMetadata(
+                            from: context.stream,
+                            expectedAgentAddress: context.agentAddress,
+                            continuation: continuation
+                        )
+                        continuation.finish()
+                    }
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { @Sendable _ in
+                producerTask.cancel()
             }
         }
     }
@@ -109,15 +146,28 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
         let stream = transport.messages()
         try await transport.send(json: codec.connectMessage(agentAddress: agent.address, route: route, session: session))
-        try await waitForConnected(on: stream, continuation: continuation)
+        let status = try await waitForConnected(
+            on: stream,
+            expectedAgentAddress: agent.address,
+            continuation: continuation
+        )
 
-        return ConnectionContext(transport: transport, route: route, stream: stream)
+        return ConnectionContext(
+            transport: transport,
+            route: route,
+            stream: stream,
+            agentAddress: agent.address,
+            status: status
+        )
     }
 
     private func waitForConnected(
         on stream: AsyncThrowingStream<String, Error>,
+        expectedAgentAddress: String,
         continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation
-    ) async throws {
+    ) async throws -> String {
+        var isAwaitingOnboarding = false
+
         for try await rawMessage in stream {
             let event = try codec.decode(rawMessage)
 
@@ -126,18 +176,54 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                 continue
             }
 
+            if consumeMetadataEvent(
+                event,
+                expectedAgentAddress: expectedAgentAddress,
+                continuation: continuation
+            ) {
+                continue
+            }
+
             if event.type == "CONNECTED" {
                 let connected = connectedEvent(from: event)
                 continuation.yield(connected)
-                return
+                return event.payload[string: "status"] ?? "connected"
+            }
+
+            if event.type == "ONBOARD_REQUIRED" {
+                isAwaitingOnboarding = true
+                continuation.yield(.server(event))
+                continue
+            }
+
+            // A trust-gated onboarding flow keeps this socket alive so the user can submit another
+            // invite/payment attempt. Every other pre-CONNECTED ERROR is terminal (invalid signature,
+            // blacklist, malformed CONNECT, and so on); treating it as a chat event leaves the send
+            // task waiting forever for a CONNECTED frame that the host will never send.
+            if event.type == "ONBOARD_SUCCESS" {
+                isAwaitingOnboarding = false
+            }
+
+            if event.type == "ERROR" {
+                let message = event.payload[string: "message"]
+                    ?? event.payload[string: "error"]
+                    ?? "The agent rejected the connection."
+                if isAwaitingOnboarding, Self.isRetryableOnboardingError(message) {
+                    continuation.yield(.server(event))
+                    continue
+                }
+                throw ConnectOnionClientError.connectionRejected(message)
             }
 
             continuation.yield(.server(event))
         }
+
+        throw URLError(.networkConnectionLost)
     }
 
     private func drainMessages(
         from stream: AsyncThrowingStream<String, Error>,
+        expectedAgentAddress: String,
         continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation,
         finishOnIdle: Bool
     ) async throws {
@@ -152,6 +238,14 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
             if event.type == "PING" {
                 try await transport?.send(json: ["type": .string("PONG")])
+                continue
+            }
+
+            if consumeMetadataEvent(
+                event,
+                expectedAgentAddress: expectedAgentAddress,
+                continuation: continuation
+            ) {
                 continue
             }
 
@@ -170,6 +264,100 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                 continuation.yield(.server(event))
             }
         }
+
+        throw URLError(.networkConnectionLost)
+    }
+
+    private func drainIdleConnectionMetadata(
+        from stream: AsyncThrowingStream<String, Error>,
+        expectedAgentAddress: String,
+        continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation
+    ) async {
+        let timeoutTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+            self?.transport?.close()
+        }
+        defer { timeoutTask.cancel() }
+
+        do {
+            for try await rawMessage in stream {
+                let event = try codec.decode(rawMessage)
+
+                if event.type == "PING" {
+                    try await transport?.send(json: ["type": .string("PONG")])
+                    continue
+                }
+
+                let wasProfile = event.type == "AGENT_PROFILE"
+                if consumeMetadataEvent(
+                    event,
+                    expectedAgentAddress: expectedAgentAddress,
+                    continuation: continuation
+                ) {
+                    if wasProfile { return }
+                    continue
+                }
+
+                if event.type == "ERROR" {
+                    let message = event.payload[string: "message"]
+                        ?? event.payload[string: "error"]
+                        ?? "Unknown agent error"
+                    continuation.yield(.failure(message))
+                    return
+                }
+
+                continuation.yield(.server(event))
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            logger.debug(
+                "Idle reconnect metadata window ended: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+    }
+
+    /// connectonion 1.5.3 sends authenticated profile and dashboard frames immediately after
+    /// CONNECTED. They are connection metadata, not timeline events: routing them through the chat
+    /// reducer creates duplicate/unknown bubbles and can persist up to 2 MB of dashboard HTML.
+    private func consumeMetadataEvent(
+        _ event: ServerEvent,
+        expectedAgentAddress: String,
+        continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation
+    ) -> Bool {
+        switch event.type {
+        case "AGENT_PROFILE":
+            do {
+                let data = try JSONEncoder().encode(event.payload)
+                let profile = try JSONDecoder().decode(AgentProfile.self, from: data)
+                guard profile.address == nil || profile.address == expectedAgentAddress else {
+                    logger.warning(
+                        "Ignoring AGENT_PROFILE for an unexpected address: \(profile.address ?? "", privacy: .public)"
+                    )
+                    return true
+                }
+                continuation.yield(.profile(profile))
+            } catch {
+                logger.warning(
+                    "Ignoring malformed AGENT_PROFILE: \(error.localizedDescription, privacy: .public)"
+                )
+            }
+            return true
+
+        case "session_sync", "SESSION_MERGED", "mode_changed", "RECONNECTED":
+            continuation.yield(.control(event))
+            return true
+
+        case "DASHBOARD_SNAPSHOT", "user_input", "SESSION_STATUS":
+            return true
+
+        default:
+            return false
+        }
     }
 
     private func activeTransport() throws -> WebSocketTransporting {
@@ -177,6 +365,13 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             throw URLError(.notConnectedToInternet)
         }
         return transport
+    }
+
+    private static func isRetryableOnboardingError(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("invalid invite code")
+            || normalized.contains("insufficient payment")
+            || normalized.contains("invite_code or payment required")
     }
 
     private func encodedInputMessageText(_ message: [String: JSONValue]) throws -> String {
@@ -206,6 +401,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     private func outputEvent(from event: ServerEvent) -> ConnectOnionClientEvent {
         .output(
             result: event.payload[string: "result"] ?? "",
+            durationMS: event.payload[int: "duration_ms"],
             serverNewer: event.payload[bool: "server_newer"] ?? false,
             session: event.payload["session"],
             chatItems: decodeChatItems(from: event.payload["chat_items"])
@@ -241,13 +437,18 @@ private struct ConnectionContext {
     var transport: WebSocketTransporting
     var route: AgentRoute
     var stream: AsyncThrowingStream<String, Error>
+    var agentAddress: String
+    var status: String
 }
 
 private enum ConnectOnionClientError: LocalizedError {
+    case connectionRejected(String)
     case inputFrameTooLarge(size: Int, maxSize: Int)
 
     var errorDescription: String? {
         switch self {
+        case .connectionRejected(let message):
+            message
         case .inputFrameTooLarge(let size, let maxSize):
             "Message is too large to send (\(Self.format(size)) > \(Self.format(maxSize))). Remove an attachment or try a smaller file."
         }

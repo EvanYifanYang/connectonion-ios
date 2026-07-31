@@ -64,7 +64,7 @@ sent, and avoid losing their draft because an optional input source fails.
 | COMP-014 | P1 | The visible user message MUST exclude transport-only personalisation wrappers. | Timeline shows only what the user intended as the request. |
 | COMP-015 | P1 | Camera/photo/file entry points MUST remain available in both fresh-chat and existing-chat composers where supported. | Shared behavior is consistent across both contexts. |
 | COMP-016 | P2 | Keyboard dismissal after send SHOULD not interrupt attachment processing or create layout corruption. | Composer resets to a clean ready state after accepted send. |
-| COMP-017 | P2 | Skill-command UI MUST follow the intended mobile product scope. | Desktop-only command palette behavior is not accidentally exposed on the agent landing screen. |
+| COMP-017 | P2 | Skill-command UI MUST expose every available match without expanding the composer beyond its intended mobile viewport. | Typing `/` opens a fixed-height scrollable palette, and the fresh-chat skill disclosure can scroll the page to every skill. |
 
 ## Current limits
 

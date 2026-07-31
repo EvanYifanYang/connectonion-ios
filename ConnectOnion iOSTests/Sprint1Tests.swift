@@ -424,27 +424,46 @@ struct Sprint1ConnectionTests {
         #expect(viewModel.items.contains { $0.kind == .user && $0.content == "What is 21 plus 21?" })
         #expect(viewModel.items.contains { $0.kind == .agent && $0.content == "Connected. Streaming mock response" })
         #expect(conversation.messages.contains { $0.kind == .agent })
+        #expect(client.sentSessions.first?.messages.isEmpty == true)
     }
 
-    @Test @MainActor func failedConnectionDoesNotEnterWorkingStateOrPersistOptimisticMessage() async throws {
+    @Test @MainActor func sentMessageAppearsImmediatelyAndSurvivesConnectionFailure() async throws {
         let conversation = ConversationRecord(agentAddress: testAgentAddress)
         let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
         let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: FailingConnectOnionClient())
 
         viewModel.send("Hello")
 
-        // Synchronous: the optimistic message is held pending, not yet committed to the transcript.
+        // Synchronous: rendering and persistence happen before the connection task gets a turn.
         #expect(viewModel.sessionState == .connecting)
-        #expect(!viewModel.shouldShowStopButton)
-        #expect(viewModel.items.isEmpty)
-        #expect(conversation.messages.isEmpty)
+        #expect(viewModel.shouldShowStopButton)
+        #expect(viewModel.items.contains { $0.kind == .user && $0.content == "Hello" })
+        #expect(viewModel.items.contains { $0.id == "__optimistic__" && $0.status == .running })
+        #expect(conversation.messages.contains { $0.kind == .user && $0.content == "Hello" })
 
         await waitUntil { viewModel.sessionState == .disconnected }
 
         #expect(viewModel.sessionState == .disconnected)
         #expect(!viewModel.shouldShowStopButton)
-        #expect(viewModel.items.isEmpty)
-        #expect(conversation.messages.isEmpty)
+        #expect(viewModel.items.contains { $0.kind == .user && $0.content == "Hello" })
+        #expect(!viewModel.items.contains { $0.id == "__optimistic__" })
+        #expect(conversation.messages.contains { $0.kind == .user && $0.content == "Hello" })
         #expect(viewModel.errorMessage?.contains("Could not connect") == true)
+    }
+
+    @Test @MainActor func secondSubmitCannotReplaceAnInFlightTurn() async throws {
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        let agent = AgentConfigRecord(address: testAgentAddress, alias: "OpenOnion")
+        let client = ControlledReplyClient()
+        let viewModel = ChatViewModel(conversation: conversation, agent: agent.config, client: client)
+
+        viewModel.send("First")
+        viewModel.send("Second")
+
+        await waitUntil { client.sentInputs.count == 1 }
+
+        #expect(client.sentInputs.map(\.prompt) == ["First"])
+        #expect(viewModel.items.filter { $0.kind == .user }.map(\.content) == ["First"])
+        viewModel.stop()
     }
 }

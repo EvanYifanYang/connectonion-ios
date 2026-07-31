@@ -285,8 +285,6 @@ struct ChatInputBar: View {
             .filter { skill in
                 skillQuery.isEmpty || skill.name.localizedCaseInsensitiveContains(skillQuery)
             }
-            .prefix(6)
-            .map { $0 }
     }
 
     private var voiceButtonTitle: String {
@@ -515,7 +513,7 @@ struct ChatInputBar: View {
 
     private func send() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !voiceInput.isActive, !trimmed.isEmpty || hasAttachments else { return }
+        guard !isRunning, !voiceInput.isActive, !trimmed.isEmpty || hasAttachments else { return }
         tick()
         let images = imageAttachments.map(\.dataURL)
         let files = fileAttachments

@@ -18,6 +18,7 @@ enum PreviewFixtures {
         case standard
         case empty
         case metadataEmpty = "metadata-empty"
+        case statusLoading = "status-loading"
         case approval
         case askText = "ask-text"
         case askOptions = "ask-options"
@@ -55,7 +56,10 @@ enum PreviewFixtures {
             MockConnectOnionClient(mode: scenario == .onboardFirstMessage ? .onboardFirstMessage : .standard)
         }
         Container.shared.agentDirectoryService.register {
-            MockAgentDirectoryService(includesCapabilities: scenario != .metadataEmpty)
+            MockAgentDirectoryService(
+                includesCapabilities: scenario != .metadataEmpty,
+                responseDelay: scenario == .statusLoading ? .seconds(3) : .zero
+            )
         }
     }
 
@@ -73,7 +77,7 @@ enum PreviewFixtures {
 
     static func sampleConversation(for scenario: Scenario) -> ConversationRecord {
         switch scenario {
-        case .standard, .empty, .metadataEmpty, .onboardFirstMessage:
+        case .standard, .empty, .metadataEmpty, .statusLoading, .onboardFirstMessage:
             return sampleConversation
         case .approval:
             return conversation(title: "Approval flow", messages: [sampleUserMessage, sampleApproval])
@@ -118,7 +122,9 @@ enum PreviewFixtures {
             SkillInfo(name: "debug", description: "Debug an error"),
             SkillInfo(name: "ship", description: "Prepare a release"),
             SkillInfo(name: "audit", description: "Review a codebase"),
-            SkillInfo(name: "explain", description: "Explain a tricky file")
+            SkillInfo(name: "explain", description: "Explain a tricky file"),
+            SkillInfo(name: "translate", description: "Translate selected content"),
+            SkillInfo(name: "organize", description: "Organize notes into a plan")
         ]
     }
 

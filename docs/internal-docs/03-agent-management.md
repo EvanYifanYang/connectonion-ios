@@ -63,6 +63,7 @@ capabilities, and start a conversation without needing to understand the directo
 | AGT-015 | P1 | Deleting an agent MUST require confirmation and resolve its local conversations. | Cancellation preserves all records; confirmation leaves no orphaned navigation. |
 | AGT-016 | P2 | Pinning an agent MUST persist across launches. | Pinned order restores from stored pin timestamps. |
 | AGT-017 | P2 | Suggestions MUST be usable as actual initial input, not decorative text. | Selecting a suggestion starts or prepares the corresponding new conversation predictably. |
+| AGT-018 | P0 | Agent connection status MUST remain `Checking` until the first status fetch completes. | Initial load never renders unknown state as Offline; manual refresh remains active until the shared refresh queue has processed the requested agents. |
 
 ## Field rules
 
@@ -106,6 +107,7 @@ It must not imply the local alias is server-owned.
 - Otherwise the directory record may provide relay status and advertised endpoints.
 - Direct `/info` can enrich relay profile data.
 - Focused agents may be polled more often than background-list agents.
+- Agents in the same refresh batch should be probed concurrently so one slow endpoint does not block every other status.
 - Polling stops or reduces when the app is inactive.
 - Cached profile data provides continuity but must not be represented as a fresh online guarantee.
 

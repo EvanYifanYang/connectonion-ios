@@ -359,7 +359,10 @@ private struct AgentSettingsRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AgentAvatar(title: agent.displayName(info: info), online: info?.online)
+            AgentAvatar(
+                title: agent.displayName(info: info),
+                connectionPhase: AgentConnectionPhase(info: info)
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(agent.displayName(info: info))
@@ -373,7 +376,10 @@ private struct AgentSettingsRow: View {
 
             Spacer(minLength: 0)
 
-            AgentStatusLabel(online: info?.online)
+            AgentStatusLabel(
+                connectionPhase: AgentConnectionPhase(info: info),
+                showsActivityIndicator: false
+            )
         }
     }
 

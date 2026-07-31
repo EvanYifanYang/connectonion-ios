@@ -11,12 +11,31 @@
 import SwiftUI
 
 struct SkillCommandPalette: View {
+    private static let visibleSkillLimit = 6
+
     var skills: [SkillInfo]
     var onSelect: (SkillInfo) -> Void
 
     var body: some View {
+        // The hidden six-row copy preserves the palette's existing, Dynamic-Type-aware viewport.
+        // The full list overlays that exact footprint and scrolls without growing the composer.
+        skillRows(Array(skills.prefix(Self.visibleSkillLimit)))
+            .hidden()
+            .accessibilityHidden(true)
+            .overlay {
+                ScrollView(.vertical) {
+                    skillRows(skills)
+                }
+                .scrollIndicators(.visible)
+                .scrollBounceBehavior(.basedOnSize)
+                .accessibilityIdentifier(AccessibilityID.chatSkillPalette)
+            }
+            .glassSurface(cornerRadius: 18, isInteractive: true)
+    }
+
+    private func skillRows(_ visibleSkills: [SkillInfo]) -> some View {
         VStack(spacing: 0) {
-            ForEach(skills) { skill in
+            ForEach(visibleSkills) { skill in
                 Button {
                     onSelect(skill)
                 } label: {
@@ -40,13 +59,11 @@ struct SkillCommandPalette: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(AccessibilityID.chatSkill(skill.name))
 
-                if skill.id != skills.last?.id {
+                if skill.id != visibleSkills.last?.id {
                     Divider()
                         .padding(.leading, 12)
                 }
             }
         }
-        .glassSurface(cornerRadius: 18, isInteractive: true)
-        .accessibilityIdentifier(AccessibilityID.chatSkillPalette)
     }
 }

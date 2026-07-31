@@ -465,21 +465,26 @@ struct Sprint2OnboardingTests {
         await waitUntil { viewModel.pendingOnboard != nil }
 
         #expect(client.sentInputs.map(\.prompt) == ["What can you do?"])
-        #expect(viewModel.items.count == 1)
-        #expect(viewModel.items[0].kind == .onboardRequired)
-        #expect(!viewModel.items.contains { $0.kind == .user })
-        #expect(!conversation.messages.contains { $0.kind == .user })
+        #expect(viewModel.items.count == 2)
+        #expect(viewModel.items[0].kind == .user)
+        #expect(viewModel.items[0].content == "What can you do?")
+        #expect(viewModel.items[1].kind == .onboardRequired)
+        #expect(conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" })
         #expect(viewModel.pendingOnboard != nil)
 
         viewModel.submitOnboard(inviteCode: "OpenOnion")
         await waitUntil {
             viewModel.pendingOnboard == nil
-                && conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" }
+                && client.sentInputs.count == 2
+                && viewModel.sessionState == .connected
         }
 
         #expect(viewModel.pendingOnboard == nil)
         #expect(client.sentInputs.map(\.prompt) == ["What can you do?", "What can you do?"])
+        #expect(client.sentSessions.count == 2)
+        #expect(!client.sentSessions[1].messages.contains { $0.kind == .user && $0.content == "What can you do?" })
         #expect(conversation.messages.contains { $0.kind == .user && $0.content == "What can you do?" })
+        #expect(conversation.messages.filter { $0.kind == .user }.count == 1)
         #expect(conversation.title == "What can you do?")
     }
 }

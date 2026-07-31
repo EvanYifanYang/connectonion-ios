@@ -19,7 +19,7 @@ struct ChatHeaderView: View {
     var body: some View {
         GlassEffectContainer(spacing: 8) {
             HStack(spacing: 12) {
-                AgentAvatar(title: displayName, online: isOnline)
+                AgentAvatar(title: displayName, connectionPhase: connectionPhase)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)
@@ -58,7 +58,7 @@ struct ChatHeaderView: View {
         case .disconnected:
             "Disconnected"
         case .connected:
-            info?.online == false ? "Offline" : "Connected"
+            "Connected"
         case .idle:
             if let online = info?.online {
                 online ? "Online" : "Offline"
@@ -84,14 +84,14 @@ struct ChatHeaderView: View {
         agent.remoteProfileName(info: info)
     }
 
-    private var isOnline: Bool {
+    private var connectionPhase: AgentConnectionPhase {
         switch state {
-        case .active, .waiting:
-            true
+        case .connected, .active, .waiting:
+            .online
         case .disconnected:
-            false
-        case .connected, .idle, .connecting, .reconnecting:
-            info?.online ?? false
+            .offline
+        case .idle, .connecting, .reconnecting:
+            AgentConnectionPhase(info: info)
         }
     }
 }

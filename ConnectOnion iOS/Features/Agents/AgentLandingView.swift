@@ -200,8 +200,6 @@ private struct ToolSummary: View {
 }
 
 private struct SkillSummary: View {
-    private let visibleLimit = 3
-
     var skills: [SkillInfo]
     @State private var isExpanded: Bool
 
@@ -216,7 +214,7 @@ private struct SkillSummary: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(skills.prefix(visibleLimit))) { skill in
+                    ForEach(skills) { skill in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(skill.name)
                                 .appFont(.footnote, weight: .semibold)
@@ -229,14 +227,6 @@ private struct SkillSummary: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier(AccessibilityID.newChatSkill(skill.name))
-                    }
-
-                    let remainingCount = skills.count - min(skills.count, visibleLimit)
-                    if remainingCount > 0 {
-                        Text("+\(remainingCount) more")
-                            .appFont(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
                 .padding(.horizontal, 18)

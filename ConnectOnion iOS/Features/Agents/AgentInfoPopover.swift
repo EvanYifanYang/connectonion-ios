@@ -56,6 +56,12 @@ struct AgentInfoPopover: View {
         if let model = info?.model, !model.isEmpty {
             result.append(Row(label: "Model", value: model))
         }
+        if let balanceUSD = info?.balanceUSD {
+            result.append(Row(
+                label: "Balance",
+                value: balanceUSD.formatted(.currency(code: "USD"))
+            ))
+        }
         if let trust = info?.trust, !trust.isEmpty {
             result.append(Row(label: "Trust", value: trust))
         }

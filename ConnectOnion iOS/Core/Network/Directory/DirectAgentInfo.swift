@@ -31,6 +31,10 @@ struct DirectAgentInfo: Decodable, Sendable {
             trust: object[string: "trust"],
             version: object[string: "version"],
             model: object[string: "model"],
+            balanceUSD: object[double: "balance_usd"],
+            onboarding: try? object["onboard"].map {
+                try JSONDecoder().decode(AgentOnboardingOptions.self, from: JSONEncoder().encode($0))
+            },
             acceptedInputs: try? object["accepted_inputs"].map {
                 try JSONDecoder().decode(AgentAcceptedInputs.self, from: JSONEncoder().encode($0))
             }

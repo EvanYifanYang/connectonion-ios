@@ -16,8 +16,8 @@ struct AgentHeroView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // No status dot on the avatar — the single "Connected" line below is the one status source.
-            AgentAvatar(title: displayName, online: nil)
+            // No status dot on the avatar — the status line below is the one status source.
+            AgentAvatar(title: displayName, connectionPhase: nil)
                 .scaleEffect(1.2)
                 .padding(.bottom, 8)
 
@@ -25,18 +25,7 @@ struct AgentHeroView: View {
                 .appFont(.title2, weight: .semibold)
                 .lineLimit(1)
 
-            if let online = info?.online {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(online ? Color.green : Color.secondary)
-                        .frame(width: 7, height: 7)
-                    Text(online ? "Connected" : "Offline")
-                        .appFont(.footnote, weight: .medium)
-                        .foregroundStyle(online ? Color.green : Color.secondary)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(online ? "Connected" : "Offline")
-            }
+            AgentStatusLabel(connectionPhase: AgentConnectionPhase(info: info))
 
             if !metaLine.isEmpty {
                 Text(metaLine)

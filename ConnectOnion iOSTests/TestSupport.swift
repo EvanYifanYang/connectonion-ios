@@ -81,7 +81,7 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
                 session: nil,
                 chatItems: []
             ))
-            continuation.yield(.output(result: replyText, serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: replyText, durationMS: nil, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -102,9 +102,11 @@ final class StreamingConnectOnionClient: ConnectOnionClientProviding {
 final class ControlledReplyClient: ConnectOnionClientProviding {
     private var continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation?
     private(set) var disconnectCount = 0
+    private(set) var sentInputs: [AgentInput] = []
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
-        AsyncThrowingStream { continuation in
+        sentInputs.append(input)
+        return AsyncThrowingStream { continuation in
             self.continuation = continuation
             continuation.yield(.connected(
                 sessionID: session.remoteSessionID ?? session.id.uuidString,
@@ -121,7 +123,7 @@ final class ControlledReplyClient: ConnectOnionClientProviding {
     }
 
     func complete(with reply: String) {
-        continuation?.yield(.output(result: reply, serverNewer: false, session: nil, chatItems: []))
+        continuation?.yield(.output(result: reply, durationMS: nil, serverNewer: false, session: nil, chatItems: []))
         continuation?.finish()
         continuation = nil
     }
@@ -184,7 +186,7 @@ final class EmptyRegenerateOutputClient: ConnectOnionClientProviding {
                 session: nil,
                 chatItems: []
             ))
-            continuation.yield(.output(result: "", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: "", durationMS: nil, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -237,7 +239,7 @@ final class OnboardFirstMessageClient: ConnectOnionClientProviding {
                 return
             }
 
-            continuation.yield(.output(result: "Ready: \(input.prompt)", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: "Ready: \(input.prompt)", durationMS: nil, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -270,7 +272,7 @@ final class AttachmentCapturingClient: ConnectOnionClientProviding {
         sentInputs.append(input)
         return AsyncThrowingStream { continuation in
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: false, session: nil, chatItems: []))
-            continuation.yield(.output(result: "Received attachments", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: "Received attachments", durationMS: nil, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }
@@ -305,7 +307,7 @@ final class AttachmentRecoveryClient: ConnectOnionClientProviding {
         reconnectCount += 1
         return AsyncThrowingStream { continuation in
             continuation.yield(.connected(sessionID: session.id.uuidString, status: "connected", serverNewer: true, session: nil, chatItems: []))
-            continuation.yield(.output(result: "Recovered image reply", serverNewer: false, session: nil, chatItems: []))
+            continuation.yield(.output(result: "Recovered image reply", durationMS: nil, serverNewer: false, session: nil, chatItems: []))
             continuation.finish()
         }
     }

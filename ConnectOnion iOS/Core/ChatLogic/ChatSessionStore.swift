@@ -23,8 +23,14 @@ final class ChatSessionStore {
     @ObservationIgnored private var visibleConversation: ConversationRecord?
     @ObservationIgnored private var isAppActive = true
 
-    func session(for conversation: ConversationRecord, agent: AgentConfig, client: ConnectOnionClientProviding? = nil) -> ChatViewModel {
+    func session(
+        for conversation: ConversationRecord,
+        agent: AgentConfig,
+        client: ConnectOnionClientProviding? = nil,
+        onAgentProfile: @escaping @MainActor (AgentProfile) -> Void = { _ in }
+    ) -> ChatViewModel {
         if let existing = sessions[conversation.id] {
+            existing.setAgentProfileHandler(onAgentProfile)
             return existing
         }
 
@@ -42,7 +48,8 @@ final class ChatSessionStore {
             },
             onReplyCompleted: { [weak self] conversation in
                 self?.replyCompleted(for: conversation)
-            }
+            },
+            onAgentProfile: onAgentProfile
         )
         sessions[conversationID] = viewModel
         updateRunningState(viewModel.sessionState, conversationID: conversationID)

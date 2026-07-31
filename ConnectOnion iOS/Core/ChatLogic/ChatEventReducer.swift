@@ -276,7 +276,8 @@ private extension ChatEventReducer {
     static var ignoredEventTypes: Set<String> {
         [
             "", "PING", "PONG", "CONNECTED", "OUTPUT", "ERROR",
-            "SESSION_STATUS", "SESSION_MERGED", "session_sync", "mode_changed"
+            "SESSION_STATUS", "SESSION_MERGED", "session_sync", "mode_changed", "RECONNECTED",
+            "AGENT_PROFILE", "DASHBOARD_SNAPSHOT", "user_input"
         ]
     }
 
@@ -371,12 +372,22 @@ private extension ChatEventReducer {
     static func applyIntent(_ event: ServerEvent, to items: inout [ChatItem]) {
         let id = event.id ?? UUID().uuidString
         if let index = items.firstIndex(where: { $0.id == id && $0.kind == .intent }) {
-            items[index].status = event.payload[string: "status"] == "understood" ? .understood : .analyzing
-            items[index].ack = event.payload[string: "ack"]
-            items[index].isBuild = event.payload[bool: "is_build"]
+            let status = event.payload[string: "status"]
+            if status == "understood" || event.payload[string: "ack"] != nil {
+                items[index].status = .understood
+            } else if status == "analyzing" {
+                items[index].status = .analyzing
+            } else if items[index].status == nil {
+                items[index].status = .analyzing
+            }
+            items[index].ack = event.payload[string: "ack"] ?? items[index].ack
+            items[index].isBuild = event.payload[bool: "is_build"] ?? items[index].isBuild
         } else {
             var item = ChatItem(id: id, kind: .intent)
-            item.status = event.payload[string: "status"] == "understood" ? .understood : .analyzing
+            item.status = event.payload[string: "status"] == "understood"
+                || event.payload[string: "ack"] != nil
+                ? .understood
+                : .analyzing
             item.ack = event.payload[string: "ack"]
             item.isBuild = event.payload[bool: "is_build"]
             items.append(item)
@@ -386,8 +397,17 @@ private extension ChatEventReducer {
     static func applyEvaluation(_ event: ServerEvent, to items: inout [ChatItem]) {
         let id = event.id ?? UUID().uuidString
         var item = items.first(where: { $0.id == id && $0.kind == .evaluation }) ?? ChatItem(id: id, kind: .evaluation)
-        item.status = event.payload[string: "status"] == "done" ? .done : .evaluating
-        item.passed = event.payload[bool: "passed"]
+        let status = event.payload[string: "status"]
+        if status == "done"
+            || event.payload[bool: "passed"] != nil
+            || event.payload[string: "summary"] != nil {
+            item.status = .done
+        } else if status == "evaluating" {
+            item.status = .evaluating
+        } else if item.status == nil {
+            item.status = .evaluating
+        }
+        item.passed = event.payload[bool: "passed"] ?? item.passed
         item.content = event.payload[string: "summary"] ?? item.content
         item.expected = event.payload[string: "expected"] ?? item.expected
         item.evalPath = event.payload[string: "eval_path"] ?? item.evalPath

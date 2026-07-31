@@ -51,7 +51,7 @@ revise the latest request without corrupting history.
 | ID | Priority | Requirement | Acceptance criteria |
 |---|---|---|---|
 | CHAT-001 | P0 | A conversation MUST be associated with exactly one agent address. | A chat cannot be opened against an unrelated agent record. |
-| CHAT-002 | P0 | A user turn MUST NOT be persisted as successfully sent if initial connection/send fails. | Failed first connection leaves no misleading optimistic turn. |
+| CHAT-002 | P0 | A submitted user turn MUST appear and persist immediately, before connection/send completes. | The first rendered frame contains the user turn and pending activity; failure removes only pending activity, keeps the visible turn, and presents a recoverable error rather than a false server acknowledgement. |
 | CHAT-003 | P0 | A successfully accepted input MUST persist its visible user content and attachments. | Relaunch restores the user turn in the correct order. |
 | CHAT-004 | P1 | Streamed server events MUST update the timeline incrementally. | Tool/thinking/assistant activity appears before final `OUTPUT` when delivered. |
 | CHAT-005 | P0 | Event interpretation MUST be deterministic and UI-independent. | Reducer tests can apply events to `[ChatItem]` without SwiftUI. |

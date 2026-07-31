@@ -35,7 +35,11 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
     func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task { @MainActor in
+            let producerTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
                 do {
                     let context = try await connect(agent: agent, session: session, continuation: continuation)
                     let message = try codec.inputMessage(
@@ -50,18 +54,28 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                     continuation.finish(throwing: error)
                 }
             }
+            continuation.onTermination = { @Sendable _ in
+                producerTask.cancel()
+            }
         }
     }
 
     func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
         AsyncThrowingStream { continuation in
-            Task { @MainActor in
+            let producerTask = Task { @MainActor [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
                 do {
                     let context = try await connect(agent: agent, session: session, forceNewConnection: true, continuation: continuation)
                     try await drainMessages(from: context.stream, continuation: continuation, finishOnIdle: true)
                 } catch {
                     continuation.finish(throwing: error)
                 }
+            }
+            continuation.onTermination = { @Sendable _ in
+                producerTask.cancel()
             }
         }
     }

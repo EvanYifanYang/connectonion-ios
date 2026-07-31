@@ -515,7 +515,7 @@ struct ChatInputBar: View {
 
     private func send() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !voiceInput.isActive, !trimmed.isEmpty || hasAttachments else { return }
+        guard !isRunning, !voiceInput.isActive, !trimmed.isEmpty || hasAttachments else { return }
         tick()
         let images = imageAttachments.map(\.dataURL)
         let files = fileAttachments

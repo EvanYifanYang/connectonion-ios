@@ -146,7 +146,8 @@ final class ChatViewModel {
     }
 
     var shouldShowStopButton: Bool {
-        (sessionState == .active || sessionState == .reconnecting) && !hasPendingUserAction
+        (sessionState == .connecting || sessionState == .active || sessionState == .reconnecting)
+            && !hasPendingUserAction
     }
 
     /// Context usage is cumulative for the conversation, so expose the latest known value at the
@@ -192,6 +193,10 @@ final class ChatViewModel {
     func send(_ prompt: String, images: [String] = [], files: [FileAttachment] = [], isRegenerate: Bool = false) {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return }
+        // A conversation has one active turn at a time. Besides matching the server protocol, this
+        // closes the tiny window before SwiftUI swaps Send for Stop where a second submit could
+        // otherwise cancel and replace the first request.
+        guard streamTask == nil else { return }
 
         let input = AgentInput(
             prompt: trimmed,
@@ -207,6 +212,10 @@ final class ChatViewModel {
     }
 
     private func sendCapturedInput(_ input: AgentInput, replacementSessionID: String? = nil) {
+        // CONNECT carries the history *before* this input; INPUT carries the new prompt separately.
+        // Capture it before appending the optimistic rows or the backend would receive the prompt twice.
+        let session = replacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
+
         isRegenerating = replacementSessionID != nil
         latestTurnCompleted = false
         errorMessage = nil
@@ -220,13 +229,22 @@ final class ChatViewModel {
         userItem.images = input.images
         userItem.files = input.files
         pendingUserItem = userItem
+        optimisticUserItemID = userItem.id
+        append(userItem, shouldPersist: false)
+
+        var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
+        placeholder.status = .running
+        append(placeholder, shouldPersist: false)
+        // Persist the user turn immediately. The presentation-only thinking placeholder is filtered
+        // by persist(), so a connection failure keeps the sent bubble without saving fake activity.
+        persist()
+
         sessionState = .connecting
         elapsedTime = 0
-        stopTimer()
+        startTimer()
         liveActivity.start(conversationID: conversation.id, agentAddress: agent.address, agentName: agent.displayName)
 
         streamTask?.cancel()
-        let session = replacementSessionID.map(replacementSnapshot(sessionID:)) ?? snapshot()
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -395,6 +413,8 @@ final class ChatViewModel {
         let restoredRegeneration = restoreRegenerateBackup()
         latestTurnCompleted = false
         if !restoredRegeneration {
+            commitOptimisticUserPrompt()
+            clearOptimisticPlaceholder()
             finalizeRunningItems() // stop the peeling-onion animation on any half-finished item
             persist()
         }
@@ -427,19 +447,31 @@ final class ChatViewModel {
             }
 
             if let pendingUserItem {
-                let wasFirstPrompt = !items.contains { $0.kind == .user }
+                // The user row is already visible. Determine whether it was the first prompt by
+                // excluding that optimistic row, but only mark it after CONNECTED. Some hosts send
+                // ONBOARD_REQUIRED before CONNECTED and continue the same input after verification;
+                // treating that pre-connect gate as a post-connect deferral would resend it twice.
+                let wasFirstPrompt = !items.contains {
+                    $0.kind == .user && $0.id != pendingUserItem.id
+                }
                 optimisticUserItemID = pendingUserItem.id
                 inFlightUserItemID = pendingUserItem.id
                 inFlightWasFirstPrompt = wasFirstPrompt
-                append(pendingUserItem, shouldPersist: false)
+                if !items.contains(where: { $0.id == pendingUserItem.id }) {
+                    append(pendingUserItem, shouldPersist: false)
+                }
 
-                var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
-                placeholder.status = .running
-                append(placeholder, shouldPersist: false)
+                if !items.contains(where: { $0.id == "__optimistic__" }) {
+                    var placeholder = ChatItem(id: "__optimistic__", kind: .thinking)
+                    placeholder.status = .running
+                    append(placeholder, shouldPersist: false)
+                }
 
                 self.pendingUserItem = nil
                 sessionState = .active
-                startTimer()
+                if startedAt == nil {
+                    startTimer()
+                }
                 liveActivity.update(
                     conversationID: conversation.id,
                     phase: .running,

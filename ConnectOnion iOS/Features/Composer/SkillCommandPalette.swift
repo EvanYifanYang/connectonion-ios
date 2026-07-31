@@ -28,9 +28,9 @@ struct SkillCommandPalette: View {
                 }
                 .scrollIndicators(.visible)
                 .scrollBounceBehavior(.basedOnSize)
+                .accessibilityIdentifier(AccessibilityID.chatSkillPalette)
             }
             .glassSurface(cornerRadius: 18, isInteractive: true)
-            .accessibilityIdentifier(AccessibilityID.chatSkillPalette)
     }
 
     private func skillRows(_ visibleSkills: [SkillInfo]) -> some View {

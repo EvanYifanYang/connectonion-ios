@@ -236,7 +236,8 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         input.tap()
         app.typeText("/")
 
-        let palette = waitForElement(chatSkillPaletteID, in: app)
+        let palette = app.scrollViews[chatSkillPaletteID]
+        XCTAssertTrue(palette.waitForExistence(timeout: 6), app.debugDescription)
         palette.swipeUp()
 
         XCTAssertTrue(waitForElement(chatOrganizeSkillID, in: app).isHittable, app.debugDescription)
@@ -291,6 +292,11 @@ final class ConnectOnion_iOSUITests: XCTestCase {
 
         XCTAssertTrue(app.anyElement(appShellID).waitForExistence(timeout: 8), app.debugDescription)
         let agent = waitForElement(seededAgentID, in: app)
+        let becameOnline = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "Online"),
+            object: agent
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [becameOnline], timeout: 6), .completed, agent.label)
         agent.press(forDuration: 0.8)
 
         XCTAssertTrue(app.anyElement(renameAgentButtonID).waitForExistence(timeout: 5), app.debugDescription)

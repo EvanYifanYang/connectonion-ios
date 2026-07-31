@@ -19,6 +19,8 @@ extension AgentInfo {
         copy.trust = directInfo.trust ?? copy.trust
         copy.version = directInfo.version ?? copy.version
         copy.model = directInfo.model ?? copy.model
+        copy.balanceUSD = directInfo.balanceUSD ?? copy.balanceUSD
+        copy.onboarding = directInfo.onboarding ?? copy.onboarding
         copy.acceptedInputs = directInfo.acceptedInputs ?? copy.acceptedInputs
         copy.online = directInfo.online || copy.online
         return copy
@@ -42,7 +44,20 @@ extension AgentInfo {
         copy.trust = profile.trust ?? copy.trust
         copy.version = profile.version ?? copy.version
         copy.model = profile.model ?? copy.model
+        copy.balanceUSD = profile.balanceUSD ?? copy.balanceUSD
+        copy.onboarding = profile.onboarding ?? copy.onboarding
         copy.acceptedInputs = profile.acceptedInputs ?? copy.acceptedInputs
+        return copy
+    }
+
+    /// An AGENT_PROFILE frame is an authenticated snapshot, not the sparse public-directory patch
+    /// represented by `merged(with:)`. Empty arrays mean the agent now has no capabilities, and an
+    /// omitted balance means this agent has no managed-key balance to display.
+    func merged(withAuthenticated profile: AgentProfile) -> AgentInfo {
+        var copy = merged(with: profile)
+        copy.tools = profile.tools.map(\.value).filter { !$0.isEmpty }
+        copy.skills = profile.skills
+        copy.balanceUSD = profile.balanceUSD
         return copy
     }
 }

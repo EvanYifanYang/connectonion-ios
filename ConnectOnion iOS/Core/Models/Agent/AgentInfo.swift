@@ -18,6 +18,8 @@ struct AgentInfo: Codable, Equatable, Sendable {
     var trust: String?
     var version: String?
     var model: String?
+    var balanceUSD: Double?
+    var onboarding: AgentOnboardingOptions?
     var acceptedInputs: AgentAcceptedInputs?
     var online: Bool
 
@@ -29,6 +31,8 @@ struct AgentInfo: Codable, Equatable, Sendable {
         trust: String? = nil,
         version: String? = nil,
         model: String? = nil,
+        balanceUSD: Double? = nil,
+        onboarding: AgentOnboardingOptions? = nil,
         acceptedInputs: AgentAcceptedInputs? = nil,
         online: Bool = false
     ) {
@@ -39,6 +43,8 @@ struct AgentInfo: Codable, Equatable, Sendable {
         self.trust = trust
         self.version = version
         self.model = model
+        self.balanceUSD = balanceUSD
+        self.onboarding = onboarding
         self.acceptedInputs = acceptedInputs
         self.online = online
     }
@@ -51,6 +57,8 @@ struct AgentInfo: Codable, Equatable, Sendable {
         case trust
         case version
         case model
+        case balanceUSD = "balance_usd"
+        case onboarding = "onboard"
         case acceptedInputs = "accepted_inputs"
         case online
     }

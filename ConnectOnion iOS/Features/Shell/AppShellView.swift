@@ -240,7 +240,17 @@ struct AppShellView: View {
         case .conversation(let id):
             if let conversation = conversations.first(where: { $0.id == id }),
                let agent = agent(for: conversation.agentAddress) {
-                let viewModel = chatSessionStore.session(for: conversation, agent: agent.config)
+                let viewModel = chatSessionStore.session(
+                    for: conversation,
+                    agent: agent.config,
+                    onAgentProfile: { profile in
+                        guard let merged = infoStore.mergeAuthenticatedProfile(
+                            profile,
+                            for: agent.address
+                        ) else { return }
+                        agent.cachedInfo = merged
+                    }
+                )
                 ChatScreen(
                     conversation: conversation,
                     agent: agent,

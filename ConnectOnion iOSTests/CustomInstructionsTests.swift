@@ -258,6 +258,7 @@ private final class CanonicalCustomInstructionsClient: ConnectOnionClientProvidi
             ))
             continuation.yield(.output(
                 result: "Recursion calls itself",
+                durationMS: nil,
                 serverNewer: false,
                 session: nil,
                 chatItems: [userItem, agentItem]
@@ -314,6 +315,7 @@ private final class CanonicalSystemReminderClient: ConnectOnionClientProviding {
             ))
             continuation.yield(.output(
                 result: "Recursion calls itself",
+                durationMS: nil,
                 serverNewer: false,
                 session: nil,
                 chatItems: [userItem, leakedReminder, agentItem]

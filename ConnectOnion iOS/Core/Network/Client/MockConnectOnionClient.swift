@@ -56,6 +56,7 @@ final class MockConnectOnionClient: ConnectOnionClientProviding {
             ])))
             continuation.yield(.output(
                 result: "Connected. Streaming mock response for: \(input.prompt)",
+                durationMS: nil,
                 serverNewer: false,
                 session: nil,
                 chatItems: []

@@ -12,7 +12,9 @@ import Foundation
 
 enum ConnectOnionClientEvent: Equatable, Sendable {
     case connected(sessionID: String, status: String, serverNewer: Bool, session: JSONValue?, chatItems: [ChatItem])
+    case profile(AgentProfile)
+    case control(ServerEvent)
     case server(ServerEvent)
-    case output(result: String, serverNewer: Bool, session: JSONValue?, chatItems: [ChatItem])
+    case output(result: String, durationMS: Int?, serverNewer: Bool, session: JSONValue?, chatItems: [ChatItem])
     case failure(String)
 }

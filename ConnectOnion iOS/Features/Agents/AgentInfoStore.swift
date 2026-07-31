@@ -32,6 +32,7 @@ final class AgentInfoStore {
     @ObservationIgnored private var generationByAddress: [String: UInt64] = [:]
     @ObservationIgnored private var inFlightGenerationByAddress: [String: UInt64] = [:]
     @ObservationIgnored private var removedAddresses = Set<String>()
+    @ObservationIgnored private var authenticatedProfilesByAddress: [String: AgentProfile] = [:]
     /// Consecutive offline probes per agent. An already-online agent only flips to offline after
     /// `offlineThreshold` consecutive failed probes, so one slow/dropped poll can't flap the dot.
     @ObservationIgnored private var offlineStrikesByAddress: [String: Int] = [:]
@@ -72,6 +73,7 @@ final class AgentInfoStore {
         removedAddresses.insert(address)
         pendingRefreshAddresses.remove(address)
         inFlightGenerationByAddress.removeValue(forKey: address)
+        authenticatedProfilesByAddress.removeValue(forKey: address)
         offlineStrikesByAddress.removeValue(forKey: address)
         endpointsByAddress.removeValue(forKey: address)
         infoByAddress.removeValue(forKey: address)
@@ -90,6 +92,26 @@ final class AgentInfoStore {
 
     func connectionPhase(for address: String) -> AgentConnectionPhase {
         AgentConnectionPhase(info: infoByAddress[address])
+    }
+
+    /// Applies the full profile that connectonion 1.5.3 sends after authenticated CONNECTED.
+    /// Connection itself is definitive online evidence; public `/info`/relay fields remain as
+    /// fallbacks for fields the authenticated frame omits.
+    @discardableResult
+    func mergeAuthenticatedProfile(_ profile: AgentProfile, for address: String) -> AgentInfo? {
+        guard !removedAddresses.contains(address),
+              profile.address == nil || profile.address == address else { return nil }
+
+        authenticatedProfilesByAddress[address] = profile
+        var info = (infoByAddress[address] ?? AgentInfo(address: address))
+            .merged(withAuthenticated: profile)
+        info.online = true
+        offlineStrikesByAddress[address] = 0
+
+        withAnimation(AppMotion.quick) {
+            infoByAddress[address] = info
+        }
+        return info
     }
 
     deinit {
@@ -189,8 +211,19 @@ final class AgentInfoStore {
             offlineStrikesByAddress[address] = 0
         }
 
+        var mergedInfo = info
+        if let profile = authenticatedProfilesByAddress[address] {
+            // `/info` deliberately exposes only published skills in connectonion 1.5.3. Once this
+            // client has authenticated, keep its full profile authoritative so the next periodic
+            // public probe cannot shrink the skill/tool list again.
+            mergedInfo = (infoByAddress[address] ?? AgentInfo(address: address))
+                .merged(with: info)
+                .merged(withAuthenticated: profile)
+            mergedInfo.online = info.online
+        }
+
         withAnimation(AppMotion.quick) {
-            infoByAddress[address] = info
+            infoByAddress[address] = mergedInfo
         }
     }
 

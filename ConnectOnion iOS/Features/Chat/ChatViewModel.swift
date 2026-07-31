@@ -56,6 +56,7 @@ final class ChatViewModel {
     @ObservationIgnored private let onSessionStateChange: (SessionActiveState) -> Void
     @ObservationIgnored private let onReplyReady: () -> Void
     @ObservationIgnored private let onReplyCompleted: @MainActor (ConversationRecord) -> Void
+    @ObservationIgnored private var onAgentProfile: @MainActor (AgentProfile) -> Void
     @ObservationIgnored private let customInstructionsProvider: @MainActor () -> String
     @ObservationIgnored private let personalityProvider: @MainActor () -> PersonalityMode
     @ObservationIgnored private var streamTask: Task<Void, Never>?
@@ -83,6 +84,7 @@ final class ChatViewModel {
         onSessionStateChange: @escaping (SessionActiveState) -> Void = { _ in },
         onReplyReady: @escaping () -> Void = {},
         onReplyCompleted: @escaping @MainActor (ConversationRecord) -> Void = { _ in },
+        onAgentProfile: @escaping @MainActor (AgentProfile) -> Void = { _ in },
         customInstructionsProvider: @escaping @MainActor () -> String = { CustomInstructions.saved },
         personalityProvider: @escaping @MainActor () -> PersonalityMode = { PersonalityMode.saved }
     ) {
@@ -94,6 +96,7 @@ final class ChatViewModel {
         self.onSessionStateChange = onSessionStateChange
         self.onReplyReady = onReplyReady
         self.onReplyCompleted = onReplyCompleted
+        self.onAgentProfile = onAgentProfile
         self.customInstructionsProvider = customInstructionsProvider
         self.personalityProvider = personalityProvider
         finalizeRunningItems() // restored items must never resume the live "running" animation
@@ -334,6 +337,7 @@ final class ChatViewModel {
                 for try await event in client.reconnect(to: agent, session: session) {
                     handle(event)
                 }
+                settleIdleReconnectIfNeeded()
             } catch is CancellationError {
                 return
             } catch {
@@ -433,6 +437,10 @@ final class ChatViewModel {
         clientOverride ?? injectedClient
     }
 
+    func setAgentProfileHandler(_ handler: @escaping @MainActor (AgentProfile) -> Void) {
+        onAgentProfile = handler
+    }
+
     private func handle(_ event: ConnectOnionClientEvent) {
         switch event {
         case .connected(let sessionID, let status, let serverNewer, let session, let chatItems):
@@ -482,6 +490,23 @@ final class ChatViewModel {
                 sessionState = status == "running" ? .active : .connected
             }
             errorMessage = nil
+
+        case .profile(let profile):
+            onAgentProfile(profile)
+
+        case .control(let event):
+            // Passive protocol state must never acknowledge the optimistic turn or remove its
+            // activity placeholder. connectonion emits session_sync after every trace event and can
+            // change approval mode independently of a reply.
+            if let session = event.payload["session"] {
+                conversation.rawSession = session
+            }
+            if event.type == "mode_changed",
+               let rawMode = event.payload[string: "mode"],
+               let mode = ApprovalMode(rawValue: rawMode) {
+                conversation.mode = mode
+            }
+            schedulePersist()
 
         case .server(let event):
             let previousAgentID = items.last(where: { $0.kind == .agent })?.id
@@ -540,7 +565,7 @@ final class ChatViewModel {
                 resumeDeferredOnboardInput()
             }
 
-        case .output(let result, let serverNewer, let session, let chatItems):
+        case .output(let result, let durationMS, let serverNewer, let session, let chatItems):
             // Capture turn-scoped metrics before a newer canonical snapshot can omit intermediate
             // events. They are persisted on the final reply below.
             let completedTurnDurationMS = currentTurnDurationMS
@@ -605,7 +630,8 @@ final class ChatViewModel {
                 items[index].model = model
             }
             if let index = items.lastIndex(where: { $0.kind == .agent }) {
-                items[index].durationMS = completedTurnDurationMS
+                items[index].durationMS = durationMS
+                    ?? completedTurnDurationMS
                     ?? currentTurnDurationMS
                     ?? items[index].durationMS
                 items[index].contextPercent = completedContextPercent
@@ -828,6 +854,41 @@ final class ChatViewModel {
             phase: .failed,
             headline: "Agent disconnected",
             detail: errorMessage ?? "The reply could not be completed"
+        )
+    }
+
+    /// connectonion 1.5.3 deliberately sends no OUTPUT when reconnecting to a session that is
+    /// already idle. Release the retained task after the CONNECTED/profile/control sequence so the
+    /// composer can accept another message instead of remaining silently blocked.
+    private func settleIdleReconnectIfNeeded() {
+        guard streamTask != nil else { return }
+
+        streamTask = nil
+        automaticReconnectAttempts = 0
+        automaticReconnectTask?.cancel()
+        automaticReconnectTask = nil
+        pendingUserItem = nil
+        clearInFlightInput()
+        deferredOnboardTurn = nil
+
+        if !restoreRegenerateBackup() {
+            isRegenerating = false
+            commitOptimisticUserPrompt()
+            clearOptimisticPlaceholder()
+            finalizeRunningItems()
+            latestTurnCompleted = hasCompletedLatestExchange
+            persist()
+        }
+
+        errorMessage = nil
+        sessionState = items.isEmpty ? .idle : .connected
+        stopTimer()
+        client.disconnect()
+        liveActivity.end(
+            conversationID: conversation.id,
+            phase: .stopped,
+            headline: "Session restored",
+            detail: "The agent is ready for another message"
         )
     }
 

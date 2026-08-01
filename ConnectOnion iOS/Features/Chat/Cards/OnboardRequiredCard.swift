@@ -15,7 +15,10 @@ struct OnboardRequiredCard: View {
     var isPending: Bool
     var onSubmit: (String?, Double?) -> Void
 
-    @State private var inviteCode = ""
+    // Held outside the view so a pasted invite code survives LazyVStack row recycling.
+    @Environment(\.cardDrafts) private var drafts
+
+    private var inviteCode: String { drafts.text(for: item.id) }
     @State private var feedbackTrigger = 0
 
     var body: some View {
@@ -36,7 +39,7 @@ struct OnboardRequiredCard: View {
 
                 if item.methods.contains("invite_code") {
                     HStack(spacing: 8) {
-                        TextField("Invite code", text: $inviteCode)
+                        TextField("Invite code", text: drafts.textBinding(for: item.id))
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .textFieldStyle(.plain)
@@ -86,6 +89,7 @@ struct OnboardRequiredCard: View {
 
     private func submitInvite() {
         let code = inviteCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts.clear(id: item.id)
         guard !code.isEmpty else { return }
         feedbackTrigger += 1
         onSubmit(code, nil)

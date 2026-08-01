@@ -15,9 +15,13 @@ struct AskUserCard: View {
     var isPending: Bool
     var onResponse: (String) -> Void
 
-    @State private var text = ""
-    @State private var selectedOptions: Set<String> = []
-    @State private var fieldValues: [String: String] = [:]
+    // Drafts live outside the view: this row is inside a LazyVStack and is destroyed (losing @State)
+    // whenever the user scrolls far enough away to re-read earlier context.
+    @Environment(\.cardDrafts) private var drafts
+
+    private var text: String { drafts.text(for: item.id) }
+    private var selectedOptions: Set<String> { drafts.options(for: item.id) }
+    private var fieldValues: [String: String] { item.fields.reduce(into: [:]) { $0[$1.name] = drafts.field($1.name, for: item.id) } }
     @State private var feedbackTrigger = 0
 
     var body: some View {
@@ -35,7 +39,7 @@ struct AskUserCard: View {
                     }
 
                     HStack(spacing: 8) {
-                        TextField("Answer", text: $text)
+                        TextField("Answer", text: drafts.textBinding(for: item.id))
                             .textFieldStyle(.plain)
                             .submitLabel(.send)
                             .onSubmit(submitText)
@@ -130,21 +134,19 @@ struct AskUserCard: View {
     }
 
     private func binding(for key: String) -> Binding<String> {
-        Binding {
-            fieldValues[key] ?? ""
-        } set: { value in
-            fieldValues[key] = value
-        }
+        drafts.fieldBinding(key, for: item.id)
     }
 
     private func toggle(_ option: String) {
         feedbackTrigger += 1
         if item.multiSelect {
-            if selectedOptions.contains(option) {
-                selectedOptions.remove(option)
+            var updated = drafts.options(for: item.id)
+            if updated.contains(option) {
+                updated.remove(option)
             } else {
-                selectedOptions.insert(option)
+                updated.insert(option)
             }
+            drafts.setOptions(updated, for: item.id)
         } else {
             onResponse(option)
         }
@@ -155,11 +157,12 @@ struct AskUserCard: View {
         guard !trimmed.isEmpty else { return }
         feedbackTrigger += 1
         onResponse(trimmed)
-        text = ""
+        drafts.clear(id: item.id)
     }
 
     private func submitOptions() {
         guard !selectedOptions.isEmpty else { return }
+        defer { drafts.clear(id: item.id) }
         feedbackTrigger += 1
         onResponse(selectedOptions.sorted().joined(separator: ", "))
     }
@@ -171,6 +174,7 @@ struct AskUserCard: View {
             partialResult[field.name] = .string(fieldValues[field.name] ?? "")
         }
         let answer = (try? object.jsonString(sortedKeys: true)) ?? "{}"
+        drafts.clear(id: item.id)
         onResponse(answer)
     }
 }

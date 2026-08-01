@@ -12,6 +12,9 @@ import Foundation
 
 enum ConnectOnionClientEvent: Equatable, Sendable {
     case connected(sessionID: String, status: String, serverNewer: Bool, session: JSONValue?, chatItems: [ChatItem])
+    /// The INPUT frame left the device. Past this point the host may already be running the turn, so a
+    /// retry must re-attach rather than send the prompt again.
+    case inputSent
     case profile(AgentProfile)
     case control(ServerEvent)
     case server(ServerEvent)

@@ -23,16 +23,26 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     /// True once the handshake has pushed a chat-visible event to the consumer. A re-probe after a
     /// stale cached route must not replay those into the reducer, so it is only safe while false.
     private var didYieldChatEventDuringHandshake = false
+    private let handshakeTimeout: Duration
+    /// When the current handshake gives up. Nil means "wait indefinitely" — used while an onboarding
+    /// card is on screen, where the host is legitimately waiting on the user, not stalled.
+    private var handshakeDeadline: ContinuousClock.Instant?
+    private var handshakeTimedOut = false
     private let logger = Logger(subsystem: "com.romantcD.ConnectOnion-iOS", category: "AgentClient")
 
     init(
         directory: AgentDirectoryServicing = AgentDirectoryService(),
         identityStore: IdentityProviding = KeychainIdentityStore(),
-        transportFactory: @escaping @MainActor () -> WebSocketTransporting = { WebSocketTransport() }
+        transportFactory: @escaping @MainActor () -> WebSocketTransporting = { WebSocketTransport() },
+        // Generous on purpose: a single CONNECTED frame can carry megabytes of echoed history (the
+        // transport allows 16 MiB), and `receive()` only returns once the whole frame has arrived, so a
+        // slow link earns no credit until then. This bounds a truly silent host, not a slow one.
+        handshakeTimeout: Duration = .seconds(45)
     ) {
         self.directory = directory
         self.identityStore = identityStore
         self.transportFactory = transportFactory
+        self.handshakeTimeout = handshakeTimeout
         codec = ProtocolCodec(identityStore: identityStore)
     }
 
@@ -52,6 +62,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                         sessionID: session.remoteSessionID ?? session.id.uuidString
                     )
                     try await context.transport.send(text: encodedInputMessageText(message))
+                    continuation.yield(.inputSent)
                     try await drainMessages(
                         from: context.stream,
                         expectedAgentAddress: context.agentAddress,
@@ -115,6 +126,9 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     }
 
     func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {
+        // The user answered the card, so the host owes us a reply again. Harmless when no handshake is
+        // in flight — the watchdog only exists inside `waitForConnected`.
+        armHandshakeDeadline()
         try await activeTransport().send(json: codec.onboardSubmit(inviteCode: inviteCode, payment: payment))
     }
 
@@ -192,12 +206,42 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     ) async throws -> String {
         var isAwaitingOnboarding = false
 
+        // A socket that opens but never answers CONNECTED would otherwise hang this task — and the
+        // chat — forever. Poll a deadline that every inbound frame refreshes, so a slow-but-chatty
+        // host is never cut off, and close the transport to break the await when it expires.
+        handshakeTimedOut = false
+        armHandshakeDeadline()
+        let watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, let deadline = handshakeDeadline else { continue }
+                if ContinuousClock.now >= deadline {
+                    handshakeTimedOut = true
+                    transport?.close()
+                    return
+                }
+            }
+        }
+        defer {
+            watchdog.cancel()
+            handshakeDeadline = nil
+        }
+
+        do {
         for try await rawMessage in stream {
             let event = try codec.decode(rawMessage)
 
             if event.type == "PING" {
+                // Deliberately does NOT extend the deadline: a host that only heartbeats is exactly the
+                // stall this watchdog exists to catch.
                 try await transport?.send(json: ["type": .string("PONG")])
                 continue
+            }
+
+            // Real progress refreshes the budget — but never while an onboarding card is on screen,
+            // where the host is waiting on the user and the clock must stay stopped.
+            if !isAwaitingOnboarding {
+                armHandshakeDeadline()
             }
 
             if consumeMetadataEvent(
@@ -217,6 +261,8 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             if event.type == "ONBOARD_REQUIRED" {
                 isAwaitingOnboarding = true
                 didYieldChatEventDuringHandshake = true
+                // The host is now waiting on the user, not stalled — stop the clock until they submit.
+                handshakeDeadline = nil
                 continuation.yield(.server(event))
                 continue
             }
@@ -227,6 +273,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             // task waiting forever for a CONNECTED frame that the host will never send.
             if event.type == "ONBOARD_SUCCESS" {
                 isAwaitingOnboarding = false
+                armHandshakeDeadline() // the host owes us a CONNECTED again
             }
 
             if event.type == "ERROR" {
@@ -235,6 +282,8 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                     ?? "The agent rejected the connection."
                 if isAwaitingOnboarding, Self.isRetryableOnboardingError(message) {
                     didYieldChatEventDuringHandshake = true
+                    // The card re-opens for another attempt, so stop the clock again.
+                    handshakeDeadline = nil
                     continuation.yield(.server(event))
                     continue
                 }
@@ -244,8 +293,17 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
             didYieldChatEventDuringHandshake = true
             continuation.yield(.server(event))
         }
+        } catch {
+            // `close()` finishes the stream without an error, so a timeout usually falls out of the
+            // loop rather than throwing — but a transport that does throw must report it the same way.
+            throw handshakeTimedOut ? ConnectOnionClientError.handshakeTimedOut : error
+        }
 
-        throw URLError(.networkConnectionLost)
+        throw handshakeTimedOut ? ConnectOnionClientError.handshakeTimedOut : URLError(.networkConnectionLost)
+    }
+
+    private func armHandshakeDeadline() {
+        handshakeDeadline = ContinuousClock.now.advanced(by: handshakeTimeout)
     }
 
     private func drainMessages(
@@ -468,9 +526,10 @@ private struct ConnectionContext {
     var status: String
 }
 
-private enum ConnectOnionClientError: LocalizedError {
+enum ConnectOnionClientError: LocalizedError {
     case connectionRejected(String)
     case inputFrameTooLarge(size: Int, maxSize: Int)
+    case handshakeTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -478,6 +537,8 @@ private enum ConnectOnionClientError: LocalizedError {
             message
         case .inputFrameTooLarge(let size, let maxSize):
             "Message is too large to send (\(Self.format(size)) > \(Self.format(maxSize))). Remove an attachment or try a smaller file."
+        case .handshakeTimedOut:
+            "Connected to the agent, but it never finished starting up. It may be busy or stuck — try again, or restart the agent."
         }
     }
 

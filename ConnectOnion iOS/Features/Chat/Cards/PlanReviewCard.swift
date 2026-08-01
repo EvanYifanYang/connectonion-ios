@@ -15,7 +15,10 @@ struct PlanReviewCard: View {
     var isPending: Bool
     var onResponse: (String) -> Void
 
-    @State private var feedback = ""
+    // Held outside the view so a half-written revision note survives LazyVStack row recycling.
+    @Environment(\.cardDrafts) private var drafts
+
+    private var feedback: String { drafts.text(for: item.id) }
     @State private var isExpanded = true
     @State private var feedbackTrigger = 0
 
@@ -54,7 +57,7 @@ struct PlanReviewCard: View {
             }
 
             if isPending {
-                TextField("Feedback", text: $feedback, axis: .vertical)
+                TextField("Feedback", text: drafts.textBinding(for: item.id), axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .submitLabel(.done)
@@ -84,11 +87,13 @@ struct PlanReviewCard: View {
 
     private func approvePlan() {
         feedbackTrigger += 1
+        drafts.clear(id: item.id)
         onResponse("Plan approved. Implement now. Do NOT re-enter plan mode.")
     }
 
     private func revisePlan() {
         let message = feedback.trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts.clear(id: item.id)
         feedbackTrigger += 1
         onResponse(message.isEmpty ? "Plan needs revision." : message)
     }

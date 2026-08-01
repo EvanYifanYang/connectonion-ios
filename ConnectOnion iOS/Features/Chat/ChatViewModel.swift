@@ -15,21 +15,13 @@ import Observation
 @MainActor
 @Observable
 final class ChatViewModel {
-    private struct RegenerationBackup {
-        let items: [ChatItem]
-        let remoteSessionID: String?
-        let rawSession: JSONValue?
-        let lastRenderedEventID: String?
-    }
-
-    private struct DeferredOnboardTurn {
-        let input: AgentInput
-        let replacementSessionID: String?
-        let userItemID: ChatItem.ID?
-    }
-
-    private let agent: AgentConfig
-    private let conversation: ConversationRecord
+    // Internal rather than private so the split-out extensions (ChatViewModel+LiveActivity) can reach
+    // them; the type is still the only owner.
+    let agent: AgentConfig
+    let conversation: ConversationRecord
+    /// Per-conversation so an unanswered card's draft can never surface in a different chat — several
+    /// card ids (e.g. the onboarding fallback id) are fixed strings shared across conversations.
+    let cardDrafts = CardDraftStore()
 
     var items: [ChatItem]
     var sessionState: SessionActiveState = .idle {
@@ -51,7 +43,7 @@ final class ChatViewModel {
     @Injected(\.connectOnionClient) private var injectedClient: ConnectOnionClientProviding
 
     @ObservationIgnored
-    @Injected(\.liveActivityController) private var liveActivity: AgentReplyLiveActivityController
+    @Injected(\.liveActivityController) var liveActivity: AgentReplyLiveActivityController
 
     @ObservationIgnored private let clientOverride: ConnectOnionClientProviding?
     @ObservationIgnored private let onSessionStateChange: (SessionActiveState) -> Void
@@ -167,6 +159,9 @@ final class ChatViewModel {
             replacementSnapshot(sessionID: $0, excludingUserItemID: reusingUserItemID)
         } ?? snapshot(excludingUserItemID: reusingUserItemID)
 
+        // Starting a turn retires any earlier failure — Retry must never resurrect a stale prompt.
+        failedTurn = nil
+        failedTurnCanResend = false
         isRegenerating = replacementSessionID != nil
         latestTurnCompleted = false
         errorMessage = nil
@@ -210,7 +205,7 @@ final class ChatViewModel {
         // Mark the turn in-flight so a force-kill mid-reply is recoverable: on next open the
         // conversation re-attaches to the still-running server session (see `resumeIfInterrupted`).
         conversation.pendingTurnStartedAt = .now
-        didReceiveConnected = false
+        didSendInput = false
         // Persist the user turn immediately. The presentation-only thinking placeholder is filtered
         // by persist(), so a connection failure keeps the sent bubble without saving fake activity.
         persist()
@@ -329,12 +324,17 @@ final class ChatViewModel {
     @ObservationIgnored private var wasSuspendedMidTurn = false
     @ObservationIgnored private var lastResumeAttemptAt: Date?
     @ObservationIgnored private var backgroundedAt: Date?
-    /// True once the host has answered CONNECTED for the current turn.
-    @ObservationIgnored private var didReceiveConnected = false
+    /// The turn a terminal failure interrupted, kept so Retry can re-send instead of silently
+    /// dropping the user's message.
+    @ObservationIgnored private var failedTurn: DeferredOnboardTurn?
+    @ObservationIgnored private var failedTurnCanResend = false
+    /// True once this turn's INPUT frame left the device. CONNECTED is NOT a safe proxy: the client
+    /// yields it before building and sending INPUT, so a failure in between must still be resendable.
+    @ObservationIgnored private var didSendInput = false
     /// Latest raw session blob from the event stream, flushed by the debounced `persist()`. Assigning
     /// `conversation.rawSession` directly JSON-encodes the blob and bumps `updatedAt` synchronously,
     /// which during a fast event burst hitches the UI.
-    @ObservationIgnored private var pendingRawSession: JSONValue?
+    @ObservationIgnored var pendingRawSession: JSONValue?
 
     /// A backgrounding shorter than this is treated as a peek (Control Center, a glance at another
     /// app): the socket almost certainly survived, so a live turn is left alone rather than re-dialled.
@@ -367,7 +367,7 @@ final class ChatViewModel {
         }
 
         // A brief peek with a stream still attached: don't tear down a healthy socket.
-        if suspendedFor < Self.backgroundGrace, streamTask != nil, didReceiveConnected {
+        if suspendedFor < Self.backgroundGrace, streamTask != nil {
             wasSuspendedMidTurn = false
             return
         }
@@ -508,6 +508,7 @@ final class ChatViewModel {
         pendingUserItem = nil
         clearInFlightInput()
         deferredOnboardTurn = nil
+        failedTurn = nil // the user cancelled deliberately
         let restoredRegeneration = restoreRegenerateBackup()
         latestTurnCompleted = false
         if !restoredRegeneration {
@@ -538,8 +539,10 @@ final class ChatViewModel {
 
     private func handle(_ event: ConnectOnionClientEvent) {
         switch event {
+        case .inputSent:
+            didSendInput = true
+
         case .connected(let sessionID, let status, let serverNewer, let session, let chatItems):
-            didReceiveConnected = true
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             if serverNewer, !isRegenerating {
                 conversation.rawSession = session
@@ -682,6 +685,7 @@ final class ChatViewModel {
             commitOptimisticUserPrompt()
             clearInFlightInput()
             clearOptimisticPlaceholder()
+            failedTurn = nil // the turn landed; nothing left to retry
 
             guard !regenerating || replacementResult != nil else {
                 streamTask = nil
@@ -798,6 +802,23 @@ final class ChatViewModel {
         inFlightWasFirstPrompt = false
     }
 
+    /// The error banner's action. Re-sends the prompt when it provably never reached the host,
+    /// otherwise re-attaches to the session the host is already running.
+    func retryLastTurn() {
+        guard streamTask == nil else { return } // a retry is already in flight
+        guard let turn = failedTurn, failedTurnCanResend else {
+            reconnect()
+            return
+        }
+        failedTurn = nil
+        errorMessage = nil
+        sendCapturedInput(
+            turn.input,
+            replacementSessionID: turn.replacementSessionID,
+            reusingUserItemID: turn.userItemID
+        )
+    }
+
     private func resumeDeferredOnboardInput() {
         guard let turn = deferredOnboardTurn else { return }
         deferredOnboardTurn = nil
@@ -810,71 +831,6 @@ final class ChatViewModel {
         }
     }
 
-    private static func sanitizingUserPrompts(in chatItems: [ChatItem]) -> [ChatItem] {
-        chatItems.compactMap { item in
-            guard item.kind == .user else { return item }
-            var sanitized = item
-            sanitized.content = CustomInstructions.visiblePrompt(from: item.content)
-            if sanitized.content != item.content,
-               sanitized.content.isEmpty,
-               sanitized.images.isEmpty,
-               sanitized.files.isEmpty {
-                return nil
-            }
-            return sanitized
-        }
-    }
-
-    /// Some hosts place the final answer only in canonical chat items. Accept that form only when an
-    /// assistant message follows the revised user message; retained history alone is not a replacement.
-    private func usableReplacementResult(result: String, chatItems: [ChatItem]) -> String? {
-        if !result.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return result
-        }
-        guard let lastUserIndex = chatItems.lastIndex(where: { $0.kind == .user }),
-              let lastAgentIndex = chatItems.lastIndex(where: { $0.kind == .agent }),
-              lastAgentIndex > lastUserIndex else {
-            return nil
-        }
-        let canonicalResult = chatItems[lastAgentIndex].content
-        return canonicalResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : canonicalResult
-    }
-
-    private func snapshot(excludingUserItemID: ChatItem.ID? = nil) -> ConversationSession {
-        ConversationSession(
-            id: conversation.id,
-            agentAddress: conversation.agentAddress,
-            remoteSessionID: conversation.remoteSessionID,
-            title: conversation.title,
-            createdAt: conversation.createdAt,
-            updatedAt: conversation.updatedAt,
-            mode: conversation.mode,
-            messages: items.filter {
-                $0.id != "__optimistic__" && $0.id != excludingUserItemID
-            },
-            // Read through the pending slot so CONNECT always carries the newest raw session even
-            // when the debounced persist has not flushed it yet.
-            rawSession: pendingRawSession ?? conversation.rawSession,
-            lastRenderedEventID: conversation.lastRenderedEventID
-        )
-    }
-
-    /// Regeneration is a replacement branch, not another input on the existing remote session.
-    /// Carry the retained local history into a fresh session and omit cursors/raw state that point
-    /// at the exchange being replaced.
-    private func replacementSnapshot(
-        sessionID: String,
-        excludingUserItemID: ChatItem.ID? = nil
-    ) -> ConversationSession {
-        var session = snapshot(excludingUserItemID: excludingUserItemID)
-        session.remoteSessionID = sessionID
-        session.rawSession = nil
-        session.lastRenderedEventID = nil
-        return session
-    }
-
     private func captureRegenerationBackup() {
         regenerateBackup = RegenerationBackup(
             items: items,
@@ -882,19 +838,6 @@ final class ChatViewModel {
             rawSession: pendingRawSession ?? conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
-    }
-
-    /// Replies with block-level markdown render very differently once formatted, so the inline
-    /// typewriter (which leaves block syntax uninterpreted) would show raw ``` / | / # and then snap to
-    /// a card with a visible reflow. Detect the common block markers so those replies skip the reveal.
-    private static func hasBlockMarkdown(_ text: String) -> Bool {
-        if text.contains("```") { return true } // fenced code block
-        for rawLine in text.split(whereSeparator: \.isNewline) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("#") { return true } // heading
-            if line.hasPrefix("|"), line.dropFirst().contains("|") { return true } // table row
-        }
-        return false
     }
 
     private func persist() {
@@ -958,11 +901,24 @@ final class ChatViewModel {
         automaticReconnectTask?.cancel()
         streamTask = nil
         pendingUserItem = nil
+        // Remember the turn so Retry can actually re-send it. Resending is only provably safe when no
+        // CONNECTED ever arrived — past that point the host may already hold the INPUT, and a second
+        // one would duplicate the turn; there Retry just re-attaches.
+        if let inFlightInput {
+            failedTurn = DeferredOnboardTurn(
+                input: inFlightInput,
+                replacementSessionID: inFlightReplacementSessionID,
+                userItemID: inFlightUserItemID ?? optimisticUserItemID
+            )
+            failedTurnCanResend = !didSendInput
+        }
         clearInFlightInput()
         deferredOnboardTurn = nil
 
         // A failed regenerate: restore the exchange we optimistically removed rather than losing it.
         if restoreRegenerateBackup() {
+            // The original exchange (including its user bubble) is back, so a resend would duplicate it.
+            failedTurn = nil
             errorMessage = userFacingError(message)
             sessionState = items.isEmpty ? .idle : .connected
             stopTimer()
@@ -1012,7 +968,18 @@ final class ChatViewModel {
             persist()
         }
 
-        errorMessage = nil
+        // A reconnect that finds the session idle is NOT proof the turn was delivered. If a message is
+        // still awaiting a reply, keep an actionable banner instead of reporting a clean restore.
+        if failedTurn != nil, !hasCompletedLatestExchange {
+            // Only promise a resend when one is actually possible; otherwise the host already has the
+            // turn and Retry can only re-attach.
+            errorMessage = failedTurnCanResend
+                ? "Your message wasn't delivered. Tap Retry to send it again."
+                : "Reconnected, but the agent produced no reply for your last message."
+        } else {
+            errorMessage = nil
+            failedTurn = nil
+        }
         sessionState = items.isEmpty ? .idle : .connected
         stopTimer()
         client.disconnect()
@@ -1093,132 +1060,6 @@ final class ChatViewModel {
             guard let self, !Task.isCancelled else { return }
             reconnect()
         }
-    }
-
-    private func updateLiveActivity(for event: ServerEvent) {
-        switch event.type {
-        case "tool_call":
-            let toolName = event.payload[string: "name"] ?? "tool"
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .tool,
-                headline: "Using \(toolName)",
-                detail: liveActivityDetail(for: event.payload["args"]?.objectValue) ?? "Running a tool call",
-                toolName: toolName
-            )
-
-        case "tool_result":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .running,
-                headline: "\(agent.displayName) is reading results",
-                detail: "Tool call completed"
-            )
-
-        case "llm_call", "thinking", "intent":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .running,
-                headline: "\(agent.displayName) is thinking",
-                detail: event.payload[string: "model"] ?? event.payload[string: "ack"] ?? "Planning the next step"
-            )
-
-        case "assistant":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .running,
-                headline: "\(agent.displayName) is replying",
-                detail: "Streaming the final response"
-            )
-
-        case "ask_user":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .waiting,
-                headline: "Needs your reply",
-                detail: event.payload[string: "text"] ?? event.payload[string: "question"] ?? "Return to answer the agent"
-            )
-
-        case "approval_needed":
-            let toolName = event.payload[string: "tool"] ?? "tool"
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .waiting,
-                headline: "Approval needed",
-                detail: event.payload[string: "description"] ?? "Review \(toolName)",
-                toolName: toolName
-            )
-
-        case "plan_review":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .waiting,
-                headline: "Plan ready",
-                detail: "Return to review the agent plan"
-            )
-
-        case "ONBOARD_REQUIRED":
-            liveActivity.update(
-                conversationID: conversation.id,
-                phase: .waiting,
-                headline: "Verification needed",
-                detail: "Return to finish onboarding"
-            )
-
-        default:
-            break
-        }
-    }
-
-    private func updateLiveActivityAfterUserAction(_ detail: String) {
-        liveActivity.update(
-            conversationID: conversation.id,
-            phase: .running,
-            headline: "\(agent.displayName) is continuing",
-            detail: detail
-        )
-    }
-
-    private func liveActivityDetail(for arguments: [String: JSONValue]?) -> String? {
-        guard let arguments else { return nil }
-        let preferredKeys = ["path", "file_path", "command", "query", "url"]
-        for key in preferredKeys {
-            if let value = arguments[key]?.stringValue, !value.isEmpty {
-                return value
-            }
-        }
-        return nil
-    }
-
-    private func userFacingError(_ message: String) -> String {
-        let lowercased = message.lowercased()
-        if lowercased.contains("could not connect") ||
-            lowercased.contains("connection refused") ||
-            lowercased.contains("cannot connect") ||
-            lowercased.contains("not connected") ||
-            lowercased.contains("-1004") {
-            return "Could not connect to this agent. Check that it is online and reachable from this iPhone."
-        }
-
-        return message
-    }
-
-    private var hasInFlightAttachments: Bool {
-        guard let inFlightInput else { return false }
-        return !inFlightInput.images.isEmpty || !inFlightInput.files.isEmpty
-    }
-
-    private var currentTurnDurationMS: Int? {
-        guard let userIndex = items.lastIndex(where: { $0.kind == .user }) else { return nil }
-        let eventDurationMS = items[userIndex...].reduce(0) { partialResult, item in
-            partialResult + (item.durationMS ?? 0) + (item.timingMS ?? 0)
-        }
-        if eventDurationMS > 0 {
-            return eventDurationMS
-        }
-
-        let wallClockDurationMS = Int((elapsedTime * 1_000).rounded())
-        return wallClockDurationMS > 0 ? wallClockDurationMS : nil
     }
 
     private func startTimer() {

@@ -67,7 +67,7 @@ struct ChatScreen: View {
                 skills: info?.skills ?? [],
                 onSend: { viewModel.send($0, images: $1, files: $2) },
                 onStop: viewModel.stop,
-                onReconnect: viewModel.reconnect
+                onReconnect: viewModel.retryLastTurn
             )
         }
         .background(Color.appCanvas.ignoresSafeArea())
@@ -109,6 +109,7 @@ struct ChatScreen: View {
                 }
             }
         }
+        .environment(\.cardDrafts, viewModel.cardDrafts)
         .onAppear {
             viewModel.prepareForPresentation()
             sessionStore.conversationDidAppear(conversation)

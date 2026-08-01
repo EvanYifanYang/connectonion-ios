@@ -26,7 +26,8 @@ struct ChatErrorBanner: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button("Reconnect", systemImage: "arrow.clockwise") {
+            // "Retry", not "Reconnect": when the prompt never reached the host this re-sends it.
+            Button("Retry", systemImage: "arrow.clockwise") {
                 feedbackTrigger += 1
                 onReconnect()
             }

@@ -142,7 +142,11 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         // only via relay surfaced as "connection failed".
         if let preferredEndpoint,
            isUsableFromCurrentDevice(preferredEndpoint),
-           let direct = await verifiedDirectRoute(httpURL: preferredEndpoint, address: address) {
+           let direct = await verifiedDirectRoute(
+               httpURL: preferredEndpoint,
+               address: address,
+               timeout: Self.preferredProbeTimeout
+           ) {
             logger.info("Using preferred direct endpoint \(preferredEndpoint.absoluteString, privacy: .public)")
             await routeCache.store(direct, for: cacheKey)
             return direct
@@ -155,7 +159,7 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         let unreachableError: AgentDirectoryError = preferredEndpoint
             .map(AgentDirectoryError.preferredEndpointUnavailable) ?? .directoryUnavailable
 
-        guard let relayData = await relayRecord(address: address) else {
+        guard let relayData = await relayRecord(address: address, timeout: Self.routeRelayTimeout) else {
             if let preferredEndpoint {
                 logger.error("Preferred endpoint unreachable and no relay record: \(preferredEndpoint.absoluteString, privacy: .public)")
             }
@@ -166,8 +170,14 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         let endpointSummary = relayData.endpoints.map(\.absoluteString).joined(separator: ",")
         logger.info("Relay record relay=\(relaySummary, privacy: .public), endpoints=\(endpointSummary, privacy: .public)")
 
+        // Kept sequential on purpose: advertised endpoints are ordered by proximity, so the nearest
+        // reachable one must win. The short per-probe budget is what keeps the worst case bounded.
         for endpoint in usableHTTPEndpoints(relayData.endpoints) {
-            if let direct = await verifiedDirectRoute(httpURL: endpoint, address: address) {
+            if let direct = await verifiedDirectRoute(
+                httpURL: endpoint,
+                address: address,
+                timeout: Self.advertisedProbeTimeout
+            ) {
                 logger.info("Using direct endpoint \(endpoint.absoluteString, privacy: .public)")
                 await routeCache.store(direct, for: cacheKey)
                 return direct
@@ -192,11 +202,11 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         throw AgentDirectoryError.noReachableRoute(relayData.endpoints)
     }
 
-    private func relayRecord(address: String) async -> RelayAgentRecord? {
+    private func relayRecord(address: String, timeout: TimeInterval = 5) async -> RelayAgentRecord? {
         let relay = relayURL.normalizedRelayHTTPURL()
         let url = relay.appending(path: "api/relay/agents/\(address)")
         var request = URLRequest(url: url)
-        request.timeoutInterval = 5
+        request.timeoutInterval = timeout
 
         do {
             let (data, response) = try await session.data(for: request)
@@ -207,12 +217,13 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         }
     }
 
-    private func directInfo(endpoint: URL, address: String) async -> AgentInfo? {
+    private func directInfo(endpoint: URL, address: String, timeout: TimeInterval = 7) async -> AgentInfo? {
         let url = endpoint.appending(path: "info")
         var request = URLRequest(url: url)
-        // 3s was tight enough that a radio wake / slow LAN response timed out and read as offline;
-        // widen it so a healthy-but-slow agent isn't misreported (offline hysteresis backs this up).
-        request.timeoutInterval = 7
+        // Status probes keep the generous default: 3s was tight enough that a radio wake / slow LAN
+        // response timed out and read as offline (offline hysteresis backs this up). Route resolution
+        // sits in front of a send, so it passes a much shorter timeout instead.
+        request.timeoutInterval = timeout
 
         do {
             let (data, response) = try await session.data(for: request)
@@ -225,11 +236,19 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         }
     }
 
-    private func verifiedDirectRoute(httpURL: URL, address: String) async -> AgentRoute? {
-        guard await directInfo(endpoint: httpURL, address: address) != nil else { return nil }
+    private func verifiedDirectRoute(httpURL: URL, address: String, timeout: TimeInterval = 7) async -> AgentRoute? {
+        guard await directInfo(endpoint: httpURL, address: address, timeout: timeout) != nil else { return nil }
         guard let webSocketURL = httpURL.webSocketURL(path: "ws") else { return nil }
         return .direct(httpURL: httpURL, webSocketURL: webSocketURL)
     }
+
+    /// Probe budgets while resolving a route to send on; the status path deliberately keeps 7s/5s.
+    /// The user's own configured endpoint keeps the full budget — making the send path stricter than
+    /// the check that reports the agent Online would show a reachable agent you cannot message.
+    /// Only the advertised-endpoint sweep, where several candidates are tried in turn, is shortened.
+    private static let preferredProbeTimeout: TimeInterval = 7
+    private static let advertisedProbeTimeout: TimeInterval = 2
+    private static let routeRelayTimeout: TimeInterval = 4
 
     private func relayRoute() -> AgentRoute {
         let normalized = relayURL.normalizedRelayWebSocketURL()

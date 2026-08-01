@@ -60,7 +60,7 @@ struct ChatScreen: View {
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerInset(
-                errorMessage: viewModel.errorMessage,
+                failure: viewModel.failure,
                 placeholder: "Reply to ConnectOnion Agent",
                 isRunning: viewModel.shouldShowStopButton,
                 acceptedInputs: info?.acceptedInputs,
@@ -91,7 +91,7 @@ struct ChatScreen: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .animation(AppMotion.standard, value: viewModel.errorMessage != nil)
+        .animation(AppMotion.standard, value: viewModel.failure)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Conversation Info", systemImage: "info.circle") {
@@ -128,7 +128,7 @@ struct ChatScreen: View {
 }
 
 private struct ChatComposerInset: View {
-    var errorMessage: String?
+    var failure: ChatFailure?
     var placeholder: String
     var isRunning: Bool
     var acceptedInputs: AgentAcceptedInputs?
@@ -139,8 +139,8 @@ private struct ChatComposerInset: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if let errorMessage {
-                ChatErrorBanner(message: errorMessage, onReconnect: onReconnect)
+            if let failure {
+                ChatErrorBanner(failure: failure, onRetry: onReconnect)
             }
 
             ChatInputBar(

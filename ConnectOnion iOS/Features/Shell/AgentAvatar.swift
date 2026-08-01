@@ -14,6 +14,9 @@ enum AgentConnectionPhase: Equatable, Sendable {
     case checking
     case online
     case offline
+    /// This iPhone has no network path at all — the agent's own state is unknown, so saying "Offline"
+    /// would blame the wrong side.
+    case noInternet
 
     init(info: AgentInfo?) {
         guard let info else {
@@ -31,6 +34,8 @@ enum AgentConnectionPhase: Equatable, Sendable {
             "Online"
         case .offline:
             "Offline"
+        case .noInternet:
+            "No internet"
         }
     }
 }
@@ -64,7 +69,7 @@ struct AgentAvatar: View {
                 .frame(width: 13, height: 13)
                 .background(.background, in: .circle)
                 .accessibilityHidden(true)
-        case .online, .offline:
+        case .online, .offline, .noInternet:
             Circle()
                 .fill(phase == .online ? .green : .secondary)
                 .frame(width: 11, height: 11)
@@ -88,7 +93,7 @@ struct AgentStatusLabel: View {
                     ProgressView()
                         .controlSize(.mini)
                 }
-            case .online, .offline:
+            case .online, .offline, .noInternet:
                 Circle()
                     .fill(connectionPhase == .online ? Color.green : Color.secondary)
                     .frame(width: 7, height: 7)
@@ -110,6 +115,8 @@ struct AgentStatusLabel: View {
             "Online"
         case .offline:
             "Offline"
+        case .noInternet:
+            "No internet"
         }
     }
 
@@ -119,7 +126,7 @@ struct AgentStatusLabel: View {
             Color.secondary
         case .online:
             Color.green
-        case .offline:
+        case .offline, .noInternet:
             Color.secondary
         }
     }

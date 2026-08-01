@@ -149,18 +149,6 @@ extension ChatViewModel {
         return nil
     }
 
-    func userFacingError(_ message: String) -> String {
-        let lowercased = message.lowercased()
-        if lowercased.contains("could not connect") ||
-            lowercased.contains("connection refused") ||
-            lowercased.contains("cannot connect") ||
-            lowercased.contains("not connected") ||
-            lowercased.contains("-1004") {
-            return "Could not connect to this agent. Check that it is online and reachable from this iPhone."
-        }
-
-        return message
-    }
 
     /// Some hosts place the final answer only in canonical chat items. Accept that form only when an
     /// assistant message follows the revised user message; retained history alone is not a replacement.

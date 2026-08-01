@@ -8,6 +8,7 @@
 //
 //  This file is part of the ConnectOnion iOS application.
 //
+import Factory
 import SwiftUI
 import SwiftData
 
@@ -62,6 +63,7 @@ private struct RootView: View {
     @AppStorage(FontSizePreference.uiStorageKey) private var uiFontSize = FontSizePreference.defaultUI
     @State private var splashDismissed = ProcessInfo.processInfo.arguments.contains("--ui-testing")
     @State private var chatSessions = ChatSessionStore()
+    @State private var reachability = Container.shared.networkReachability()
 
     private var showSplash: Bool { !splashDismissed && !agents.isEmpty }
 
@@ -80,7 +82,10 @@ private struct RootView: View {
         .environment(\.uiFontPreference, uiFontPreference)
         .environment(\.uiFontSize, FontSizePreference.normalizedUI(uiFontSize))
         .environment(chatSessions)
+        // Reading `reachability` here establishes observation, so the plain Bool below refreshes.
+        .environment(\.deviceIsOffline, reachability.reachability.isKnownOffline)
         .onAppear {
+            reachability.start()
             // The splash is a launch-only decision. If this launch starts in the first-run state,
             // keep it dismissed even after the user adds their first agent later in the session.
             if agents.isEmpty {

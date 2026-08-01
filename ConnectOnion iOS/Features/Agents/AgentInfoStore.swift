@@ -22,6 +22,7 @@ final class AgentInfoStore {
     @ObservationIgnored
     @Injected(\.agentDirectoryService) private var directory: AgentDirectoryServicing
     @ObservationIgnored private let directoryOverride: AgentDirectoryServicing?
+    @ObservationIgnored private let reachability: (any NetworkReachabilityMonitoring)?
     @ObservationIgnored private var allRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var focusedRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
@@ -40,8 +41,12 @@ final class AgentInfoStore {
     // poll but detects a genuine shutdown within ~2 poll cycles instead of 3.
     private static let offlineThreshold = 2
 
-    init(directory: AgentDirectoryServicing? = nil) {
+    init(
+        directory: AgentDirectoryServicing? = nil,
+        reachability: (any NetworkReachabilityMonitoring)? = Container.shared.networkReachability()
+    ) {
         directoryOverride = directory
+        self.reachability = reachability
     }
 
     /// The user-configured direct endpoints, keyed by agent address, so the status probe can reach a
@@ -127,6 +132,9 @@ final class AgentInfoStore {
     }
 
     func refreshNow(addresses: [String]) async {
+        // Every probe is guaranteed to fail with no network path, and a failed probe counts an offline
+        // strike — so polling while offline would burn battery to mislabel healthy agents.
+        guard !(reachability?.reachability.isKnownOffline ?? false) else { return }
         let addresses = Self.uniqueAddresses(addresses).filter { !removedAddresses.contains($0) }
         guard !addresses.isEmpty else { return }
 

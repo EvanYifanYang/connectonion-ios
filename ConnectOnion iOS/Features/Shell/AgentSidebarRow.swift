@@ -11,6 +11,7 @@
 import SwiftUI
 
 struct AgentSidebarRow: View {
+    @Environment(\.deviceIsOffline) private var deviceIsOffline
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var isSelected: Bool
@@ -115,7 +116,7 @@ struct AgentSidebarRow: View {
     }
 
     private var connectionPhase: AgentConnectionPhase {
-        AgentConnectionPhase(info: info)
+        AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline)
     }
 
     @ViewBuilder

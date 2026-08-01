@@ -33,6 +33,11 @@ extension Container {
         }
     }
 
+    var networkReachability: Factory<any NetworkReachabilityMonitoring> {
+        self { @MainActor in NetworkPathMonitor() }
+            .scope(.singleton)
+    }
+
     var liveActivityController: Factory<AgentReplyLiveActivityController> {
         self { @MainActor in AgentReplyLiveActivityController() }
             .scope(.singleton)

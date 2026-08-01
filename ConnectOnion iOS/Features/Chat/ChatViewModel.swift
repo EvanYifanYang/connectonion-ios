@@ -720,8 +720,19 @@ final class ChatViewModel {
             // prior turn's identical reply must not be mistaken for this turn's — there the re-sent user
             // is the last item, so we still append the fresh bubble below it.
             if !finalResult.isEmpty, !(items.last?.kind == .agent && items.last?.content == finalResult) {
-                let agentItem = ChatItem(kind: .agent, content: finalResult)
-                append(agentItem, shouldPersist: false)
+                // A streamed agent_image arrives before the reply text and parks in a content-less
+                // agent row. Fill that row rather than appending a second bubble: otherwise the turn
+                // renders two agent messages, the image-only one is not the turn's final answer, and it
+                // would be folded into the collapsed trace (which draws no images) and disappear.
+                if let index = items.indices.last,
+                   items[index].kind == .agent,
+                   items[index].content.isEmpty,
+                   !items[index].images.isEmpty {
+                    items[index].content = finalResult
+                } else {
+                    let agentItem = ChatItem(kind: .agent, content: finalResult)
+                    append(agentItem, shouldPersist: false)
+                }
             }
             finalizeRunningItems()
             // Type the reply out client-side. The host server never emits a live "assistant" event — the

@@ -364,16 +364,32 @@ private extension ChatEventReducer {
     static func applyAgentImage(_ event: ServerEvent, to items: inout [ChatItem]) {
         guard let image = event.payload[string: "image"] else { return }
 
-        let targetID = items.last(where: { $0.kind == .agent })?.id
+        // Attach to the CURRENT turn only: the last `.agent` at or after the last `.user`. The turn has
+        // no reply item until its OUTPUT arrives, so "last agent anywhere" would glue the image onto the
+        // previous turn's bubble. When there is no such item, hold the image in a content-less agent
+        // row that the OUTPUT handler then fills with the reply text (see ChatViewModel), which keeps
+        // image and answer in one bubble and lets reconcile match it by content.
+        let lastUserIndex = items.lastIndex(where: { $0.kind == .user })
+        let targetID: String? = {
+            guard let index = items.lastIndex(where: { $0.kind == .agent }) else { return nil }
+            if let lastUserIndex, index < lastUserIndex { return nil }
+            return items[index].id
+        }()
+
+        // De-duplicate only within the current turn; a repeat of the same image on an earlier,
+        // already-completed turn must be left alone.
         for index in items.indices.reversed()
-        where items[index].kind == .agent && items[index].id != targetID && items[index].images.contains(image) {
+        where items[index].kind == .agent
+            && items[index].id != targetID
+            && index >= (lastUserIndex ?? 0)
+            && items[index].images.contains(image) {
             items[index].images.removeAll { $0 == image }
             if items[index].content.isEmpty && items[index].images.isEmpty {
                 items.remove(at: index)
             }
         }
 
-        if let index = items.lastIndex(where: { $0.kind == .agent }) {
+        if let targetID, let index = items.firstIndex(where: { $0.id == targetID }) {
             if !items[index].images.contains(image) {
                 items[index].images.append(image)
             }

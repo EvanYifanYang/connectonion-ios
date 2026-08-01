@@ -52,7 +52,9 @@ enum ChatTimelineBuilder {
                 // Only a turn's final assistant message stays a prominent bubble; interim assistant
                 // messages fold into the activity group, so each turn reads as one collapsible trace
                 // plus one answer (matching ChatGPT/Claude-style transcripts).
-                if finalAgentIDs.contains(item.id) {
+                // An agent message carrying images always stays a bubble: the trace renders text only,
+                // so folding one would silently drop the image.
+                if finalAgentIDs.contains(item.id) || !item.images.isEmpty {
                     flushActivity(completedBy: item)
                     units.append(itemUnit(item))
                 } else {

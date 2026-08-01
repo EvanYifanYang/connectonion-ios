@@ -44,17 +44,44 @@ struct MarkdownMessageView: View, Equatable {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
-                    image.resizable().scaledToFit()
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 360)
+                        .clipShape(.rect(cornerRadius: 18))
                 case .failure:
-                    ContentUnavailableView(alt.isEmpty ? "Image unavailable" : alt, systemImage: "photo")
+                    // A bare grey box says nothing about WHY. Name the image, show where it was meant
+                    // to come from, and let the user open it directly — an agent can invent a URL, and
+                    // a plain http:// one is blocked by App Transport Security.
+                    Link(destination: url) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "photo.badge.exclamationmark")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(alt.isEmpty ? "Image couldn't be loaded" : alt)
+                                    .appFont(.footnote, weight: .semibold)
+                                Text(url.host() ?? url.absoluteString)
+                                    .appFont(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(url.scheme == "http" ? "Open in Safari (insecure http link)" : "Open in Safari")
+                                    .appFont(.caption2)
+                                    .foregroundStyle(.tint)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.secondary.opacity(0.08), in: .rect(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
                 case .empty:
-                    ProgressView()
+                    ProgressView().frame(maxWidth: .infinity)
                 @unknown default:
                     EmptyView()
                 }
             }
-            .frame(maxHeight: 360)
-            .clipShape(.rect(cornerRadius: 18))
             .accessibilityLabel(alt.isEmpty ? "Image" : alt)
 
         case .bulletList(let items):

@@ -479,7 +479,10 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
     private func activeTransport() throws -> WebSocketTransporting {
         guard let transport, transport.isConnected else {
-            throw URLError(.notConnectedToInternet)
+            // NOT URLError(.notConnectedToInternet): that means the DEVICE has no network, and the
+            // failure copy would then tell a user on healthy Wi-Fi that their iPhone is offline. This
+            // only means our socket to the agent is closed.
+            throw ConnectOnionClientError.notConnected
         }
         return transport
     }
@@ -563,6 +566,7 @@ enum ConnectOnionClientError: LocalizedError {
     case inputFrameTooLarge(size: Int, maxSize: Int)
     case handshakeTimedOut
     case connectionWentSilent
+    case notConnected
 
     var errorDescription: String? {
         switch self {
@@ -574,6 +578,8 @@ enum ConnectOnionClientError: LocalizedError {
             "Connected to the agent, but it never finished starting up. It may be busy or stuck — try again, or restart the agent."
         case .connectionWentSilent:
             "Lost contact with the agent while it was replying. The connection went quiet — check the agent is still running."
+        case .notConnected:
+            "The connection to this agent is closed."
         }
     }
 

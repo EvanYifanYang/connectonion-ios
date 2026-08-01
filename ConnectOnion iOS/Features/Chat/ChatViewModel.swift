@@ -49,6 +49,9 @@ final class ChatViewModel {
     @ObservationIgnored
     @Injected(\.liveActivityController) var liveActivity: AgentReplyLiveActivityController
 
+    @ObservationIgnored
+    @Injected(\.networkReachability) var reachability: any NetworkReachabilityMonitoring
+
     @ObservationIgnored let clientOverride: ConnectOnionClientProviding?
     @ObservationIgnored let onSessionStateChange: (SessionActiveState) -> Void
     @ObservationIgnored let onReplyReady: () -> Void
@@ -826,7 +829,7 @@ final class ChatViewModel {
         // Mirrors retryLastTurn: a resend needs a captured turn whose INPUT provably never went out.
         let canResend = inFlightInput != nil && !didSendInput
         let failure: ChatFailure = switch reason {
-        case .error(let error): ChatFailure(error: error, canResend: canResend)
+        case .error(let error): ChatFailure(error: error, canResend: canResend, deviceIsOffline: reachability.reachability.isKnownOffline)
         case .agentMessage(let message): ChatFailure(agentMessage: message, canResend: canResend)
         }
         if shouldAutomaticallyReconnect(after: failure) {

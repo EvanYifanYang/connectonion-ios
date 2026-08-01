@@ -43,7 +43,10 @@ struct ChatFailure: Equatable {
     /// `canResend` must mirror `ChatViewModel.retryLastTurn`: there has to BE a captured turn, and its
     /// INPUT must provably not have been written. Otherwise the copy would promise a resend that the
     /// button does not perform.
-    init(error: Error, canResend: Bool) {
+    /// `deviceIsOffline` corroborates a claim about the user's own connectivity — never assert it
+    /// from an error code alone, since several in-app conditions surface as URLError codes that merely
+    /// sound like device connectivity.
+    init(error: Error, canResend: Bool, deviceIsOffline: Bool = false) {
         let retry = ChatFailure.recoveryHint(canResend: canResend)
         let action: Action = canResend ? .resend : .reconnect
 
@@ -103,6 +106,12 @@ struct ChatFailure: Equatable {
                     body: "It connected but stopped responding. It may be busy or stuck — restart it if this keeps happening. \(retry)",
                     action: action
                 )
+            case .notConnected:
+                self.init(
+                    title: "Not connected to this agent",
+                    body: "The connection closed before that could be sent. \(retry)",
+                    action: action
+                )
             case .connectionWentSilent:
                 self.init(
                     title: "The agent stopped responding mid-reply",
@@ -114,11 +123,20 @@ struct ChatFailure: Equatable {
         case let urlError as URLError:
             switch urlError.code {
             case .notConnectedToInternet, .dataNotAllowed:
-                self.init(
-                    title: "This iPhone is offline",
-                    body: "Check Wi-Fi or mobile data. \(retry)",
-                    action: action
-                )
+                if deviceIsOffline {
+                    self.init(
+                        title: "This iPhone is offline",
+                        body: "Check Wi-Fi or mobile data. \(retry)",
+                        action: action
+                    )
+                } else {
+                    self.init(
+                        title: "Couldn't reach this agent",
+                        body: "The connection isn't available right now. \(retry)",
+                        action: action,
+                        detail: error.localizedDescription
+                    )
+                }
             case .cannotConnectToHost, .cannotFindHost:
                 // The literal "Could not connect" is asserted by Sprint1Tests — keep it in the title.
                 self.init(

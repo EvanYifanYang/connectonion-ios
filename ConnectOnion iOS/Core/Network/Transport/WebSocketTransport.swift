@@ -38,7 +38,8 @@ final class WebSocketTransport: WebSocketTransporting {
 
     func send(text: String) async throws {
         guard let task else {
-            throw URLError(.notConnectedToInternet)
+            // The socket is gone — that is a lost connection, not a device without internet.
+            throw URLError(.networkConnectionLost)
         }
 
         try await task.send(.string(text))

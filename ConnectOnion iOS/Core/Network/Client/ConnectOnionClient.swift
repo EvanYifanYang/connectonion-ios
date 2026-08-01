@@ -28,7 +28,6 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     /// card is on screen, where the host is legitimately waiting on the user, not stalled.
     private var handshakeDeadline: ContinuousClock.Instant?
     private var handshakeTimedOut = false
-    private var turnSilenceDeadline: ContinuousClock.Instant?
     private let logger = Logger(subsystem: "com.romantcD.ConnectOnion-iOS", category: "AgentClient")
 
     init(
@@ -303,10 +302,6 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         throw handshakeTimedOut ? ConnectOnionClientError.handshakeTimedOut : URLError(.networkConnectionLost)
     }
 
-    /// Total inbound silence — no agent event AND no keepalive — that proves the socket is dead.
-    /// Comfortably above the host's 30s ping interval so a healthy-but-quiet turn is never cut off.
-    private static let turnSilenceTimeout: Duration = .seconds(95)
-
     private func armHandshakeDeadline() {
         handshakeDeadline = ContinuousClock.now.advanced(by: handshakeTimeout)
     }
@@ -317,29 +312,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation,
         finishOnIdle: Bool
     ) async throws {
-        // Past CONNECTED the handshake watchdog is gone, so a half-open socket would hang this loop —
-        // and the chat — forever. Every inbound frame (keepalives included) refreshes the deadline.
-        var wentSilent = false
-        turnSilenceDeadline = ContinuousClock.now.advanced(by: Self.turnSilenceTimeout)
-        let silenceWatchdog = Task { @MainActor [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
-                guard let self, let deadline = turnSilenceDeadline else { continue }
-                if ContinuousClock.now >= deadline {
-                    wentSilent = true
-                    transport?.close()
-                    return
-                }
-            }
-        }
-        defer {
-            silenceWatchdog.cancel()
-            turnSilenceDeadline = nil
-        }
-
-        do {
         for try await rawMessage in stream {
-            turnSilenceDeadline = ContinuousClock.now.advanced(by: Self.turnSilenceTimeout)
             let event: ServerEvent
             do {
                 event = try codec.decode(rawMessage)
@@ -376,13 +349,8 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                 continuation.yield(.server(event))
             }
         }
-        } catch {
-            // close() finishes the stream without an error, so a silence timeout usually falls out of
-            // the loop rather than throwing — but report it the same way if the transport does throw.
-            throw wentSilent ? ConnectOnionClientError.connectionWentSilent : error
-        }
 
-        throw wentSilent ? ConnectOnionClientError.connectionWentSilent : URLError(.networkConnectionLost)
+        throw URLError(.networkConnectionLost)
     }
 
     private func drainIdleConnectionMetadata(

@@ -40,6 +40,23 @@ struct MarkdownMessageView: View, Equatable {
             MarkdownInlineText(text)
                 .lineSpacing(3)
 
+        case .image(let url, let alt):
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                case .failure:
+                    ContentUnavailableView(alt.isEmpty ? "Image unavailable" : alt, systemImage: "photo")
+                case .empty:
+                    ProgressView()
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(maxHeight: 360)
+            .clipShape(.rect(cornerRadius: 18))
+            .accessibilityLabel(alt.isEmpty ? "Image" : alt)
+
         case .bulletList(let items):
             listView(items.map { (marker: "•", text: $0) })
 

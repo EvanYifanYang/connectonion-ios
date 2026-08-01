@@ -45,6 +45,7 @@ extension ChatViewModel {
     /// a card with a visible reflow. Detect the common block markers so those replies skip the reveal.
     static func hasBlockMarkdown(_ text: String) -> Bool {
         if text.contains("```") { return true } // fenced code block
+        if text.contains("![") { return true }  // image — rendered as a block, never typed out
         for rawLine in text.split(whereSeparator: \.isNewline) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("#") { return true } // heading

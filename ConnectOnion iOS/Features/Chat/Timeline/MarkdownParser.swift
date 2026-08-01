@@ -19,6 +19,9 @@ enum MarkdownBlock: Equatable, Sendable {
     case codeBlock(language: String?, code: String)
     case quote(String)
     case table(header: [String], rows: [[String]])
+    /// A markdown image on its own line. `Text` can't draw one, so it needs its own block — otherwise
+    /// an agent that answers "here's the picture: ![apple](https://…)" renders as just the word "apple".
+    case image(url: URL, alt: String)
     case rule
 }
 
@@ -131,15 +134,42 @@ enum MarkdownParser {
                 if t.isEmpty { break }
                 if codeFence(t) != nil || isRule(t) || parseHeading(t) != nil || t.hasPrefix(">") || listItem(raw) != nil { break }
                 if t.contains("|"), i + 1 < lines.count, isTableSeparator(lines[i + 1].trimmingCharacters(in: .whitespaces)) { break }
+                if imageLine(t) != nil { break }
                 paragraph.append(t)
                 i += 1
             }
             if !paragraph.isEmpty {
                 blocks.append(.paragraph(paragraph.joined(separator: "\n")))
             }
+
+            if i < lines.count, let image = imageLine(lines[i].trimmingCharacters(in: .whitespaces)) {
+                blocks.append(.image(url: image.url, alt: image.alt))
+                i += 1
+            }
         }
 
         return blocks
+    }
+
+    /// Matches a line that is exactly one markdown image, optionally wrapped in a link.
+    private static func imageLine(_ line: String) -> (url: URL, alt: String)? {
+        guard line.hasPrefix("![") || line.hasPrefix("[!["),
+              let altOpen = line.firstIndex(of: "["),
+              let altClose = line[altOpen...].firstIndex(of: "]"),
+              let urlOpen = line[altClose...].firstIndex(of: "("),
+              let urlClose = line.lastIndex(of: ")") else { return nil }
+
+        let alt = String(line[line.index(after: altOpen)..<altClose])
+        var target = String(line[line.index(after: urlOpen)..<urlClose])
+            .trimmingCharacters(in: .whitespaces)
+        // Strip an optional markdown title: ![alt](url "title")
+        if let space = target.firstIndex(of: " ") {
+            target = String(target[..<space])
+        }
+        guard let url = URL(string: target), url.scheme?.hasPrefix("http") == true || url.scheme == "data" else {
+            return nil
+        }
+        return (url, alt)
     }
 
     private static func codeFence(_ line: String) -> String? {

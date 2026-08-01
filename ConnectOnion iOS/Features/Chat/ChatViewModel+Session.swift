@@ -21,9 +21,7 @@ extension ChatViewModel {
             messages: items.filter {
                 $0.id != "__optimistic__" && $0.id != excludingUserItemID
             },
-            // Read through the pending slot so CONNECT always carries the newest raw session even
-            // when the debounced persist has not flushed it yet.
-            rawSession: pendingRawSession ?? conversation.rawSession,
+            rawSession: conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
     }

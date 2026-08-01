@@ -299,11 +299,14 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [becameOnline], timeout: 6), .completed, agent.label)
         agent.press(forDuration: 0.8)
 
-        XCTAssertTrue(app.anyElement(renameAgentButtonID).waitForExistence(timeout: 5), app.debugDescription)
+        // The context menu presents well within 5s locally but has timed out on a loaded CI runner
+        // (all three retries failed there while passing here), so allow the same budget as the other
+        // presentation waits in this suite.
+        XCTAssertTrue(app.anyElement(renameAgentButtonID).waitForExistence(timeout: 12), app.debugDescription)
         XCTAssertTrue(app.anyElement(deleteAgentButtonID).exists, app.debugDescription)
 
         tapElement(renameAgentButtonID, in: app)
-        XCTAssertTrue(app.anyElement(agentRenameFieldID).waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertTrue(app.anyElement(agentRenameFieldID).waitForExistence(timeout: 12), app.debugDescription)
     }
 
     @MainActor

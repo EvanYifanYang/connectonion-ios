@@ -167,7 +167,10 @@ struct ConnectOnionLatestProtocolTests {
             events.append(event)
         }
 
-        #expect(events.count == 5)
+        // CONNECTED, .inputSent (emitted once the INPUT frame leaves the device, so a retry knows
+        // whether re-sending is safe), the profile, the routed control frame, and OUTPUT.
+        #expect(events.count == 6)
+        #expect(events.contains { if case .inputSent = $0 { true } else { false } })
         #expect(events.contains { event in
             guard case .profile(let profile) = event else { return false }
             return profile.address == testAgentAddress

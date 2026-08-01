@@ -200,7 +200,6 @@ final class ChatViewModel {
             conversation.remoteSessionID = replacementSessionID
             conversation.rawSession = nil
             conversation.lastRenderedEventID = nil
-            pendingRawSession = nil
         }
         // Mark the turn in-flight so a force-kill mid-reply is recoverable: on next open the
         // conversation re-attaches to the still-running server session (see `resumeIfInterrupted`).
@@ -331,10 +330,6 @@ final class ChatViewModel {
     /// True once this turn's INPUT frame left the device. CONNECTED is NOT a safe proxy: the client
     /// yields it before building and sending INPUT, so a failure in between must still be resendable.
     @ObservationIgnored private var didSendInput = false
-    /// Latest raw session blob from the event stream, flushed by the debounced `persist()`. Assigning
-    /// `conversation.rawSession` directly JSON-encodes the blob and bumps `updatedAt` synchronously,
-    /// which during a fast event burst hitches the UI.
-    @ObservationIgnored var pendingRawSession: JSONValue?
 
     /// A backgrounding shorter than this is treated as a peek (Control Center, a glance at another
     /// app): the socket almost certainly survived, so a live turn is left alone rather than re-dialled.
@@ -345,9 +340,6 @@ final class ChatViewModel {
     func noteAppWillEnterBackground() {
         wasSuspendedMidTurn = wasSuspendedMidTurn || streamTask != nil || conversation.pendingTurnStartedAt != nil
         if backgroundedAt == nil { backgroundedAt = .now }
-        // Suspension can become termination without warning; get the newest session blob on disk now
-        // rather than leaving it in the debounced slot.
-        if pendingRawSession != nil { persist() }
     }
 
     /// Re-attach after returning from the background. Unlike `resumeIfInterrupted`, this deliberately
@@ -546,7 +538,6 @@ final class ChatViewModel {
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             if serverNewer, !isRegenerating {
                 conversation.rawSession = session
-                pendingRawSession = nil
                 ChatEventReducer.reconcile(
                     with: AgentContentSanitizer.sanitize(Self.sanitizingUserPrompts(in: chatItems)),
                     items: &items
@@ -599,7 +590,7 @@ final class ChatViewModel {
             // activity placeholder. connectonion emits session_sync after every trace event and can
             // change approval mode independently of a reply.
             if let session = event.payload["session"] {
-                pendingRawSession = session
+                conversation.rawSession = session
             }
             if event.type == "mode_changed",
                let rawMode = event.payload[string: "mode"],
@@ -658,9 +649,7 @@ final class ChatViewModel {
                 conversation.lastRenderedEventID = eventID
             }
             if let session = event.payload["session"] {
-                // Hold it in memory; the setter JSON-encodes the whole blob and bumps updatedAt, which
-                // is far too expensive to run once per streamed event. persist() flushes it.
-                pendingRawSession = session
+                conversation.rawSession = session
             }
             if event.type == "mode_changed", let rawMode = event.payload[string: "mode"], let mode = ApprovalMode(rawValue: rawMode) {
                 conversation.mode = mode
@@ -765,7 +754,6 @@ final class ChatViewModel {
             }
             lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
-            pendingRawSession = nil
             sessionState = .connected
             streamTask = nil
             latestTurnCompleted = hasCompletedLatestExchange
@@ -846,7 +834,7 @@ final class ChatViewModel {
         regenerateBackup = RegenerationBackup(
             items: items,
             remoteSessionID: conversation.remoteSessionID,
-            rawSession: pendingRawSession ?? conversation.rawSession,
+            rawSession: conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
     }
@@ -854,10 +842,6 @@ final class ChatViewModel {
     private func persist() {
         persistTask?.cancel()
         persistTask = nil
-        if let pendingRawSession {
-            conversation.rawSession = pendingRawSession
-            self.pendingRawSession = nil
-        }
         conversation.messages = items.filter { $0.id != "__optimistic__" }
     }
 
@@ -1014,7 +998,6 @@ final class ChatViewModel {
         items = backup.items
         conversation.remoteSessionID = backup.remoteSessionID
         conversation.rawSession = backup.rawSession
-        pendingRawSession = nil
         conversation.lastRenderedEventID = backup.lastRenderedEventID
         finalizeRunningItems()
         latestTurnCompleted = hasCompletedLatestExchange

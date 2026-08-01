@@ -35,14 +35,67 @@ enum AgentDirectoryError: LocalizedError, Sendable {
     }
 }
 
+/// Remembers the last route that actually worked for an agent. `ConnectOnionClient` disconnects after
+/// every completed turn, so without this each send re-runs the full HTTP probe sequence before a single
+/// byte of the prompt goes out. Reference type on purpose: `AgentDirectoryService` is a struct, and all
+/// its copies (Factory registers one singleton) must share the same cache.
+actor AgentRouteCache {
+    private struct Entry {
+        var route: AgentRoute
+        var resolvedAt: Date
+    }
+
+    /// A direct LAN route can be invalidated by simply walking to another network, so it expires
+    /// quickly; a relay route is far more stable.
+    private static let directTTL: TimeInterval = 60
+    /// Kept close to a status-poll cycle: nothing actively demotes a relay entry when the agent
+    /// becomes directly reachable again, so the TTL is what lets a direct route win back.
+    private static let relayTTL: TimeInterval = 120
+
+    private var entries: [String: Entry] = [:]
+
+    static func key(address: String, preferredEndpoint: URL?) -> String {
+        "\(address)|\(preferredEndpoint?.absoluteString ?? "")"
+    }
+
+    func route(for key: String) -> AgentRoute? {
+        guard let entry = entries[key] else { return nil }
+        let ttl = entry.route.isDirect ? Self.directTTL : Self.relayTTL
+        guard Date.now.timeIntervalSince(entry.resolvedAt) < ttl else {
+            entries[key] = nil
+            return nil
+        }
+        return entry.route
+    }
+
+    func store(_ route: AgentRoute, for key: String) {
+        entries[key] = Entry(route: route, resolvedAt: .now)
+    }
+
+    /// Drops every cached route for an address (its endpoint changed, or a connection just failed).
+    func invalidate(address: String) {
+        entries = entries.filter { !$0.key.hasPrefix("\(address)|") }
+    }
+}
+
 struct AgentDirectoryService: AgentDirectoryServicing {
     private let relayURL: URL
     private let session: URLSession
+    private let routeCache: AgentRouteCache
     private let logger = Logger(subsystem: "com.romantcD.ConnectOnion-iOS", category: "AgentDirectory")
 
-    init(relayURL: URL = URL(string: "wss://oo.openonion.ai")!, session: URLSession = .shared) {
+    init(
+        relayURL: URL = URL(string: "wss://oo.openonion.ai")!,
+        session: URLSession = .shared,
+        routeCache: AgentRouteCache = AgentRouteCache()
+    ) {
         self.relayURL = relayURL
         self.session = session
+        self.routeCache = routeCache
+    }
+
+    func invalidateRoute(for address: String) async {
+        await routeCache.invalidate(address: address)
     }
 
     func fetchAgentInfo(address: String, preferredEndpoint: URL?) async -> AgentInfo {
@@ -74,6 +127,13 @@ struct AgentDirectoryService: AgentDirectoryServicing {
     }
 
     func resolveRoute(for address: String, preferredEndpoint: URL?) async throws -> AgentRoute {
+        // A completed turn disconnects, so every send lands back here. Reuse the route that just
+        // worked instead of re-running the probe sequence (seconds of HTTP) ahead of each message.
+        let cacheKey = AgentRouteCache.key(address: address, preferredEndpoint: preferredEndpoint)
+        if let cached = await routeCache.route(for: cacheKey) {
+            return cached
+        }
+
         // The preferred endpoint is the highest-priority *direct* candidate, not a make-or-break
         // decision. If it can't be reached — e.g. the agent is on a campus / NAT'd LAN whose address
         // *looks* usable but this iPhone can't actually route to it — fall through to the relay record
@@ -84,6 +144,7 @@ struct AgentDirectoryService: AgentDirectoryServicing {
            isUsableFromCurrentDevice(preferredEndpoint),
            let direct = await verifiedDirectRoute(httpURL: preferredEndpoint, address: address) {
             logger.info("Using preferred direct endpoint \(preferredEndpoint.absoluteString, privacy: .public)")
+            await routeCache.store(direct, for: cacheKey)
             return direct
         }
 
@@ -108,6 +169,7 @@ struct AgentDirectoryService: AgentDirectoryServicing {
         for endpoint in usableHTTPEndpoints(relayData.endpoints) {
             if let direct = await verifiedDirectRoute(httpURL: endpoint, address: address) {
                 logger.info("Using direct endpoint \(endpoint.absoluteString, privacy: .public)")
+                await routeCache.store(direct, for: cacheKey)
                 return direct
             }
         }
@@ -118,7 +180,9 @@ struct AgentDirectoryService: AgentDirectoryServicing {
             } else {
                 logger.info("Using relay route")
             }
-            return relayRoute()
+            let relay = relayRoute()
+            await routeCache.store(relay, for: cacheKey)
+            return relay
         }
 
         logger.error("No reachable route for iPhone. Advertised endpoints: \(endpointSummary, privacy: .public)")

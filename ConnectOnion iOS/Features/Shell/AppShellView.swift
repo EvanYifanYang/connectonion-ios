@@ -163,8 +163,15 @@ struct AppShellView: View {
         .onChange(of: scenePhase) { _, phase in
             chatSessionStore.setAppActive(phase == .active)
             if phase == .active {
+                // Re-attach any turn whose socket died while we were suspended.
+                chatSessionStore.applicationDidBecomeActive()
                 configureAgentInfoRefresh()
             } else {
+                // Only `.background` — `.inactive` also fires for Control Center / app-switcher peeks,
+                // where a healthy live socket must not be torn down and re-handshaked.
+                if phase == .background {
+                    chatSessionStore.applicationDidEnterBackground()
+                }
                 infoStore.stopAutoRefresh()
             }
         }
@@ -311,8 +318,14 @@ struct AppShellView: View {
         guard let validAddress = AgentAddress(rawValue: address) else { return }
 
         if let existing = agents.first(where: { $0.address == validAddress.rawValue }) {
-            existing.alias = alias
-            existing.preferredEndpoint = endpoint
+            // Re-adding an existing address (e.g. re-scanning a QR that carries no name/endpoint) must
+            // not wipe the saved name or LAN endpoint — merge only the values actually supplied.
+            if !alias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                existing.alias = alias
+            }
+            if let endpoint {
+                existing.preferredEndpoint = endpoint
+            }
             existing.updatedAt = .now
         } else {
             modelContext.insert(AgentConfigRecord(address: validAddress.rawValue, alias: alias, preferredEndpoint: endpoint))
@@ -397,7 +410,16 @@ struct AppShellView: View {
     }
 
     private func handleNewChatRequest(agentAddress: String?, suggestion: String?) {
-        let agent = agentAddress.flatMap(agent(for:)) ?? agents.first
+        // Only fall back to the first agent when NO agent was named. A deep link that names a specific
+        // but unknown agent (deleted, or a stale widget snapshot) must not be silently retargeted to a
+        // different agent — that could auto-send the prompt to the wrong one.
+        let agent: AgentConfigRecord?
+        if let agentAddress {
+            guard let resolved = self.agent(for: agentAddress) else { return }
+            agent = resolved
+        } else {
+            agent = agents.first
+        }
         guard let agent else {
             agentEditorDraft = .empty
             return
@@ -417,10 +439,35 @@ struct AppShellView: View {
 
         if request.opensAgentScanner {
             presentAgentScanner()
-        } else if let conversationID = request.conversationID {
-            openConversation(id: conversationID)
+            return
+        }
+
+        // A navigating deep link must first dismiss any presented sheet/dialog; otherwise the path
+        // change happens hidden behind the modal and the tap looks like it did nothing.
+        let hadModal = agentEditorDraft != nil || editingAgent != nil || showingSettings
+            || deletingAgent != nil || deletingConversation != nil
+        agentEditorDraft = nil
+        editingAgent = nil
+        showingSettings = false
+        deletingAgent = nil
+        deletingConversation = nil
+
+        func navigate() {
+            if let conversationID = request.conversationID {
+                openConversation(id: conversationID)
+            } else {
+                handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+            }
+        }
+
+        if hadModal {
+            // Give the sheet a beat to animate out before pushing, matching presentAgentScanner.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                navigate()
+            }
         } else {
-            handleNewChatRequest(agentAddress: request.agentAddress, suggestion: request.suggestion)
+            navigate()
         }
     }
 

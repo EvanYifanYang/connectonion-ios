@@ -272,6 +272,21 @@ private struct ChatItemIdentity: Hashable {
     }
 }
 
+extension ChatEventReducer {
+    /// Protocol/telemetry frames (`AGENT_PROFILE`, `DASHBOARD_SNAPSHOT`, `user_input`, …) carry no
+    /// user-facing content. The live `apply` path drops them via `ignoredEventTypes`; this lets the
+    /// snapshot / restore / reconcile paths drop the same frames once they've already been decoded
+    /// into `.unknown` chat items, so they don't resurface as noisy "Agent event: X" rows on reconnect.
+    static func isSuppressedTelemetry(_ item: ChatItem) -> Bool {
+        // Only suppress items carrying a genuine ignored protocol type. A typeless `.unknown` item can
+        // still hold user-facing content (e.g. a `message` field with no `type`), and `""` is itself a
+        // member of `ignoredEventTypes` — so guard against nil/empty before matching, or we'd silently
+        // drop a legitimate row on the snapshot/restore paths.
+        guard item.kind == .unknown, let type = item.eventType, !type.isEmpty else { return false }
+        return ignoredEventTypes.contains(type)
+    }
+}
+
 private extension ChatEventReducer {
     static var ignoredEventTypes: Set<String> {
         [

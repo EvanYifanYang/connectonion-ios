@@ -2,7 +2,7 @@
 //  AgentBubble.swift
 //
 //  Purpose: Implements AgentBubble for the Features/Chat/Timeline module.
-//  Collaborates with: AgentActivityGroup, CompactRow, EvaluationRow, FilesReceivedRow, IntentRow, MarkdownMessageView.
+//  Collaborates with: AgentActivityGroup, ActivityStep, ActivityStepRow, MarkdownMessageView.
 //  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
 //               the project architecture described in README.md where applicable.
 //

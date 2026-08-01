@@ -93,7 +93,7 @@ final class ConnectOnion_iOSUITests: XCTestCase {
         let app = launchUITestApp(scenario: "status-loading")
         let agent = waitForElement(seededAgentID, in: app)
 
-        XCTAssertTrue(agent.label.contains("Checking connection status"), agent.label)
+        XCTAssertTrue(agent.label.contains("Connecting"), agent.label)
 
         let becameOnline = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS %@", "Online"),

@@ -53,6 +53,10 @@ enum AgentContentSanitizer {
     }
 
     static func sanitize(_ item: ChatItem) -> ChatItem? {
+        // Protocol/telemetry frames leak in as `.unknown` items on snapshot/reconnect and render as
+        // noisy "Agent event: X" rows — drop them before any content cleaning.
+        if ChatEventReducer.isSuppressedTelemetry(item) { return nil }
+
         var sanitized = item
         let containedInternalContent = item.containsInternalReminder
         guard containedInternalContent else { return item }

@@ -197,6 +197,20 @@ final class ChatViewModel {
             placeholder.status = .running
             append(placeholder, shouldPersist: false)
         }
+        if let replacementSessionID {
+            // The local transcript has already forked. Persist the fork now so a kill-and-resume
+            // re-attaches to the REPLACEMENT session; otherwise reconnect() would rebuild the
+            // transcript from the branch we just replaced and resurrect the deleted exchange.
+            // Rollback is unaffected — captureRegenerationBackup() snapshots all three fields.
+            conversation.remoteSessionID = replacementSessionID
+            conversation.rawSession = nil
+            conversation.lastRenderedEventID = nil
+            pendingRawSession = nil
+        }
+        // Mark the turn in-flight so a force-kill mid-reply is recoverable: on next open the
+        // conversation re-attaches to the still-running server session (see `resumeIfInterrupted`).
+        conversation.pendingTurnStartedAt = .now
+        didReceiveConnected = false
         // Persist the user turn immediately. The presentation-only thinking placeholder is filtered
         // by persist(), so a connection failure keeps the sent bubble without saving fake activity.
         persist()
@@ -307,6 +321,125 @@ final class ChatViewModel {
         }
     }
 
+    /// Beyond this age a persisted in-flight turn is treated as abandoned rather than resumed.
+    private static let staleTurnCutoff: TimeInterval = 30 * 60
+
+    /// Sticky across the whole background episode: set if a turn was live when we were suspended, and
+    /// only cleared once we have actually attempted the foreground re-attach.
+    @ObservationIgnored private var wasSuspendedMidTurn = false
+    @ObservationIgnored private var lastResumeAttemptAt: Date?
+    @ObservationIgnored private var backgroundedAt: Date?
+    /// True once the host has answered CONNECTED for the current turn.
+    @ObservationIgnored private var didReceiveConnected = false
+    /// Latest raw session blob from the event stream, flushed by the debounced `persist()`. Assigning
+    /// `conversation.rawSession` directly JSON-encodes the blob and bumps `updatedAt` synchronously,
+    /// which during a fast event burst hitches the UI.
+    @ObservationIgnored private var pendingRawSession: JSONValue?
+
+    /// A backgrounding shorter than this is treated as a peek (Control Center, a glance at another
+    /// app): the socket almost certainly survived, so a live turn is left alone rather than re-dialled.
+    private static let backgroundGrace: TimeInterval = 5
+
+    /// Record that the app is being suspended while this conversation has work in flight. iOS may kill
+    /// or freeze us here and the socket dies silently, so foregrounding must re-attach.
+    func noteAppWillEnterBackground() {
+        wasSuspendedMidTurn = wasSuspendedMidTurn || streamTask != nil || conversation.pendingTurnStartedAt != nil
+        if backgroundedAt == nil { backgroundedAt = .now }
+        // Suspension can become termination without warning; get the newest session blob on disk now
+        // rather than leaving it in the debounced slot.
+        if pendingRawSession != nil { persist() }
+    }
+
+    /// Re-attach after returning from the background. Unlike `resumeIfInterrupted`, this deliberately
+    /// bypasses the `streamTask == nil` guard: after a suspension the task object often survives while
+    /// its socket is already dead, which is exactly the "frozen thinking forever" case.
+    func resumeAfterForeground() {
+        guard wasSuspendedMidTurn else { return }
+        let suspendedFor = backgroundedAt.map { Date.now.timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+        backgroundedAt = nil
+
+        // Debounce BEFORE consuming the sticky flag, so a swallowed call (foreground racing a deep
+        // link) leaves the record intact for the next attempt instead of losing the resume entirely.
+        guard !isResumeDebounced else { return }
+        guard conversation.pendingTurnStartedAt != nil else {
+            wasSuspendedMidTurn = false
+            return
+        }
+
+        // A brief peek with a stream still attached: don't tear down a healthy socket.
+        if suspendedFor < Self.backgroundGrace, streamTask != nil, didReceiveConnected {
+            wasSuspendedMidTurn = false
+            return
+        }
+        wasSuspendedMidTurn = false
+
+        if hasCompletedLatestExchange {
+            conversation.pendingTurnStartedAt = nil
+            persist()
+            return
+        }
+
+        if let startedAt = conversation.pendingTurnStartedAt,
+           Date.now.timeIntervalSince(startedAt) > Self.staleTurnCutoff {
+            expireInterruptedTurn()
+            return
+        }
+
+        automaticReconnectAttempts = 0
+        reconnect() // cancels streamTask and force-dials a fresh connection
+    }
+
+    /// Collapses a burst of resume triggers (foreground + a deep link pushing the chat) into one.
+    private var isResumeDebounced: Bool {
+        if let lastResumeAttemptAt, Date.now.timeIntervalSince(lastResumeAttemptAt) < 2 { return true }
+        lastResumeAttemptAt = .now
+        return false
+    }
+
+    /// Abandon a turn we will not resume. Must also release the stream: `send()` refuses to run while
+    /// `streamTask != nil`, so leaving one behind wedges the conversation with no visible Stop button.
+    private func expireInterruptedTurn() {
+        streamTask?.cancel()
+        streamTask = nil
+        automaticReconnectTask?.cancel()
+        automaticReconnectTask = nil
+        client.disconnect()
+        conversation.pendingTurnStartedAt = nil
+        pendingUserItem = nil
+        clearInFlightInput()
+        clearOptimisticPlaceholder()
+        finalizeRunningItems()
+        sessionState = items.isEmpty ? .idle : .connected
+        stopTimer()
+        persist()
+    }
+
+    /// Recovers a turn left in-flight when the app was killed or backgrounded. A force-kill terminates
+    /// all in-app work, so the only reliable recovery is server-side: the agent keeps running and, on
+    /// next open, we re-attach via `reconnect()` — which sends only CONNECT (session_id + last_msg_id),
+    /// never a second INPUT, so the running turn resumes (its events/reply stream back in) rather than
+    /// restarting. A no-op when nothing was interrupted, so it is safe to call on every appear.
+    func resumeIfInterrupted() {
+        guard streamTask == nil else { return }              // a live turn already owns the stream
+        guard let startedAt = conversation.pendingTurnStartedAt else { return }
+        guard !isResumeDebounced else { return }
+
+        // The reply already arrived locally before the app went away — just clear the marker.
+        if hasCompletedLatestExchange {
+            conversation.pendingTurnStartedAt = nil
+            persist()
+            return
+        }
+
+        // An abandoned turn: don't re-attach to a session the host has long since dropped.
+        if Date.now.timeIntervalSince(startedAt) > Self.staleTurnCutoff {
+            expireInterruptedTurn()
+            return
+        }
+
+        reconnect()
+    }
+
     func respondToAskUser(_ answer: String) {
         ChatEventReducer.markLatestAskUserAnswered(answer: answer, in: &items)
         persist()
@@ -384,6 +517,7 @@ final class ChatViewModel {
             persist()
         }
         stopTimer()
+        conversation.pendingTurnStartedAt = nil // user cancelled — turn no longer awaiting a reply
         sessionState = items.isEmpty ? .idle : .connected
         persist()
         liveActivity.end(
@@ -405,9 +539,11 @@ final class ChatViewModel {
     private func handle(_ event: ConnectOnionClientEvent) {
         switch event {
         case .connected(let sessionID, let status, let serverNewer, let session, let chatItems):
+            didReceiveConnected = true
             conversation.remoteSessionID = sessionID.isEmpty ? conversation.remoteSessionID : sessionID
             if serverNewer, !isRegenerating {
                 conversation.rawSession = session
+                pendingRawSession = nil
                 ChatEventReducer.reconcile(
                     with: AgentContentSanitizer.sanitize(Self.sanitizingUserPrompts(in: chatItems)),
                     items: &items
@@ -460,7 +596,7 @@ final class ChatViewModel {
             // activity placeholder. connectonion emits session_sync after every trace event and can
             // change approval mode independently of a reply.
             if let session = event.payload["session"] {
-                conversation.rawSession = session
+                pendingRawSession = session
             }
             if event.type == "mode_changed",
                let rawMode = event.payload[string: "mode"],
@@ -519,7 +655,9 @@ final class ChatViewModel {
                 conversation.lastRenderedEventID = eventID
             }
             if let session = event.payload["session"] {
-                conversation.rawSession = session
+                // Hold it in memory; the setter JSON-encodes the whole blob and bumps updatedAt, which
+                // is far too expensive to run once per streamed event. persist() flushes it.
+                pendingRawSession = session
             }
             if event.type == "mode_changed", let rawMode = event.payload[string: "mode"], let mode = ApprovalMode(rawValue: rawMode) {
                 conversation.mode = mode
@@ -547,6 +685,7 @@ final class ChatViewModel {
 
             guard !regenerating || replacementResult != nil else {
                 streamTask = nil
+                conversation.pendingTurnStartedAt = nil // terminal, like every other turn-ending path
                 _ = restoreRegenerateBackup()
                 errorMessage = "The agent returned an empty response. The original exchange was restored."
                 sessionState = items.isEmpty ? .idle : .connected
@@ -567,7 +706,10 @@ final class ChatViewModel {
             // Only adopt a newer server snapshot, and reconcile it at a user-turn boundary so an
             // unacknowledged local turn and locally answered cards cannot be rolled back.
             if serverNewer, !regenerating {
-                ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(chatItems), items: &items)
+                // Use the prompt-stripped list (as restore + the .connected path do), otherwise the
+                // host-echoed personalisation/custom-instructions wrapper leaks into visible user
+                // bubbles because reconcile matches user items by content and never finds the local one.
+                ChatEventReducer.reconcile(with: AgentContentSanitizer.sanitize(sanitizedChatItems), items: &items)
             }
             // Ensure the fresh reply exists as the LAST item so it can be revealed. Guard on the last
             // *item* (not the last agent anywhere): on a regenerate the canonical list is skipped, so a
@@ -581,8 +723,12 @@ final class ChatViewModel {
             // Type the reply out client-side. The host server never emits a live "assistant" event — the
             // reply only ever arrives here in OUTPUT — so point the typewriter at the just-finished reply
             // however it landed (adopted from the canonical list or appended above). This is the single
-            // place the reveal is triggered for a normal turn.
+            // place the reveal is triggered for a normal turn. Skip the reveal for replies with block
+            // markdown (code fences, tables, headings): the inline typewriter would show raw ``` / | and
+            // then snap to a formatted card — for a coding agent that's most replies, so render formatted
+            // immediately instead.
             if !finalResult.isEmpty,
+               !Self.hasBlockMarkdown(finalResult),
                let index = items.lastIndex(where: { $0.kind == .agent }),
                items[index].content == finalResult {
                 streamingMessageID = items[index].id
@@ -604,9 +750,11 @@ final class ChatViewModel {
             }
             lastResponseModel = items.last(where: { $0.kind == .agent })?.model
             conversation.rawSession = session
+            pendingRawSession = nil
             sessionState = .connected
             streamTask = nil
             latestTurnCompleted = hasCompletedLatestExchange
+            conversation.pendingTurnStartedAt = nil // reply delivered — turn no longer awaiting
             stopTimer()
             persist()
             onReplyReady()
@@ -706,7 +854,9 @@ final class ChatViewModel {
             messages: items.filter {
                 $0.id != "__optimistic__" && $0.id != excludingUserItemID
             },
-            rawSession: conversation.rawSession,
+            // Read through the pending slot so CONNECT always carries the newest raw session even
+            // when the debounced persist has not flushed it yet.
+            rawSession: pendingRawSession ?? conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
     }
@@ -729,14 +879,31 @@ final class ChatViewModel {
         regenerateBackup = RegenerationBackup(
             items: items,
             remoteSessionID: conversation.remoteSessionID,
-            rawSession: conversation.rawSession,
+            rawSession: pendingRawSession ?? conversation.rawSession,
             lastRenderedEventID: conversation.lastRenderedEventID
         )
+    }
+
+    /// Replies with block-level markdown render very differently once formatted, so the inline
+    /// typewriter (which leaves block syntax uninterpreted) would show raw ``` / | / # and then snap to
+    /// a card with a visible reflow. Detect the common block markers so those replies skip the reveal.
+    private static func hasBlockMarkdown(_ text: String) -> Bool {
+        if text.contains("```") { return true } // fenced code block
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") { return true } // heading
+            if line.hasPrefix("|"), line.dropFirst().contains("|") { return true } // table row
+        }
+        return false
     }
 
     private func persist() {
         persistTask?.cancel()
         persistTask = nil
+        if let pendingRawSession {
+            conversation.rawSession = pendingRawSession
+            self.pendingRawSession = nil
+        }
         conversation.messages = items.filter { $0.id != "__optimistic__" }
     }
 
@@ -785,6 +952,8 @@ final class ChatViewModel {
             return
         }
 
+        // Terminal failure (not an auto-reconnect): the turn is no longer awaiting a reply.
+        conversation.pendingTurnStartedAt = nil
         client.disconnect()
         automaticReconnectTask?.cancel()
         streamTask = nil
@@ -824,6 +993,8 @@ final class ChatViewModel {
     private func settleIdleReconnectIfNeeded() {
         guard streamTask != nil else { return }
 
+        // The server had nothing more to stream — the turn is settled; clear the in-flight marker.
+        conversation.pendingTurnStartedAt = nil
         streamTask = nil
         automaticReconnectAttempts = 0
         automaticReconnectTask?.cancel()
@@ -865,6 +1036,7 @@ final class ChatViewModel {
         items = backup.items
         conversation.remoteSessionID = backup.remoteSessionID
         conversation.rawSession = backup.rawSession
+        pendingRawSession = nil
         conversation.lastRenderedEventID = backup.lastRenderedEventID
         finalizeRunningItems()
         latestTurnCompleted = hasCompletedLatestExchange
@@ -889,7 +1061,9 @@ final class ChatViewModel {
     private func shouldAutomaticallyReconnect(after message: String) -> Bool {
         guard automaticReconnectAttempts == 0 else { return false }
         guard conversation.remoteSessionID != nil else { return false }
-        guard hasInFlightAttachments else { return false }
+        // Previously gated on `hasInFlightAttachments`, so a dropped socket on an ordinary text turn
+        // went straight to a terminal failure. Any turn the host is still holding deserves the retry.
+        guard conversation.pendingTurnStartedAt != nil, !hasCompletedLatestExchange else { return false }
         switch sessionState {
         case .connecting, .active, .reconnecting:
             return true

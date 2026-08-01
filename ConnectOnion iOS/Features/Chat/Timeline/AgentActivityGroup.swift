@@ -2,7 +2,7 @@
 //  AgentActivityGroup.swift
 //
 //  Purpose: Implements AgentActivityGroup for the Features/Chat/Timeline module.
-//  Collaborates with: AgentBubble, CompactRow, EvaluationRow, FilesReceivedRow, IntentRow, MarkdownMessageView.
+//  Collaborates with: ActivityStep, ActivityStepRow, AgentBubble, MarkdownMessageView.
 //  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
 //               the project architecture described in README.md where applicable.
 //
@@ -11,8 +11,9 @@
 import Foundation
 import SwiftUI
 
-/// A Codex-style summary for consecutive internal agent events. The transcript keeps the result and
-/// user-action cards prominent while making the execution trace available on demand.
+/// The collapsed-by-default summary of one turn's internal execution. The transcript keeps the answer
+/// and the user-action cards prominent; the trace is available on demand and, when opened, reads as a
+/// single quiet list of `ActivityStepRow`s on a continuous rail — not a stack of tinted cards.
 struct AgentActivityGroup: View {
     var items: [ChatItem]
     /// Stored on the reply at turn completion so the elapsed time survives later session snapshots.
@@ -20,7 +21,20 @@ struct AgentActivityGroup: View {
     /// True only for the last activity group while its agent turn is executing.
     var isRunning = false
 
-    @State private var isExpanded = false
+    @State private var isExpanded: Bool
+
+    init(items: [ChatItem], durationMS: Int? = nil, isRunning: Bool = false, initiallyExpanded: Bool = false) {
+        self.items = items
+        self.durationMS = durationMS
+        self.isRunning = isRunning
+        _isExpanded = State(initialValue: initiallyExpanded)
+    }
+
+    /// Empty "Thinking" rows (bare llm_call markers) repeat once per LLM step and carry no detail —
+    /// the elapsed/token metrics already live in the summary, so they never become steps.
+    private var visibleItems: [ChatItem] {
+        items.filter { !($0.kind == .thinking && $0.content.isEmpty) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -56,26 +70,27 @@ struct AgentActivityGroup: View {
             .accessibilityHint(isExpanded ? "Collapses agent activity" : "Shows agent activity details")
 
             if isExpanded {
-                // This stack is already nested inside the transcript's LazyVStack. Keeping the inner
-                // group eager avoids nested lazy-layout gaps when the outer scroll view is restored.
-                VStack(spacing: 2) {
-                    // Empty "Thinking · N tok" rows (bare llm_call markers) repeat once per LLM step and
-                    // carry no detail — the elapsed/token metrics already live in the summary. Hide them
-                    // so the expanded trace shows the meaningful work (tool calls, real thinking notes).
-                    ForEach(items.filter { !($0.kind == .thinking && $0.content.isEmpty) }) { item in
-                        ChatItemView(item: item)
+                // Zero spacing so each row's own padding sets the rhythm and the rails join into one
+                // continuous line. This stack is already nested inside the transcript's LazyVStack, so
+                // keeping the inner group eager avoids nested lazy-layout gaps on scroll restoration.
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(visibleItems) { item in
+                        ChatItemView(item: item, isInTrace: true)
                     }
                 }
+                .padding(.top, 2)
+                .padding(.bottom, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Reuses each step's own label so the collapsed header and the expanded rows never drift apart.
     private var summary: String {
         var seen: Set<String> = []
         let labels = items
-            .compactMap(\.activitySummary)
+            .compactMap { $0.activityStep?.label }
             .filter { seen.insert($0).inserted }
         let meaningful = labels.filter { $0 != "Thinking" && $0 != "Working" }
         let candidates = meaningful.isEmpty ? labels : meaningful
@@ -88,7 +103,7 @@ struct AgentActivityGroup: View {
         }
         let totalDurationMS = durationMS ?? eventDurationMS
         if totalDurationMS > 0 {
-            return formattedDuration(totalDurationMS)
+            return ActivityText.formattedDuration(totalDurationMS)
         }
         return nil
     }
@@ -122,120 +137,6 @@ private struct BreathingActivitySummary: View {
     }
 }
 
-private extension ChatItem {
-    var activitySummary: String? {
-        switch kind {
-        case .thinking:
-            return compactSummary(content) ?? (status == .running ? "Working" : "Thinking")
-
-        case .toolCall:
-            return toolSummary
-
-        case .intent:
-            return compactSummary(ack ?? content) ?? "Planning"
-
-        case .evaluation:
-            if let summary = compactSummary(content) {
-                return summary
-            }
-            return passed.map { $0 ? "Check passed" : "Check failed" } ?? "Checking result"
-
-        case .compact:
-            return compactSummary(content) ?? "Compacted context"
-
-        case .toolBlocked:
-            return compactSummary(content) ?? compactSummary(reason) ?? "Tool blocked"
-
-        case .onboardSuccess:
-            return compactSummary(content) ?? "Onboarding completed"
-
-        case .filesReceived:
-            let names = receivedFiles.prefix(2).map(\.name)
-            if !names.isEmpty {
-                return "Received \(names.joined(separator: ", "))"
-            }
-            return compactSummary(content) ?? "Files received"
-
-        case .ulwTurnsReached:
-            return compactSummary(content) ?? "Work limit reached"
-
-        case .unknown:
-            return compactSummary(content) ?? eventType.map { humanized($0) } ?? "Agent event"
-
-        case .user, .agent, .askUser, .approvalNeeded, .onboardRequired, .planReview:
-            return nil
-        }
-    }
-
-    var toolSummary: String {
-        let rawName = name?.components(separatedBy: "__").last ?? "tool"
-        let action = toolAction(for: rawName)
-        guard let target = preferredToolTarget else { return action }
-        return clipped("\(action) \(target)", limit: 88)
-    }
-
-    var preferredToolTarget: String? {
-        for key in ["path", "file_path", "query", "url", "command", "name"] {
-            guard let value = arguments[key]?.stringValue,
-                  let summary = compactSummary(value) else { continue }
-            if key == "path" || key == "file_path" {
-                return URL(fileURLWithPath: summary).lastPathComponent.nilIfEmpty ?? summary
-            }
-            return summary
-        }
-        return nil
-    }
-}
-
-private func toolAction(for name: String) -> String {
-    let lowercased = name.lowercased()
-    if lowercased.contains("read") { return "Read" }
-    if lowercased.contains("search") || lowercased.contains("query") { return "Search" }
-    if lowercased.contains("write") || lowercased.contains("create") { return "Write" }
-    if lowercased.contains("edit") || lowercased.contains("patch") { return "Edit" }
-    if lowercased.contains("bash") || lowercased.contains("shell") || lowercased.contains("command") { return "Run" }
-    if lowercased.contains("open") || lowercased.contains("fetch") || lowercased.contains("browse") { return "Open" }
-    return humanized(name)
-}
-
-private func humanized(_ value: String) -> String {
-    let words = value
-        .replacingOccurrences(of: "_", with: " ")
-        .replacingOccurrences(of: "-", with: " ")
-        .split(separator: " ")
-        .map(String.init)
-        .joined(separator: " ")
-    guard let first = words.first else { return "Agent activity" }
-    return first.uppercased() + String(words.dropFirst())
-}
-
-private func compactSummary(_ value: String?) -> String? {
-    guard let value else { return nil }
-    let firstLine = value
-        .split(whereSeparator: { $0.isNewline })
-        .first
-        .map(String.init)?
-        .replacingOccurrences(of: "`", with: "")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    guard let firstLine, !firstLine.isEmpty else { return nil }
-    return clipped(firstLine, limit: 88)
-}
-
-private func clipped(_ value: String, limit: Int) -> String {
-    guard value.count > limit else { return value }
-    return String(value.prefix(limit - 1)) + "…"
-}
-
-private func formattedDuration(_ milliseconds: Int) -> String {
-    if milliseconds < 1_000 {
-        return "\(milliseconds)ms"
-    }
-    if milliseconds < 60_000 {
-        return String(format: "%.1fs", Double(milliseconds) / 1_000)
-    }
-    return (Double(milliseconds) / 1_000).formattedDuration
-}
-
 #Preview("Agent Activity — Collapsed") {
     AgentActivityGroup(items: [
         PreviewFixtures.sampleThinking,
@@ -243,4 +144,20 @@ private func formattedDuration(_ milliseconds: Int) -> String {
         PreviewFixtures.sampleEvaluation
     ])
     .padding()
+}
+
+#Preview("Agent Activity — Expanded") {
+    AgentActivityGroup(
+        items: [
+            PreviewFixtures.sampleIntent,
+            PreviewFixtures.sampleThinking,
+            PreviewFixtures.sampleToolCall,
+            PreviewFixtures.sampleEvaluation,
+            PreviewFixtures.sampleCompact
+        ],
+        durationMS: 5_900,
+        initiallyExpanded: true
+    )
+    .padding(.vertical)
+    .background(Color.appCanvas)
 }

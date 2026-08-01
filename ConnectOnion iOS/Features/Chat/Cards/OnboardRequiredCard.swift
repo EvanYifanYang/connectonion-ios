@@ -2,7 +2,7 @@
 //  OnboardRequiredCard.swift
 //
 //  Purpose: Implements OnboardRequiredCard for the Features/Chat/Cards module.
-//  Collaborates with: ApprovalButtons, ApprovalNeededCard, AskUserCard, PlanReviewCard, ToolCallCard, ToolCallGroupCard.
+//  Collaborates with: ApprovalButtons, ApprovalNeededCard, AskUserCard, PlanReviewCard.
 //  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
 //               the project architecture described in README.md where applicable.
 //

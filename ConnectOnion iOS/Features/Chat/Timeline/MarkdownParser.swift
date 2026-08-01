@@ -2,7 +2,7 @@
 //  MarkdownParser.swift
 //
 //  Purpose: Implements MarkdownParser for the Features/Chat/Timeline module.
-//  Collaborates with: AgentActivityGroup, AgentBubble, CompactRow, EvaluationRow, FilesReceivedRow, IntentRow.
+//  Collaborates with: AgentActivityGroup, AgentBubble, ActivityStep, ActivityStepRow.
 //  References: Apple Swift documentation (https://developer.apple.com/documentation/swift) and
 //               the project architecture described in README.md where applicable.
 //

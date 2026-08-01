@@ -20,6 +20,9 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
     private var transport: WebSocketTransporting?
     private var route: AgentRoute?
     private var codec: ProtocolCodec
+    /// True once the handshake has pushed a chat-visible event to the consumer. A re-probe after a
+    /// stale cached route must not replay those into the reducer, so it is only safe while false.
+    private var didYieldChatEventDuringHandshake = false
     private let logger = Logger(subsystem: "com.romantcD.ConnectOnion-iOS", category: "AgentClient")
 
     init(
@@ -129,6 +132,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         agent: AgentConfig,
         session: ConversationSession,
         forceNewConnection: Bool = false,
+        allowRouteRetry: Bool = true,
         continuation: AsyncThrowingStream<ConnectOnionClientEvent, Error>.Continuation
     ) async throws -> ConnectionContext {
         if forceNewConnection {
@@ -145,12 +149,32 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
         }
 
         let stream = transport.messages()
-        try await transport.send(json: codec.connectMessage(agentAddress: agent.address, route: route, session: session))
-        let status = try await waitForConnected(
-            on: stream,
-            expectedAgentAddress: agent.address,
-            continuation: continuation
-        )
+        let status: String
+        didYieldChatEventDuringHandshake = false
+        do {
+            try await transport.send(json: codec.connectMessage(agentAddress: agent.address, route: route, session: session))
+            status = try await waitForConnected(
+                on: stream,
+                expectedAgentAddress: agent.address,
+                continuation: continuation
+            )
+        } catch {
+            // A cached route can go stale (the agent moved networks, the LAN endpoint died). Without a
+            // re-probe the user would just see a failure, because a cache hit skips resolveRoute's own
+            // direct → advertised → relay fallback chain. Drop the entry and run the full probe once.
+            if error is CancellationError { throw error }
+            if case ConnectOnionClientError.connectionRejected = error { throw error } // protocol-level, not routing
+            await directory.invalidateRoute(for: agent.address)
+            guard allowRouteRetry, !didYieldChatEventDuringHandshake else { throw error }
+            logger.info("Handshake failed on the cached route — re-probing once")
+            return try await connect(
+                agent: agent,
+                session: session,
+                forceNewConnection: true,
+                allowRouteRetry: false,
+                continuation: continuation
+            )
+        }
 
         return ConnectionContext(
             transport: transport,
@@ -192,6 +216,7 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
 
             if event.type == "ONBOARD_REQUIRED" {
                 isAwaitingOnboarding = true
+                didYieldChatEventDuringHandshake = true
                 continuation.yield(.server(event))
                 continue
             }
@@ -209,12 +234,14 @@ final class ConnectOnionClient: ConnectOnionClientProviding {
                     ?? event.payload[string: "error"]
                     ?? "The agent rejected the connection."
                 if isAwaitingOnboarding, Self.isRetryableOnboardingError(message) {
+                    didYieldChatEventDuringHandshake = true
                     continuation.yield(.server(event))
                     continue
                 }
                 throw ConnectOnionClientError.connectionRejected(message)
             }
 
+            didYieldChatEventDuringHandshake = true
             continuation.yield(.server(event))
         }
 

@@ -26,7 +26,7 @@ enum AgentConnectionPhase: Equatable, Sendable {
     var accessibilityLabel: String {
         switch self {
         case .checking:
-            "Checking connection status"
+            "Connecting"
         case .online:
             "Online"
         case .offline:
@@ -105,7 +105,7 @@ struct AgentStatusLabel: View {
     private var label: String {
         switch connectionPhase {
         case .checking:
-            "Checking…"
+            "Connecting…"
         case .online:
             "Online"
         case .offline:

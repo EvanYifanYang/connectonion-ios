@@ -12,6 +12,9 @@ import SwiftUI
 
 struct ChatItemView: View {
     var item: ChatItem
+    /// True when rendered inside an `AgentActivityGroup`'s expanded trace. Only `.agent` differs by
+    /// context — an interim assistant message folds into a quiet step instead of a full bubble.
+    var isInTrace: Bool = false
     var isPendingAskUser: Bool = false
     var isPendingApproval: Bool = false
     var isPendingOnboard: Bool = false
@@ -31,46 +34,31 @@ struct ChatItemView: View {
         case .user:
             UserBubble(item: item)
         case .agent:
-            AgentBubble(
-                item: item,
-                showActions: showAgentActions,
-                isStreaming: isStreaming,
-                modelName: modelName,
-                onRegenerate: onRegenerate,
-                onStreamComplete: onStreamComplete
-            )
-        case .thinking:
-            ThinkingRow(item: item)
-        case .toolCall:
-            ToolCallCard(item: item, isPendingApproval: isPendingApproval, onApprovalResponse: onApprovalResponse)
+            if isInTrace {
+                ActivityStepRow(step: item.activityStep ?? .fallback)
+            } else {
+                AgentBubble(
+                    item: item,
+                    showActions: showAgentActions,
+                    isStreaming: isStreaming,
+                    modelName: modelName,
+                    onRegenerate: onRegenerate,
+                    onStreamComplete: onStreamComplete
+                )
+            }
         case .askUser:
             AskUserCard(item: item, isPending: isPendingAskUser, onResponse: onAskUserResponse)
         case .approvalNeeded:
             ApprovalNeededCard(item: item, isPending: isPendingApproval, onResponse: onApprovalResponse)
         case .onboardRequired:
             OnboardRequiredCard(item: item, isPending: isPendingOnboard, onSubmit: onOnboardSubmit)
-        case .onboardSuccess:
-            StatusPill(systemImage: "checkmark.circle.fill", text: item.content, tint: .green)
-        case .intent:
-            IntentRow(item: item)
-        case .evaluation:
-            EvaluationRow(item: item)
-        case .compact:
-            CompactRow(item: item)
-        case .toolBlocked:
-            StatusPill(systemImage: "hand.raised.fill", text: item.content, tint: .orange)
         case .planReview:
             PlanReviewCard(item: item, isPending: isPendingPlanReview, onResponse: onPlanReviewResponse)
-        case .filesReceived:
-            FilesReceivedRow(item: item)
-        case .ulwTurnsReached:
-            StatusPill(systemImage: "hourglass.bottomhalf.filled", text: item.content, tint: .orange)
-        case .unknown:
-            StatusPill(
-                systemImage: "questionmark.bubble.fill",
-                text: item.content.nilIfEmpty ?? "Agent event: \(item.eventType ?? "unknown")",
-                tint: .secondary
-            )
+        // Everything below is execution detail: it only ever appears inside an activity trace, and
+        // renders as one uniform quiet step rather than its own tinted pill/card.
+        case .thinking, .toolCall, .onboardSuccess, .intent, .evaluation, .compact,
+             .toolBlocked, .filesReceived, .ulwTurnsReached, .unknown:
+            ActivityStepRow(step: item.activityStep ?? .fallback)
         }
     }
 }

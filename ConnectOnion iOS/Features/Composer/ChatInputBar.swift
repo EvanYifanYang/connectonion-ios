@@ -155,13 +155,31 @@ struct ChatInputBar: View {
                             .buttonStyle(.glass)
                             .accessibilityIdentifier(AccessibilityID.chatVoiceButton)
 
-                        Button("Send", systemImage: "arrow.up", action: send)
-                            .labelStyle(.iconOnly)
-                            .frame(width: 40, height: 40)
-                            .buttonStyle(.glassProminent)
-                            .disabled(!canSend)
-                            .accessibilityIdentifier(AccessibilityID.chatSendButton)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        // Ready: a filled brand-violet circle with a white arrow — the single primary
+                        // action. Empty: fall back to the SAME neutral `.glass` as the +/mic buttons so
+                        // the arrow stays clearly visible, instead of `.glassProminent`+`.disabled` which
+                        // renders a washed-out light capsule whose arrow nearly disappears in dark mode.
+                        if canSend {
+                            Button("Send", systemImage: "arrow.up", action: send)
+                                .labelStyle(.iconOnly)
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 40, height: 40)
+                                .buttonStyle(.glassProminent)
+                                .tint(.onion)
+                                .foregroundStyle(.white)
+                                .accessibilityIdentifier(AccessibilityID.chatSendButton)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        } else {
+                            // send() already no-ops on empty input, so leaving it tappable is harmless and
+                            // keeps full contrast (a `.disabled` glass would dim the arrow again).
+                            Button("Send", systemImage: "arrow.up", action: send)
+                                .labelStyle(.iconOnly)
+                                .font(.headline.weight(.semibold))
+                                .frame(width: 40, height: 40)
+                                .buttonStyle(.glass)
+                                .accessibilityIdentifier(AccessibilityID.chatSendButton)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
                     }
                 }
             }
@@ -276,7 +294,11 @@ struct ChatInputBar: View {
 
     private var skillQuery: String? {
         guard text.hasPrefix("/") else { return nil }
-        return String(text.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+        let afterSlash = text.dropFirst()
+        // Once a space is typed the command name is committed — stop matching so the palette dismisses
+        // instead of lingering (showing the one already-chosen skill) over the rest of the message.
+        guard !afterSlash.contains(" ") else { return nil }
+        return String(afterSlash)
     }
 
     private var filteredSkills: [SkillInfo] {
@@ -375,6 +397,7 @@ struct ChatInputBar: View {
             guard validateAttachment(size: data.count) else { return }
 
             let file = AttachmentEncoding.fileAttachment(name: url.lastPathComponent, contentType: contentType, data: data)
+            guard validateFileFitsFrame(file) else { return }
             fileAttachments.append(file)
             attachmentError = nil
             tick()
@@ -432,6 +455,41 @@ struct ChatInputBar: View {
         }
 
         return true
+    }
+
+    /// A file can pass the raw size limit yet still overflow the ~836 KB input frame once base64-encoded
+    /// (files aren't downscaled like images). Reject at attach time — mirroring send()'s frame check — so
+    /// the user is never left holding an attachment that can never be sent.
+    private func validateFileFitsFrame(_ file: FileAttachment) -> Bool {
+        // Match send()'s computation: it injects the TRIMMED prompt, so trim here too or a file that
+        // would actually send fine could be rejected over trailing whitespace.
+        let transmittedPrompt = CustomInstructions.injecting(
+            personality: personality,
+            instructions: customInstructions,
+            into: text.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        let projected = AttachmentEncoding.estimatedInputFrameBytes(
+            prompt: transmittedPrompt,
+            images: imageAttachments.map(\.dataURL),
+            files: fileAttachments + [file]
+        )
+        guard projected <= maxInputFramePayloadBytes else {
+            // Blame the single file only when it overflows the frame on its own; otherwise the real
+            // cause is the combined attachment payload, so use send()'s cumulative wording.
+            let fileAlone = AttachmentEncoding.estimatedInputFrameBytes(prompt: "", images: [], files: [file])
+            if fileAlone > maxInputFramePayloadBytes {
+                showAttachmentError("“\(file.name)” is too large to send (max about \(formatFileSize(maxSingleFileRawBytes)))")
+            } else {
+                showAttachmentError("Message attachments are larger than \(formatFileSize(maxInputFramePayloadBytes))")
+            }
+            return false
+        }
+        return true
+    }
+
+    /// Rough largest raw file that fits one input frame on its own (base64 ≈ 4/3 expansion, plus overhead).
+    private var maxSingleFileRawBytes: Int {
+        max(0, (maxInputFramePayloadBytes - 4096 - 64) * 3 / 4)
     }
 
     private func removeImage(_ id: UUID) {

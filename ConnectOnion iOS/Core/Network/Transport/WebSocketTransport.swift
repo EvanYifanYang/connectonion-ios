@@ -23,6 +23,11 @@ final class WebSocketTransport: WebSocketTransporting {
     func connect(to url: URL) async throws {
         close()
         let task = URLSession.shared.webSocketTask(with: url)
+        // Large inbound frames — 2 MB dashboard snapshots, and CONNECTED/OUTPUT frames whose chat_items
+        // echo an image-heavy history — exceed URLSessionWebSocketTask's 1 MiB default, which would make
+        // receive() throw and tear the socket down (losing the reply). Raise the ceiling well past the
+        // documented ~2 MB frames.
+        task.maximumMessageSize = 16 * 1024 * 1024
         self.task = task
         task.resume()
     }

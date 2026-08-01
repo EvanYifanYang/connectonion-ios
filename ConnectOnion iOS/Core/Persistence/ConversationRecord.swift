@@ -29,6 +29,12 @@ final class ConversationRecord {
     /// Local presentation state; cleared when the conversation becomes visible.
     var hasUnread: Bool = false
 
+    /// Timestamp of the last turn that is still awaiting a reply, or nil when idle. Persisted so that
+    /// after a force-kill (which terminates all in-app work) reopening the conversation can re-attach
+    /// to the still-running server session via `reconnect`. A `Date` — not a `Bool` — so an abandoned
+    /// turn can be expired instead of resuming forever.
+    var pendingTurnStartedAt: Date?
+
     init(
         id: UUID = UUID(),
         agentAddress: String,

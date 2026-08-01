@@ -40,14 +40,26 @@ enum ChatTimelineBuilder {
             activitySegment += 1
         }
 
+        let finalAgentIDs = Self.finalAgentIDs(in: items)
+
         for item in items {
             if item.kind == .user {
                 flushActivity()
                 turnID = item.id
                 activitySegment = 0
                 units.append(itemUnit(item))
+            } else if item.kind == .agent {
+                // Only a turn's final assistant message stays a prominent bubble; interim assistant
+                // messages fold into the activity group, so each turn reads as one collapsible trace
+                // plus one answer (matching ChatGPT/Claude-style transcripts).
+                if finalAgentIDs.contains(item.id) {
+                    flushActivity(completedBy: item)
+                    units.append(itemUnit(item))
+                } else {
+                    activityItems.append(item)
+                }
             } else if item.kind.isPrimaryTimelineContent {
-                flushActivity(completedBy: item.kind == .agent ? item : nil)
+                flushActivity()
                 units.append(itemUnit(item))
             } else {
                 activityItems.append(item)
@@ -56,6 +68,30 @@ enum ChatTimelineBuilder {
 
         flushActivity()
         return units
+    }
+
+    /// The id of the final `.agent` message in each user-delimited turn — the answer that stays a
+    /// prominent bubble. Earlier assistant messages in the same turn fold into the activity group.
+    private static func finalAgentIDs(in items: [ChatItem]) -> Set<String> {
+        var result: Set<String> = []
+        var lastAgentID: String?
+        for item in items {
+            switch item.kind {
+            // An interactive card ends a segment just like a user prompt does. Answering a card does
+            // not append a `.user` item, so without this the assistant message the user already read
+            // above the card would be retroactively demoted into the collapsed trace once the
+            // post-card reply arrives.
+            case .user, .askUser, .approvalNeeded, .onboardRequired, .planReview:
+                if let lastAgentID { result.insert(lastAgentID) }
+                lastAgentID = nil
+            case .agent:
+                lastAgentID = item.id
+            default:
+                break
+            }
+        }
+        if let lastAgentID { result.insert(lastAgentID) }
+        return result
     }
 
     private static func itemUnit(_ item: ChatItem) -> ChatTimelineUnit {

@@ -112,6 +112,8 @@ struct ChatScreen: View {
         .onAppear {
             viewModel.prepareForPresentation()
             sessionStore.conversationDidAppear(conversation)
+            // Re-attach to a turn that was left running when the app was killed/backgrounded.
+            viewModel.resumeIfInterrupted()
         }
         .onDisappear {
             sessionStore.conversationDidDisappear(conversation.id)

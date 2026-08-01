@@ -79,6 +79,19 @@ final class ChatSessionStore {
         }
     }
 
+    /// iOS may suspend or kill us while a turn is in flight, and the WebSocket dies without an error.
+    /// Record which sessions were mid-turn so foregrounding can re-attach them.
+    func applicationDidEnterBackground() {
+        sessions.values.forEach { $0.noteAppWillEnterBackground() }
+    }
+
+    /// Re-attach every session that was interrupted. `ChatScreen.onAppear` does not re-fire when the
+    /// app returns to an already-visible chat, so without this the transcript stays frozen on
+    /// "thinking" forever.
+    func applicationDidBecomeActive() {
+        sessions.values.forEach { $0.resumeAfterForeground() }
+    }
+
     func removeSession(for conversationID: UUID) {
         if visibleConversation?.id == conversationID {
             visibleConversation = nil

@@ -308,6 +308,10 @@ final class AgentInfoStore {
 
     private func bumpGeneration(for address: String) {
         generationByAddress[address, default: 0] &+= 1
+        // The agent's endpoint configuration just changed (added, edited, or removed), so any route
+        // cached for it is suspect — drop it so the next send re-probes instead of dialling a stale one.
+        let directory = directoryOverride ?? self.directory
+        Task { await directory.invalidateRoute(for: address) }
     }
 
 }

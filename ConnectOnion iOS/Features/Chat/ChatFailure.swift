@@ -103,6 +103,12 @@ struct ChatFailure: Equatable {
                     body: "It connected but stopped responding. It may be busy or stuck — restart it if this keeps happening. \(retry)",
                     action: action
                 )
+            case .connectionWentSilent:
+                self.init(
+                    title: "The agent stopped responding mid-reply",
+                    body: "It went quiet while answering — it may have crashed. Check the agent's terminal for an error. \(retry)",
+                    action: action
+                )
             }
 
         case let urlError as URLError:

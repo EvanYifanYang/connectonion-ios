@@ -999,7 +999,8 @@ final class ChatViewModel {
         failure = nil
         pendingUserItem = nil
         commitOptimisticUserPrompt()
-        clearOptimisticPlaceholder()
+        // Deliberately KEEP the activity placeholder: `.reconnecting` renders nowhere else, so clearing
+        // it left the turn showing a Stop button over a blank transcript with no sign of life.
         stopTimer()
         sessionState = .reconnecting
         liveActivity.update(

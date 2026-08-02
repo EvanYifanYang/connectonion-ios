@@ -169,3 +169,90 @@ struct DirectoryFailureAttributionTests {
         #expect(failure.title.contains("192.168.1.8:8001"))
     }
 }
+
+/// Reported from a real device: after killing and reopening the app, the banner said "Reconnected,
+/// but there's no reply yet" and tapping Retry did nothing visible — it reconnected, settled idle,
+/// and re-showed the same banner. `failedTurn` is in-memory, so after a relaunch there is nothing to
+/// re-attach to and re-asking is the only thing that helps.
+@MainActor
+final class IdleReconnectClient: ConnectOnionClientProviding {
+    private(set) var sentPrompts: [String] = []
+    /// What the host reports on CONNECTED: "connected" means a warm session that produced nothing.
+    var status = "connected"
+
+    func send(input: AgentInput, to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        sentPrompts.append(input.prompt)
+        return AsyncThrowingStream { c in
+            c.yield(.connected(sessionID: session.id.uuidString, status: "connected",
+                               serverNewer: false, session: nil, chatItems: []))
+            c.yield(.inputSent)
+            c.finish()
+        }
+    }
+
+    func reconnect(to agent: AgentConfig, session: ConversationSession) -> AsyncThrowingStream<ConnectOnionClientEvent, Error> {
+        AsyncThrowingStream { [status] c in
+            c.yield(.connected(sessionID: session.id.uuidString, status: status,
+                               serverNewer: false, session: nil, chatItems: []))
+            c.finish()
+        }
+    }
+
+    func sendAskUserResponse(_ answer: String) async throws {}
+    func sendApprovalResponse(approved: Bool, scope: String, mode: String?, feedback: String?) async throws {}
+    func sendOnboardSubmit(inviteCode: String?, payment: Double?) async throws {}
+    func sendPlanReviewResponse(_ message: String) async throws {}
+    func disconnect() {}
+}
+
+@Suite("Retry after a relaunch")
+struct RetryAfterRelaunchTests {
+    @MainActor
+    private func interruptedConversation() -> ConversationRecord {
+        let conversation = ConversationRecord(agentAddress: testAgentAddress)
+        conversation.messages = [ChatItem(kind: .user, content: "hi")]
+        conversation.pendingTurnStartedAt = .now          // the turn was in flight when we died
+        conversation.remoteSessionID = "remote-session"
+        return conversation
+    }
+
+    @Test("Retry re-asks when the host has no reply and is not running the turn")
+    @MainActor
+    func retryReAsksAfterRelaunch() async {
+        let conversation = interruptedConversation()
+        let client = IdleReconnectClient()
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: AgentConfig(address: testAgentAddress, alias: "A", createdAt: .now),
+            client: client
+        )
+
+        viewModel.resumeIfInterrupted()                    // what ChatScreen.onAppear does
+        await waitUntil { viewModel.failure != nil }
+        #expect(viewModel.failure?.title.contains("no reply yet") == true)
+
+        viewModel.retryLastTurn()
+        await waitUntil { !client.sentPrompts.isEmpty }
+        #expect(client.sentPrompts == ["hi"])              // it re-asked, it did not sit there
+        #expect(viewModel.items.filter { $0.kind == .user }.count == 1)  // and did not duplicate the bubble
+    }
+
+    @Test("Retry only reconnects while the host is still running that turn")
+    @MainActor
+    func retryWaitsWhileRunning() async {
+        let conversation = interruptedConversation()
+        let client = IdleReconnectClient()
+        client.status = "running"
+        let viewModel = ChatViewModel(
+            conversation: conversation,
+            agent: AgentConfig(address: testAgentAddress, alias: "A", createdAt: .now),
+            client: client
+        )
+
+        viewModel.resumeIfInterrupted()
+        await waitUntil { viewModel.sessionState == .active || viewModel.failure != nil }
+        viewModel.retryLastTurn()
+        try? await Task.sleep(for: .milliseconds(250))
+        #expect(client.sentPrompts.isEmpty)                // never fork a turn the host is running
+    }
+}

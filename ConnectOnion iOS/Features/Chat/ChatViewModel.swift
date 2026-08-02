@@ -715,11 +715,12 @@ final class ChatViewModel {
     func retryLastTurn() {
         guard streamTask == nil else { return } // a retry is already in flight
         guard let turn = failedTurn, failedTurnCanResend else {
-            // Cold launch after the host dropped the session: nothing to re-attach to, so ask again
-            // with the original prompt. Restricted to status "new" — the only status where the host
-            // provably never ran this input, so a resend cannot fork a duplicate turn.
+            // Cold launch: `failedTurn` is in-memory, so after a relaunch there is nothing to
+            // re-attach to and reconnecting just repeats the same idle settle — the button appears
+            // dead. Ask again instead. Excluded only when the host says "running": a turn really is
+            // in flight there, and a second INPUT would fork it.
             if failedTurn == nil,
-               lastConnectedStatus == "new",
+               lastConnectedStatus != "running",
                !hasCompletedLatestExchange,
                !hasPendingUserAction,
                let userIndex = items.lastIndex(where: { $0.kind == .user }) {
@@ -931,8 +932,8 @@ final class ChatViewModel {
                         action: .resend)
                     : ChatFailure(
                         title: "Reconnected, but there's no reply yet",
-                        body: "The agent produced no reply for your last message. Tap Retry to reconnect.",
-                        action: .reconnect))
+                        body: "The agent produced no reply for your last message. Tap Retry to ask again.",
+                        action: .resend))
         } else {
             failure = nil
             failedTurn = nil

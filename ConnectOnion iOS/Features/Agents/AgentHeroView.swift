@@ -11,6 +11,8 @@
 import SwiftUI
 
 struct AgentHeroView: View {
+    @Environment(\.deviceIsOffline) private var deviceIsOffline
+
     var agent: AgentConfigRecord
     var info: AgentInfo?
 
@@ -25,7 +27,7 @@ struct AgentHeroView: View {
                 .appFont(.title2, weight: .semibold)
                 .lineLimit(1)
 
-            AgentStatusLabel(connectionPhase: AgentConnectionPhase(info: info))
+            AgentStatusLabel(connectionPhase: AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline))
 
             if !metaLine.isEmpty {
                 Text(metaLine)

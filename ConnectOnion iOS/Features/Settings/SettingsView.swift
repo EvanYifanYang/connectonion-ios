@@ -354,6 +354,8 @@ private struct FontSizeRow: View {
 }
 
 private struct AgentSettingsRow: View {
+    @Environment(\.deviceIsOffline) private var deviceIsOffline
+
     var agent: AgentConfigRecord
     var info: AgentInfo?
 
@@ -361,7 +363,7 @@ private struct AgentSettingsRow: View {
         HStack(spacing: 12) {
             AgentAvatar(
                 title: agent.displayName(info: info),
-                connectionPhase: AgentConnectionPhase(info: info)
+                connectionPhase: AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline)
             )
 
             VStack(alignment: .leading, spacing: 3) {
@@ -377,7 +379,7 @@ private struct AgentSettingsRow: View {
             Spacer(minLength: 0)
 
             AgentStatusLabel(
-                connectionPhase: AgentConnectionPhase(info: info),
+                connectionPhase: AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline),
                 showsActivityIndicator: false
             )
         }

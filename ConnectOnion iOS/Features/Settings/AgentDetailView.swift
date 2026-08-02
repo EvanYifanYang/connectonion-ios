@@ -13,6 +13,8 @@ import SwiftUI
 /// Edit one added agent from Settings: its display name, its direct endpoint (the LAN address a
 /// phone needs to reach a local agent), plus its address, live status, and a delete action.
 struct AgentDetailView: View {
+    @Environment(\.deviceIsOffline) private var deviceIsOffline
+
     var agent: AgentConfigRecord
     var info: AgentInfo?
     var onDelete: () -> Void
@@ -37,14 +39,14 @@ struct AgentDetailView: View {
                 HStack(spacing: 12) {
                     AgentAvatar(
                         title: agent.displayName(info: info),
-                        connectionPhase: AgentConnectionPhase(info: info)
+                        connectionPhase: AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline)
                     )
                     VStack(alignment: .leading, spacing: 3) {
                         Text(agent.displayName(info: info))
                             .appFont(.headline)
                             .lineLimit(1)
                         AgentStatusLabel(
-                            connectionPhase: AgentConnectionPhase(info: info),
+                            connectionPhase: AgentConnectionPhase(info: info).offlineAware(deviceIsOffline: deviceIsOffline),
                             showsActivityIndicator: false
                         )
                     }

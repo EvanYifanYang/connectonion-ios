@@ -112,3 +112,29 @@ struct RejectionCopyTests {
         #expect(failure.detail == "Invalid signature")
     }
 }
+
+/// Observed on device: with airplane mode on, the agent home still read "Online". The offline
+/// override had only been applied to the agent-list row, not to the other status surfaces.
+@Suite("Offline status phase")
+struct OfflineStatusPhaseTests {
+    @Test("A confirmed-online agent still reads No internet once the device has no path")
+    func onlineAgentBecomesNoInternet() {
+        let online = AgentConnectionPhase(info: AgentInfo(address: testAgentAddress, online: true))
+        #expect(online == .online)
+        #expect(online.offlineAware(deviceIsOffline: true) == .noInternet)
+    }
+
+    @Test("Every phase reads No internet while offline, and is untouched while online")
+    func phasesMapConsistently() {
+        for phase in [AgentConnectionPhase.checking, .online, .offline] {
+            #expect(phase.offlineAware(deviceIsOffline: true) == .noInternet)
+            #expect(phase.offlineAware(deviceIsOffline: false) == phase)
+        }
+    }
+
+    @Test("No internet carries its own label, distinct from Offline")
+    func noInternetHasItsOwnLabel() {
+        #expect(AgentConnectionPhase.noInternet.accessibilityLabel == "No internet")
+        #expect(AgentConnectionPhase.offline.accessibilityLabel == "Offline")
+    }
+}

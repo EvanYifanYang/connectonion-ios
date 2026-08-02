@@ -83,3 +83,32 @@ struct OfflineFailureCopyTests {
         #expect(tooLarge.action == .dismiss)
     }
 }
+
+
+/// A pre-CONNECTED ERROR frame is free text, so "the agent isn't running" and "the agent rejected
+/// you" arrive as the same case. Observed live: a stopped agent produced "Agent not connected: 0x…"
+/// and the app told the user to check trust settings, with no Retry.
+@Suite("Rejected vs absent agent")
+struct RejectionCopyTests {
+    @Test("A relay saying the agent isn't connected offers Retry, not trust advice")
+    func absentAgentIsRetryable() {
+        let failure = ChatFailure(
+            error: ConnectOnionClientError.connectionRejected("Agent not connected: 0x5513e629e0"),
+            canResend: false
+        )
+        #expect(failure.title == "That agent isn't online")
+        #expect(failure.action == .reconnect)
+        #expect(failure.body.contains("Start the agent"))
+    }
+
+    @Test("A genuine trust rejection keeps its advice and offers no retry")
+    func trustRejectionIsTerminal() {
+        let failure = ChatFailure(
+            error: ConnectOnionClientError.connectionRejected("Invalid signature"),
+            canResend: false
+        )
+        #expect(failure.title.contains("refused"))
+        #expect(failure.action == .dismiss)
+        #expect(failure.detail == "Invalid signature")
+    }
+}

@@ -100,12 +100,24 @@ struct ChatFailure: Equatable {
         case let clientError as ConnectOnionClientError:
             switch clientError {
             case .connectionRejected(let message):
-                self.init(
-                    title: "The agent refused the connection",
-                    body: "It rejected this device. Check the agent's trust settings, then try again.",
-                    action: .dismiss,
-                    detail: message
-                )
+                if ChatFailure.indicatesAgentAbsent(message) {
+                    // The relay accepted us but has no live session for this agent — it is simply not
+                    // running. Telling the user to check trust settings would send them the wrong way,
+                    // and retrying after starting the agent is exactly the right move.
+                    self.init(
+                        title: "That agent isn't online",
+                        body: "Nothing is connected for this address right now. Start the agent, then tap Retry.",
+                        action: action,
+                        detail: message
+                    )
+                } else {
+                    self.init(
+                        title: "The agent refused the connection",
+                        body: "It rejected this device. Check the agent's trust settings, then try again.",
+                        action: .dismiss,
+                        detail: message
+                    )
+                }
             case .inputFrameTooLarge:
                 self.init(
                     title: "That message is too large to send",
@@ -196,6 +208,18 @@ struct ChatFailure: Equatable {
             action: canResend ? .resend : .reconnect,
             detail: agentMessage
         )
+    }
+
+    /// The pre-CONNECTED ERROR frame carries only free text — no code — so "the agent isn't there"
+    /// and "the agent rejected you" arrive as the same case. Matching the host's wording is not ideal,
+    /// but one vague message covering both would misdirect the user in whichever case it didn't fit.
+    private static func indicatesAgentAbsent(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return text.contains("not connected")
+            || text.contains("not online")
+            || text.contains("offline")
+            || text.contains("not found")
+            || text.contains("unavailable")
     }
 
     /// Failures that a missing network path fully explains. Excludes the ones the user must fix

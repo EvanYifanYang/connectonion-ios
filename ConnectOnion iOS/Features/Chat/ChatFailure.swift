@@ -50,6 +50,19 @@ struct ChatFailure: Equatable {
         let retry = ChatFailure.recoveryHint(canResend: canResend)
         let action: Action = canResend ? .resend : .reconnect
 
+        // With no network path, every route probe fails and route resolution reports the configured
+        // endpoint as unreachable — blaming the agent for the device's problem. When the monitor
+        // confirms the device is offline, that is the cause; only genuinely non-connectivity failures
+        // (a bad address, an oversized message, an outright rejection) keep their own copy.
+        if deviceIsOffline, ChatFailure.isConnectivityFailure(error) {
+            self.init(
+                title: "This iPhone is offline",
+                body: "Check Wi-Fi or mobile data. \(retry)",
+                action: action
+            )
+            return
+        }
+
         switch error {
         case let directoryError as AgentDirectoryError:
             switch directoryError {
@@ -183,6 +196,21 @@ struct ChatFailure: Equatable {
             action: canResend ? .resend : .reconnect,
             detail: agentMessage
         )
+    }
+
+    /// Failures that a missing network path fully explains. Excludes the ones the user must fix
+    /// themselves — those stay accurate even offline.
+    private static func isConnectivityFailure(_ error: Error) -> Bool {
+        switch error {
+        case AgentDirectoryError.invalidAddress,
+             ConnectOnionClientError.inputFrameTooLarge,
+             ConnectOnionClientError.connectionRejected:
+            false
+        case is AgentDirectoryError, is ConnectOnionClientError, is URLError:
+            true
+        default:
+            false
+        }
     }
 
     private static func recoveryHint(canResend: Bool) -> String {

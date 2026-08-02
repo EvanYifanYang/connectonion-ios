@@ -42,3 +42,44 @@ struct MarkdownImageTests {
         #expect(ChatViewModel.hasBlockMarkdown("Here you go:\n\n![apple](https://example.com/a.png)"))
     }
 }
+
+/// Route resolution converts every probe failure into an AgentDirectoryError, so an offline device
+/// would otherwise be reported as an unreachable endpoint — blaming the agent for the phone's problem.
+@Suite("Offline failure copy")
+struct OfflineFailureCopyTests {
+    private let endpoint = URL(string: "http://192.168.1.20:8000")!
+
+    @Test("An offline device owns the failure, not the endpoint")
+    func offlineDeviceOwnsTheFailure() {
+        let failure = ChatFailure(
+            error: AgentDirectoryError.preferredEndpointUnavailable(endpoint),
+            canResend: false,
+            deviceIsOffline: true
+        )
+        #expect(failure.title == "This iPhone is offline")
+    }
+
+    @Test("The same error blames the endpoint when the device has a network path")
+    func onlineDeviceBlamesTheEndpoint() {
+        let failure = ChatFailure(
+            error: AgentDirectoryError.preferredEndpointUnavailable(endpoint),
+            canResend: false,
+            deviceIsOffline: false
+        )
+        #expect(failure.title.contains("192.168.1.20:8000"))
+    }
+
+    @Test("A user-fixable failure keeps its own copy even offline")
+    func userFixableFailuresSurviveOffline() {
+        let invalid = ChatFailure(error: AgentDirectoryError.invalidAddress, canResend: false, deviceIsOffline: true)
+        #expect(invalid.title.contains("isn't valid"))
+        #expect(invalid.action == .dismiss)
+
+        let tooLarge = ChatFailure(
+            error: ConnectOnionClientError.inputFrameTooLarge(size: 2_000_000, maxSize: 900_000),
+            canResend: false,
+            deviceIsOffline: true
+        )
+        #expect(tooLarge.action == .dismiss)
+    }
+}

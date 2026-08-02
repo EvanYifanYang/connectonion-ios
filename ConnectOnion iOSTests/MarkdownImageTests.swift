@@ -138,3 +138,34 @@ struct OfflineStatusPhaseTests {
         #expect(AgentConnectionPhase.offline.accessibilityLabel == "Offline")
     }
 }
+
+/// With an endpoint configured, every routing failure used to be reported as "couldn't reach that
+/// endpoint" — even when the directory had answered and simply had no live connection for the agent.
+/// The address can be perfectly correct and the agent just not running.
+@Suite("Directory failure attribution")
+struct DirectoryFailureAttributionTests {
+    @Test("A registered but disconnected agent is named as offline, not as a bad endpoint")
+    func offlineAgentIsNotBlamedOnTheEndpoint() {
+        let failure = ChatFailure(error: AgentDirectoryError.agentOffline(endpoints: []), canResend: false)
+        #expect(failure.title == "That agent isn't online")
+        #expect(failure.action == .reconnect)
+        #expect(failure.body.contains("Start the agent"))
+    }
+
+    @Test("Advertised addresses that all failed are surfaced as detail")
+    func advertisedAddressesBecomeDetail() {
+        let endpoints = [URL(string: "http://10.0.0.5:8000")!, URL(string: "http://10.0.0.6:8000")!]
+        let failure = ChatFailure(error: AgentDirectoryError.agentOffline(endpoints: endpoints), canResend: false)
+        #expect(failure.title == "Can't reach that agent")
+        #expect(failure.detail?.contains("10.0.0.5") == true)
+    }
+
+    @Test("The endpoint is still named when the directory told us nothing")
+    func silentDirectoryStillBlamesTheEndpoint() {
+        let failure = ChatFailure(
+            error: AgentDirectoryError.preferredEndpointUnavailable(URL(string: "http://192.168.1.8:8001")!),
+            canResend: false
+        )
+        #expect(failure.title.contains("192.168.1.8:8001"))
+    }
+}

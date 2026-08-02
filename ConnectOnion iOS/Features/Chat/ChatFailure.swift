@@ -88,6 +88,13 @@ struct ChatFailure: Equatable {
                     body: "The agent directory didn't respond. Check your connection. \(retry)",
                     action: action
                 )
+            case .agentOffline(let endpoints):
+                self.init(
+                    title: endpoints.isEmpty ? "That agent isn't online" : "Can't reach that agent",
+                    body: "Nothing is connected for it right now. Start the agent, then tap Retry.",
+                    action: action,
+                    detail: endpoints.isEmpty ? nil : endpoints.map(\.absoluteString).joined(separator: "\n")
+                )
             case .noReachableRoute(let endpoints):
                 self.init(
                     title: "No route to this agent",

@@ -16,6 +16,8 @@ enum AgentDirectoryError: LocalizedError, Sendable {
     case directoryUnavailable
     case preferredEndpointUnavailable(URL)
     case noReachableRoute([URL])
+    /// The directory knows this agent, but nothing is connected for it — it is down, not misaddressed.
+    case agentOffline(endpoints: [URL])
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +27,10 @@ enum AgentDirectoryError: LocalizedError, Sendable {
             "Could not resolve this agent. Check the address and network connection."
         case .preferredEndpointUnavailable(let endpoint):
             "Could not reach the configured endpoint \(endpoint.absoluteString). Check that the agent is running and reachable from this iPhone."
+        case .agentOffline(let endpoints):
+            endpoints.isEmpty
+                ? "This agent is registered but nothing is connected for it right now."
+                : "This agent is registered but nothing is connected, and none of its addresses answered."
         case .noReachableRoute(let endpoints):
             if endpoints.isEmpty {
                 "This agent is online in the directory but has no reachable route for this iPhone."
@@ -195,11 +201,11 @@ struct AgentDirectoryService: AgentDirectoryServicing {
             return relay
         }
 
-        logger.error("No reachable route for iPhone. Advertised endpoints: \(endpointSummary, privacy: .public)")
-        if preferredEndpoint != nil {
-            throw unreachableError
-        }
-        throw AgentDirectoryError.noReachableRoute(relayData.endpoints)
+        // The directory answered and reports no live connection for this agent. Blaming the
+        // configured endpoint here would be wrong: the address may be perfectly correct and the agent
+        // simply not running. `unreachableError` is only right when the directory told us nothing.
+        logger.error("Directory has no live connection. Advertised endpoints: \(endpointSummary, privacy: .public)")
+        throw AgentDirectoryError.agentOffline(endpoints: relayData.endpoints)
     }
 
     private func relayRecord(address: String, timeout: TimeInterval = 5) async -> RelayAgentRecord? {

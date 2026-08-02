@@ -44,8 +44,10 @@ extension EnvironmentValues {
 
 extension AgentConnectionPhase {
     /// An agent can't be judged offline while the phone itself has no path — say so instead of
-    /// blaming the agent. A confirmed-online agent keeps its state (the probe already succeeded).
+    /// blaming the agent. This also overrides a previously-confirmed `.online`: with no network path
+    /// nothing is reachable, so that badge is stale, and leaving it up invites a tap that can only
+    /// fail. Status polling is paused while offline, so it would not correct itself either.
     func offlineAware(deviceIsOffline: Bool) -> AgentConnectionPhase {
-        deviceIsOffline && self != .online ? .noInternet : self
+        deviceIsOffline ? .noInternet : self
     }
 }
